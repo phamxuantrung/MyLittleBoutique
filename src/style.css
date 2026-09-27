@@ -5281,20 +5281,28 @@ dialog.dialog-gameover .dialog-inner { padding: 0; }
 .gameover-debt span { color: #957186; font-size: 11px; }
 .gameover-debt strong { color: #63334e; font-size: 12px; text-align: right; }
 .financial-gameover > .btn { width: 100%; }
-dialog.dialog-debt-warning { width: min(470px, calc(100vw - 24px)); border-color: #edc179; background: #fffaf1; }
+dialog.dialog-debt-warning { width: min(500px, calc(100vw - 24px)); border-color: #edc179; background: #fffaf1; box-shadow: 0 18px 55px rgba(91,49,76,.3); }
 dialog.dialog-debt-warning .dialog-inner { padding: 0; }
-.debt-warning-modal { padding: 24px; text-align: center; background: radial-gradient(circle at 50% 0, #fff0c9, transparent 50%); }
-.debt-warning-icon { width: 54px; height: 54px; margin: 0 auto 10px; display: grid; place-items: center; border: 1px solid #edc77f; border-radius: 18px; color: #bd711e; background: #fffaf0; box-shadow: 0 8px 20px rgba(151,94,24,.1); }
-.debt-warning-icon .icon { width: 26px; height: 26px; }
-.debt-warning-modal h2 { margin: 4px 0 7px; color: #613d2b; font: 800 24px/1.15 var(--font-serif); }
-.debt-warning-modal > p { max-width: 370px; margin: 0 auto 14px; color: #8d705e; font-size: 11px; line-height: 1.45; }
+.debt-warning-modal { padding: 20px; color: #613d2b; background: radial-gradient(circle at 14% 0, #ffedbd 0, transparent 45%), linear-gradient(145deg, #fffdf8, #fff8ec); }
+.debt-warning-hero { display: grid; grid-template-columns: 54px minmax(0,1fr); align-items: center; gap: 13px; margin-bottom: 15px; text-align: left; }
+.debt-warning-icon { width: 54px; height: 54px; display: grid; place-items: center; border: 1px solid #edc77f; border-radius: 17px; color: #bd711e; background: rgba(255,255,255,.8); box-shadow: 0 7px 18px rgba(151,94,24,.11); }
+.debt-warning-icon .icon { width: 25px; height: 25px; }
+.debt-warning-copy { min-width: 0; }
+.debt-warning-copy .eyebrow { color: #ad7898; font-size: 9px; letter-spacing: 1.2px; }
+.debt-warning-modal h2 { margin: 2px 0 3px; color: #613d2b; font: 800 22px/1.15 var(--font-serif); }
+.debt-warning-copy p { margin: 0; color: #8d705e; font-size: 10.5px; line-height: 1.4; }
 .debt-warning-modal.is-final h2, .debt-warning-modal.is-final .debt-warning-icon { color: #c7374f; }
-.debt-warning-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-.debt-warning-list > div { min-width: 0; padding: 11px; display: grid; gap: 2px; border: 1px solid #efd8ae; border-radius: 13px; background: rgba(255,255,255,.82); }
-.debt-warning-list span, .debt-warning-list small { color: #98755c; font-size: 9px; }
-.debt-warning-list strong { overflow: hidden; color: #69402f; font-size: 15px; text-overflow: ellipsis; }
-.debt-warning-actions { display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; }
-@media (max-width: 480px) { .debt-warning-list, .debt-warning-actions { grid-template-columns: 1fr; } }
+.debt-warning-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 13px; }
+.debt-warning-list > div { min-width: 0; padding: 10px 12px; display: grid; gap: 5px; border: 1px solid #efd8ae; border-radius: 13px; background: rgba(255,255,255,.82); text-align: left; }
+.debt-warning-list > div:only-child { grid-column: 1 / -1; }
+.debt-warning-list span { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #98755c; font-size: 9.5px; font-weight: 750; }
+.debt-warning-list small { color: #b37b54; font-size: 9px; font-weight: 800; }
+.debt-warning-list strong { overflow: hidden; color: #69402f; font-size: 16px; text-overflow: ellipsis; }
+.debt-warning-list i { height: 4px; overflow: hidden; border-radius: 99px; background: #f4e5d0; }
+.debt-warning-list i b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #efb24d, #df5c76); }
+.debt-warning-actions { display: grid; grid-template-columns: 1.15fr 1fr; gap: 8px; }
+.debt-warning-actions .btn { min-height: 40px; border-radius: 12px; }
+@media (max-width: 480px) { .debt-warning-modal { padding: 16px; } .debt-warning-hero { grid-template-columns: 46px minmax(0,1fr); } .debt-warning-icon { width: 46px; height: 46px; } .debt-warning-modal h2 { font-size: 19px; } .debt-warning-list { grid-template-columns: 1fr; } .debt-warning-actions { grid-template-columns: 1fr 1fr; } }
 
 /* Hướng dẫn thao tác đầu game: chỉ mục tiêu hiện tại nhận được click. */
 body.guided-tutorial-active [data-action],
@@ -6932,13 +6940,13 @@ dialog.dialog-quests .dialog-inner {
 }
 
 .inv-card {
-  background: #ffffff;
-  border: 1.5px solid #f4d8f0;
-  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #fffbfd 100%);
+  border: 1px solid #efd8e8;
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 3px 10px rgba(180, 60, 140, 0.05);
+  box-shadow: 0 5px 16px rgba(111, 57, 96, 0.07);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
@@ -6949,17 +6957,21 @@ dialog.dialog-quests .dialog-inner {
 }
 
 .inv-visual {
-  height: 95px;
+  height: 80px;
   position: relative;
-  background: linear-gradient(135deg, #fff8fc, var(--item-color, #fdeeff));
+  background:
+    radial-gradient(circle at 50% 55%, rgba(255, 255, 255, 0.94) 0 28%, transparent 60%),
+    linear-gradient(145deg, #fffafd, var(--item-color, #fdeeff));
+  border-bottom: 1px solid #f7e7f0;
   display: grid;
   place-items: center;
 }
 
 .inv-visual .product-art {
-  height: 75px;
-  max-width: 90%;
+  height: 64px;
+  max-width: 82%;
   object-fit: contain;
+  filter: drop-shadow(0 3px 3px rgba(91, 45, 76, 0.09));
 }
 
 .inv-stock-count {
@@ -6985,11 +6997,11 @@ dialog.dialog-quests .dialog-inner {
 }
 
 .inv-detail {
-  padding: 8px 10px 10px;
+  padding: 9px 10px 10px;
   display: flex;
   flex-direction: column;
   flex: 1;
-  gap: 4px;
+  gap: 6px;
 }
 
 .inv-name-row {
@@ -7001,10 +7013,10 @@ dialog.dialog-quests .dialog-inner {
 
 /* Pricing Console inside Inventory */
 .inv-pricing-console {
-  background: #fdf8ff;
-  border: 1px solid #edd8f4;
-  border-radius: 9px;
-  padding: 6px 8px;
+  background: linear-gradient(145deg, #fffaff, #fff6fb);
+  border: 1px solid #eed8e8;
+  border-radius: 11px;
+  padding: 7px 8px 8px;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -7015,7 +7027,7 @@ dialog.dialog-quests .dialog-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: 9.5px;
   color: var(--ink-500);
 }
 
@@ -7026,38 +7038,48 @@ dialog.dialog-quests .dialog-inner {
 
 .inv-sell-control {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.inv-card .product-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
 }
 
 .inv-sell-control label {
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
   color: var(--ink-800);
 }
 
 .inv-select-wrapper {
   position: relative;
+  width: 100%;
 }
 
 .inv-price-input {
-  width: 94px;
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
   box-sizing: border-box;
   background: #fff;
-  border: 1.5px solid #d45898;
-  border-radius: var(--radius-pill);
-  padding: 4px 22px 4px 9px;
-  font: 800 10px/1.2 var(--font-body);
+  border: 1px solid #df5a9f;
+  border-radius: 9px;
+  padding: 3px 25px 3px 9px;
+  font: 800 11px/1.2 var(--font-body);
   color: #a8286e;
   text-align: right;
-  box-shadow: 0 1px 3px rgba(168, 40, 110, 0.1);
+  box-shadow: inset 0 1px 2px rgba(104, 45, 85, 0.04), 0 1px 3px rgba(168, 40, 110, 0.06);
 }
 
 .inv-price-input:focus {
   outline: none;
   border-color: #a8286e;
-  box-shadow: 0 0 0 2px rgba(212, 88, 152, 0.2);
+  box-shadow: 0 0 0 3px rgba(212, 88, 152, 0.14);
 }
 
 .inv-price-currency {
@@ -7072,10 +7094,10 @@ dialog.dialog-quests .dialog-inner {
 }
 
 .inv-price-hint {
-  margin-top: 3px;
-  font-size: 8px;
+  margin-top: 1px;
+  font-size: 8.5px;
   line-height: 1.25;
-  text-align: right;
+  text-align: left;
   color: var(--ink-500);
 }
 
@@ -7113,9 +7135,11 @@ select.inv-price-select:focus {
   justify-content: space-between;
   font-size: 9.5px;
   font-weight: 700;
-  padding: 3px 6px;
-  border-radius: 6px;
-  background: #fdf0f8;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid #f6dce9;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #fff8e9 0%, #fff0f8 100%);
   color: var(--primary-green);
 }
 
@@ -7136,6 +7160,7 @@ select.inv-price-select:focus {
 
 .inv-profit-row .profit-val {
   font-weight: 800;
+  margin-left: auto;
 }
 
 .inv-profit-row .profit-rate {
@@ -9868,6 +9893,12 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
     min-height: 40px;
     font-size: 12px !important;
     line-height: 1.3 !important;
+  }
+
+  .game-content-panel .inv-price-input {
+    height: 32px;
+    min-height: 32px;
+    font-size: 11px !important;
   }
 
   :is(.game-content-panel, dialog) :is(.notice, .setting-row, .quest, .empty-state) {

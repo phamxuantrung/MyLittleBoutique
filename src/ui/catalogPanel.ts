@@ -407,7 +407,7 @@ export function inventoryPanel(s: GameState) {
                 <div class="inv-sell-control">
                   <label for="inv-price-${p.id}">Giá bán ra</label>
                   <div class="inv-select-wrapper">
-                    <input id="inv-price-${p.id}" class="inv-price-input" data-price="${p.id}" inputmode="numeric" value="${sell}" aria-describedby="price-hint-${p.id}" aria-label="Giá bán ${escapeHtml(p.name)}">
+                    <input id="inv-price-${p.id}" class="inv-price-input" data-price="${p.id}" inputmode="numeric" enterkeyhint="done" autocomplete="off" value="${sell.toLocaleString('vi-VN')}" aria-describedby="price-hint-${p.id}" aria-label="Giá bán ${escapeHtml(p.name)}">
                     <span class="inv-price-currency">₫</span>
                   </div>
                 </div>

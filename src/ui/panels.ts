@@ -68,7 +68,7 @@ export function questPanel(s: GameState) {
                   </div>
               </div>
 
-              ${claimed ? `<div class="quest-card-footer"><span class="quest-claim-state is-claimed">${icon('check')} Đã nhận</span></div>` : ready ? `<div class="quest-card-footer"><button class="btn quest-claim-btn btn-ready" data-action="claim" data-id="${q.id}">${icon('gift')} Nhận thưởng</button></div>` : ''}
+              ${ready && !claimed ? `<div class="quest-card-footer"><button class="btn quest-claim-btn btn-ready" data-action="claim" data-id="${q.id}">${icon('gift')} Nhận thưởng</button></div>` : ''}
             </article>
           `;
         }).join('')}
@@ -1431,13 +1431,17 @@ export function debtWarningModal(s: GameState) {
   const finalDay = daysLeft === 0;
   return `
     <div class="debt-warning-modal ${finalDay ? 'is-final' : ''}">
-      <div class="debt-warning-icon">${icon('clock')}</div>
-      <span class="eyebrow">CẢNH BÁO TÀI CHÍNH</span>
-      <h2>${finalDay ? 'Hôm nay là hạn cuối!' : `Chỉ còn ${daysLeft} ngày để thanh toán`}</h2>
-      <p>${finalDay ? 'Nếu kết thúc thêm một ngày mà chưa trả, boutique sẽ bị thu hồi.' : 'Các khoản nợ đang tiến gần giới hạn 7 ngày. Hãy cân đối tiền mặt và thanh toán sớm.'}</p>
+      <header class="debt-warning-hero">
+        <div class="debt-warning-icon">${icon('clock')}</div>
+        <div class="debt-warning-copy">
+          <span class="eyebrow">CẢNH BÁO TÀI CHÍNH</span>
+          <h2>${finalDay ? 'Hôm nay là hạn cuối!' : `Còn ${daysLeft} ngày để thanh toán`}</h2>
+          <p>${finalDay ? 'Nếu kết thúc thêm một ngày mà chưa trả, boutique sẽ bị thu hồi.' : 'Khoản nợ sắp chạm giới hạn 7 ngày. Hãy cân đối tiền mặt và thanh toán sớm.'}</p>
+        </div>
+      </header>
       <div class="debt-warning-list">
-        ${s.loanOverdueDays >= 5 ? `<div><span>Kỳ vay</span><strong>${money(s.loan?.paymentDue ?? 0)}</strong><small>${s.loanOverdueDays}/7 ngày</small></div>` : ''}
-        ${s.rentOverdueDays >= 5 ? `<div><span>Thuê mặt bằng</span><strong>${money(s.rentDue)}</strong><small>${s.rentOverdueDays}/7 ngày</small></div>` : ''}
+        ${s.loanOverdueDays >= 5 ? `<div><span>Kỳ vay <small>${s.loanOverdueDays}/7 ngày</small></span><strong>${money(s.loan?.paymentDue ?? 0)}</strong><i><b style="width:${Math.min(100, s.loanOverdueDays / 7 * 100)}%"></b></i></div>` : ''}
+        ${s.rentOverdueDays >= 5 ? `<div><span>Thuê mặt bằng <small>${s.rentOverdueDays}/7 ngày</small></span><strong>${money(s.rentDue)}</strong><i><b style="width:${Math.min(100, s.rentOverdueDays / 7 * 100)}%"></b></i></div>` : ''}
       </div>
       <div class="debt-warning-actions">
         <button class="btn btn-primary" data-action="finance-open">Thanh toán ngay</button>

@@ -351,6 +351,21 @@ export class GameUI {
     });
     document.addEventListener('input', event => {
       const target = event.target as HTMLInputElement;
+      if (target.matches('.inv-price-input[data-price]')) {
+        const caret = target.selectionStart ?? target.value.length;
+        const digitsBeforeCaret = target.value.slice(0, caret).replace(/\D/g, '').length;
+        const digits = target.value.replace(/\D/g, '').slice(0, 9);
+        const formatted = digits ? Number(digits).toLocaleString('vi-VN') : '';
+        target.value = formatted;
+
+        let nextCaret = 0;
+        let seenDigits = 0;
+        while (nextCaret < formatted.length && seenDigits < digitsBeforeCaret) {
+          if (/\d/.test(formatted[nextCaret])) seenDigits++;
+          nextCaret++;
+        }
+        target.setSelectionRange(nextCaret, nextCaret);
+      }
       if (target.id === 'music-volume') {
         const volume = Number(target.value) / 100;
         this.audio.setMusicVolume(volume);
@@ -382,6 +397,7 @@ export class GameUI {
     });
     document.addEventListener('keydown', event => {
       const target = event.target as HTMLElement;
+      if (target.matches('.inv-price-input') && event.key === 'Enter') { event.preventDefault(); target.blur(); return; }
       if (target.matches('.fixture-title-edit') && event.key === 'Enter') { event.preventDefault(); target.blur(); return; }
       if (this.tab !== 'decor' || !this.selectedFurniture || this.modal !== 'none' || (event.target as HTMLElement).matches('input,select,textarea')) return;
       const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };

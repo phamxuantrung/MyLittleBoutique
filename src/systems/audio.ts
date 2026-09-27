@@ -1,48 +1,34 @@
-type AudioBus = 'sfx' | 'music';
-
-const midi = (note: number) => 440 * 2 ** ((note - 69) / 12);
-const MUSIC_OUTPUT_BOOST = 2.5;
-const SFX_OUTPUT_BOOST = 1.8;
+const SFX_OUTPUT_BOOST = 2.6;
+const MUSIC_TRACK_URL = `${import.meta.env.BASE_URL}assets/audio/boutique-theme.mp3`;
 
 export class AudioSystem {
   private context?: AudioContext;
-  private musicGain?: GainNode;
-  private musicTimer?: ReturnType<typeof setInterval>;
-  private musicStep = 0;
-  private musicVolume = 1;
+  private musicTrack?: HTMLAudioElement;
+  private musicVolume = 0.55;
   enabled = true;
 
   async unlock() {
     try {
       this.context ??= new AudioContext();
-      if (!this.musicGain) {
-        this.musicGain = this.context.createGain();
-        this.musicGain.gain.value = this.musicVolume;
-        this.musicGain.connect(this.context.destination);
-      }
       if (this.context.state === 'suspended') await this.context.resume();
     } catch { /* A browser without audio can still play the complete game. */ }
   }
 
   setMusicVolume(value: number) {
-    this.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
-    if (this.context && this.musicGain) {
-      this.musicGain.gain.setTargetAtTime(this.musicVolume, this.context.currentTime, 0.025);
-    }
+    this.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
+    if (this.musicTrack) this.musicTrack.volume = this.musicVolume;
   }
 
-  private tone(frequency: number, start: number, duration: number, volume = .045, type: OscillatorType = 'sine', bus: AudioBus = 'sfx') {
+  private tone(frequency: number, start: number, duration: number, volume = .045, type: OscillatorType = 'sine') {
     if (!this.context || this.context.state !== 'running') return;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
     oscillator.type = type;
     oscillator.frequency.value = frequency;
     oscillator.connect(gain);
-    gain.connect(bus === 'music' && this.musicGain ? this.musicGain : this.context.destination);
+    gain.connect(this.context.destination);
     const t = this.context.currentTime + start;
-    const outputVolume = bus === 'music'
-      ? Math.min(.18, volume * MUSIC_OUTPUT_BOOST)
-      : Math.min(.2, volume * SFX_OUTPUT_BOOST);
+    const outputVolume = Math.min(.2, volume * SFX_OUTPUT_BOOST);
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(outputVolume, t + .018);
     gain.gain.exponentialRampToValueAtTime(.001, t + duration);
@@ -62,48 +48,17 @@ export class AudioSystem {
     notes.forEach((note, index) => this.tone(note, index * .09, kind === 'click' ? .08 : .32));
   }
 
-  private playMusicStep() {
-    if (document.hidden) return;
-    const progression = [
-      { bass: 48, chord: [60, 64, 67, 71] },
-      { bass: 45, chord: [57, 60, 64, 67] },
-      { bass: 41, chord: [53, 57, 60, 64] },
-      { bass: 43, chord: [55, 59, 62, 64] },
-    ];
-    const melody: Array<number | null> = [
-      72, null, 76, 74, 72, null, 67, 69,
-      72, null, 76, 79, 76, 74, 72, null,
-      69, null, 72, 76, 74, null, 69, 67,
-      71, null, 74, 76, 74, 71, 67, null,
-      76, null, 79, 81, 79, 76, 74, 72,
-      72, 74, 76, null, 72, 69, 67, null,
-      69, 72, 76, 74, 72, 69, 67, 64,
-      67, 71, 74, null, 72, 71, 67, null,
-    ];
-    const step = this.musicStep % melody.length;
-    const beat = step % 8;
-    const harmony = progression[Math.floor(step / 8) % progression.length];
-
-    if (beat === 0 || beat === 4) this.tone(midi(harmony.bass), 0, .82, .022, 'sine', 'music');
-    if (beat % 2 === 0) {
-      const chordNote = harmony.chord[(beat / 2) % harmony.chord.length];
-      this.tone(midi(chordNote), 0, .62, .012, 'triangle', 'music');
-      this.tone(midi(chordNote + 12), .035, .4, .005, 'sine', 'music');
-    }
-    const lead = melody[step];
-    if (lead) this.tone(midi(lead), 0, .34, .014, 'triangle', 'music');
-    if (beat === 7) this.tone(midi(harmony.chord[2] + 12), 0, .48, .005, 'sine', 'music');
-    this.musicStep++;
-  }
-
   music(enabled: boolean) {
-    if (this.musicTimer) {
-      clearInterval(this.musicTimer);
-      this.musicTimer = undefined;
+    if (!this.musicTrack) {
+      this.musicTrack = new Audio(MUSIC_TRACK_URL);
+      this.musicTrack.loop = true;
+      this.musicTrack.preload = 'auto';
+      this.musicTrack.volume = this.musicVolume;
     }
-    if (!enabled) return;
-    this.musicStep = 0;
-    this.playMusicStep();
-    this.musicTimer = setInterval(() => this.playMusicStep(), 300);
+    if (!enabled) {
+      this.musicTrack.pause();
+      return;
+    }
+    void this.musicTrack.play().catch(() => { /* Playback resumes after the next user gesture. */ });
   }
 }

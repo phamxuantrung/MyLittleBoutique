@@ -1120,7 +1120,7 @@ export class GameStore {
   }
   settings(key: 'sound' | 'music' | 'tutorialDone', value: boolean) { this.state[key] = value; this.commit(); }
   setMusicVolume(value: number) {
-    this.state.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
+    this.state.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
     this.commit();
   }
   setShopName(name: string) {

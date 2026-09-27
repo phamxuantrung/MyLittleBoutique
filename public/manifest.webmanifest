@@ -1,7 +1,7 @@
 {
-  "name": "My Little Boutique · Fashion Shop",
-  "short_name": "Boutique",
-  "description": "Một góc nhỏ, một giấc mơ lớn. Xây dựng boutique của riêng bạn trong game thời trang 2D My Little Boutique.",
+  "name": "Tiệm thời trang nhỏ",
+  "short_name": "Tiệm thời trang nhỏ",
+  "description": "Một góc nhỏ, một giấc mơ lớn. Xây dựng cửa hàng thời trang của riêng bạn trong Tiệm thời trang nhỏ.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -228,6 +228,7 @@ export class GameUI {
       let startX = 0;
       let startY = 0;
       let draggingShop = false;
+      let activePointerId: number | null = null;
       const resetHold = () => {
         window.clearTimeout(holdTimer);
         window.cancelAnimationFrame(holdFrame);
@@ -244,7 +245,10 @@ export class GameUI {
       landButton.addEventListener('pointerdown', event => {
         if (event.button !== 0 || landButton.disabled || this.store.state.phase === 'open') return;
         event.preventDefault();
+        event.stopImmediatePropagation();
         resetHold();
+        activePointerId = event.pointerId;
+        this.scene?.setHudPointerBlocked(true);
         startTime = performance.now();
         startX = event.clientX;
         startY = event.clientY;
@@ -261,6 +265,10 @@ export class GameUI {
         }, landHoldDuration);
       });
       landButton.addEventListener('pointermove', event => {
+        if (event.pointerId === activePointerId) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
         if (!holdTimer && !draggingShop) return;
         if (!draggingShop && Math.hypot(event.clientX - startX, event.clientY - startY) > 10) {
           resetHold();
@@ -269,16 +277,26 @@ export class GameUI {
         }
         if (draggingShop) this.scene?.moveHudPan(event.clientX, event.clientY);
       });
-      const finishLandInteraction = () => {
+      const finishLandInteraction = (event: PointerEvent) => {
+        if (activePointerId !== null && event.pointerId !== activePointerId) return;
+        if (activePointerId !== null) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
         resetHold();
         if (draggingShop) this.scene?.endHudPan();
         draggingShop = false;
+        activePointerId = null;
+        // Keep Phaser disabled until this pointer event has fully left the DOM.
+        // Otherwise iOS may deliver the same release to an item under the HUD.
+        window.setTimeout(() => this.scene?.setHudPointerBlocked(false), 0);
       };
       landButton.addEventListener('pointerup', finishLandInteraction);
       landButton.addEventListener('pointercancel', finishLandInteraction);
       landButton.addEventListener('lostpointercapture', finishLandInteraction);
-      landButton.addEventListener('contextmenu', event => event.preventDefault());
-      landButton.addEventListener('dragstart', event => event.preventDefault());
+      landButton.addEventListener('click', event => { event.preventDefault(); event.stopImmediatePropagation(); });
+      landButton.addEventListener('contextmenu', event => { event.preventDefault(); event.stopImmediatePropagation(); });
+      landButton.addEventListener('dragstart', event => { event.preventDefault(); event.stopImmediatePropagation(); });
     }
     document.addEventListener('pointerdown', event => {
       if ((event.target as HTMLElement).closest('#move-toolbar')) this.scene?.preserveSelectionForUiAction();
@@ -370,6 +388,14 @@ export class GameUI {
       if (moves[event.key]) { event.preventDefault(); this.moveSelected(...moves[event.key]); }
     });
     this.dialog.addEventListener('cancel', event => { event.preventDefault(); if (this.modal === 'gameover') return; this.modal === 'result' ? this.continueAfterSale() : this.closeModal(); });
+    this.dialog.addEventListener('click', event => {
+      if (event.target !== this.dialog || this.modal === 'none' || this.modal === 'gameover') return;
+      const bounds = this.dialog.getBoundingClientRect();
+      const outside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+      if (!outside) return;
+      event.preventDefault();
+      this.modal === 'result' ? this.continueAfterSale() : this.closeModal();
+    });
     window.addEventListener('boutique-display', event => {
       const uid = (event as CustomEvent<string>).detail;
       if (uid && this.tab === 'shop' && this.modal === 'none' && !this.moveMode) {
@@ -778,6 +804,8 @@ export class GameUI {
     this.scene?.setEdit(false);
     this.updateDockVisibility();
     this.render();
+    panel.scrollTop = 0;
+    requestAnimationFrame(() => { panel.scrollTop = 0; });
     requestAnimationFrame(() => this.scene?.scale?.refresh());
   }
   private beginFurniturePlacement(uid: string) {
@@ -1158,7 +1186,17 @@ export class GameUI {
     this.dialog.querySelector('.dialog-inner')!.innerHTML = html;
     this.dialog.className = `dialog-${type}`;
     if (!this.dialog.open) this.dialog.showModal();
-    this.dialog.scrollTop = 0;
+    const resetModalScroll = () => {
+      this.dialog.scrollTop = 0;
+      const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+      if (!inner) return;
+      inner.scrollTop = 0;
+      inner.querySelectorAll<HTMLElement>('*').forEach(element => {
+        if (element.scrollTop) element.scrollTop = 0;
+      });
+    };
+    resetModalScroll();
+    requestAnimationFrame(resetModalScroll);
     // Focus the dismiss/continue action rather than a product to prevent accidental purchases.
     this.dialog.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
     this.updateDockVisibility();

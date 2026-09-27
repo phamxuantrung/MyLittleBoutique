@@ -40,6 +40,31 @@ const shopSignTextureKey = (side: 'left' | 'right', name: string) => {
   return `f-shop-sign-${side}-${hash.toString(36)}`;
 };
 
+const shopSignTextLayout = (name: string) => {
+  const normalized = (name.trim() || 'My Little Boutique').normalize('NFC');
+  const words = normalized.split(/\s+/);
+  let lines = [normalized];
+  if (normalized.length > 13) {
+    if (words.length > 1) {
+      let splitAt = 1;
+      let smallestDifference = Number.POSITIVE_INFINITY;
+      for (let index = 1; index < words.length; index++) {
+        const difference = Math.abs(words.slice(0, index).join(' ').length - words.slice(index).join(' ').length);
+        if (difference < smallestDifference) {
+          smallestDifference = difference;
+          splitAt = index;
+        }
+      }
+      lines = [words.slice(0, splitAt).join(' '), words.slice(splitAt).join(' ')];
+    } else {
+      const middle = Math.ceil(normalized.length / 2);
+      lines = [normalized.slice(0, middle), normalized.slice(middle)];
+    }
+  }
+  const longest = Math.max(...lines.map(line => line.length));
+  return { lines, fontSize: longest > 20 ? 14 : longest > 16 ? 17 : longest > 12 ? 20 : 24 };
+};
+
 /* Danh sách câu thoại & cảm thán dễ thương của chủ shop (Retro Anime Boutique) */
 const OWNER_IDLE_CHATS_PREP = [
   'Đã là ủi phẳng phiu mấy mẫu váy mới rồi nè~',
@@ -594,6 +619,16 @@ export class ShopScene extends Phaser.Scene {
   refresh() { this.refreshFurniture(); this.refreshCustomer(); this.refreshOnlineShippers(); }
 
   /** Continue camera panning when a drag starts on a DOM control above the canvas. */
+  setHudPointerBlocked(blocked: boolean) {
+    if (!this.input) return;
+    this.input.enabled = !blocked;
+    this.selectionClearBlockedUntil = Date.now() + (blocked ? 10000 : 350);
+    if (blocked) {
+      this.isPanning = false;
+      this.pinchDist = 0;
+    }
+  }
+
   beginHudPan(clientX: number, clientY: number) {
     if (!this.scene.isActive() || this.currentTab !== 'shop') return;
     const point = this.hudPointerToGame(clientX, clientY);
@@ -944,19 +979,50 @@ export class ShopScene extends Phaser.Scene {
     const source = new Image();
     source.onload = async () => {
       try { await source.decode(); } catch { /* onload đã xác nhận ảnh có thể dùng */ }
-      // Cho trình raster SVG hoàn tất áp dụng @font-face nhúng trước khi Phaser upload texture.
-      window.setTimeout(() => {
-        if (!this.textures.exists(key)) this.textures.addImage(key, source);
-        this.pendingSvgTextures.delete(key);
-        if (this.scene.isActive()) this.refreshFurniture();
-      }, 120);
+      const canvas = document.createElement('canvas');
+      canvas.width = 180;
+      canvas.height = 230;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        const { lines, fontSize } = shopSignTextLayout(shopName);
+        context.save();
+        context.transform(.9, side === 'left' ? -.45 : .45, 0, 1, 9, side === 'left' ? 46 : -35);
+        context.translate(-12, 0);
+        context.font = `700 ${fontSize}px Mali, "Arial Rounded MT Bold", Arial, sans-serif`;
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.lineJoin = 'round';
+        context.strokeStyle = '#fff9fc';
+        context.lineWidth = 4.5;
+        context.fillStyle = '#873568';
+        context.shadowColor = 'rgba(123, 56, 101, .24)';
+        context.shadowBlur = 1.8;
+        context.shadowOffsetX = 1.5;
+        context.shadowOffsetY = 3;
+        lines.forEach((line, index) => {
+          const y = lines.length === 1 ? 108 : 98 + index * 24;
+          context.strokeText(line, 90, y);
+          context.fillText(line, 90, y);
+        });
+        context.restore();
+      }
+      if (!this.textures.exists(key)) {
+        if (context) this.textures.addCanvas(key, canvas);
+        else this.textures.addImage(key, source);
+      }
+      this.pendingSvgTextures.delete(key);
+      if (this.scene.isActive()) this.refreshFurniture();
     };
     source.onerror = () => this.pendingSvgTextures.delete(key);
     const loadAfterFonts = async () => {
       try {
+        await document.fonts.load('700 24px Mali');
         await document.fonts.ready;
       } catch { /* SVG vẫn có font tiếng Việt nhúng làm dự phòng */ }
-      source.src = svgUrl(furnitureSvg('shop-sign', side, shopName));
+      // Safari iOS does not reliably expose fonts embedded in an SVG loaded as
+      // an image. The SVG supplies the art; the shop name is painted on canvas.
+      source.src = svgUrl(furnitureSvg('shop-sign', side, shopName, false));
     };
     void loadAfterFonts();
   }

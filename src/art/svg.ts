@@ -300,7 +300,7 @@ export function rackSvg() {
 export const wallArtAssets = ['boutique-window', 'blush-blinds', 'shop-sign', 'fashion-print', 'gallery-print', 'botanical-print', 'runway-print', 'parfum-print', 'shoe-sketch-print', 'ribbon-sign', 'neon-sign', 'lightbox-sign'] as const;
 export const isWallArtAsset = (art: string) => (wallArtAssets as readonly string[]).includes(art);
 
-export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', shopName = 'My Little Boutique') {
+export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', shopName = 'My Little Boutique', includeShopName = true) {
   // Tên biến tương thích với template cũ; dữ liệu thực tế là Mali Bold Vietnamese được nhúng hoàn toàn.
   const playfairVietnameseFont = maliVietnameseFont;
   const escapeSvgText = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[char] ?? char);
@@ -328,10 +328,10 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
   }
   const longestSignLine = Math.max(...signLines.map(line => line.length));
   const signFontSize = longestSignLine > 20 ? 14 : longestSignLine > 16 ? 17 : longestSignLine > 12 ? 20 : 24;
-  const signText = signLines.map((line, index) => {
+  const signText = includeShopName ? signLines.map((line, index) => {
     const y = signLines.length === 1 ? 108 : 98 + index * 24;
     return `<tspan x="90" y="${y}">${escapeSvgText(line)}</tspan>`;
-  }).join('');
+  }).join('') : '';
   const signDecorY = signLines.length === 1 ? 128 : 140;
   const demoTop = (x: number, y: number, color: string) => `<path d="M${x - 12} ${y + 5}L${x - 20} ${y + 13}L${x - 16} ${y + 22}L${x - 9} ${y + 18}V${y + 38}Q${x} ${y + 42} ${x + 9} ${y + 38}V${y + 18}L${x + 16} ${y + 22}L${x + 20} ${y + 13}L${x + 12} ${y + 5}Q${x} ${y + 9} ${x - 12} ${y + 5}Z" fill="${color}" stroke="#4a2d5a" stroke-width="1.6"/><path d="M${x - 4} ${y + 7}Q${x} ${y + 13} ${x + 4} ${y + 7}" fill="none" stroke="#fff2f8" stroke-width="1.5"/>`;
   const demoIsoTop = (x: number, y: number, color: string) => `<g transform="matrix(.62,.31,0,.62,${x},${y})" stroke-linejoin="round"><path d="M-11 3L-20 10L-16 19L-9 15V37Q0 41 9 37V15L16 19L20 10L11 3Q0 8-11 3Z" fill="${color}" stroke="#4a2d5a" stroke-width="2"/><path d="M-5 4Q0 11 5 4" fill="none" stroke="#fff7fb" stroke-width="2"/></g>`;
@@ -834,7 +834,7 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
   const resolvedShape = art === 'shop-sign'
     ? rawShape
         .replaceAll('Boutique Playfair', 'Boutique Mali')
-        .replace('font-style:normal;font-weight:100 900}', 'font-style:normal;font-weight:700;font-display:block}')
+        .replace('font-style:normal;font-weight:100 900}', 'font-style:normal;font-weight:700;font-display:swap}')
         .replace("'Segoe Print','Comic Sans MS','Boutique Mali',cursive", "'Boutique Mali','Segoe Print','Comic Sans MS',cursive")
         .replace('fill="#ef79b1" stroke="#fff9fc" stroke-width="3.5" paint-order="stroke fill"', 'fill="#ef79b1" stroke="#fff9fc" stroke-width="4.5" paint-order="stroke fill" opacity="1"')
     : rawShape;

@@ -1119,13 +1119,17 @@ export class GameStore {
     this.toast('Hãy mở mục Tài chính để vay vốn nhập hàng cho boutique.', 'error');
   }
   settings(key: 'sound' | 'music' | 'tutorialDone', value: boolean) { this.state[key] = value; this.commit(); }
+  setMusicVolume(value: number) {
+    this.state.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
+    this.commit();
+  }
   setShopName(name: string) {
     const clean = name.trim().slice(0, 30);
     if (!clean) return;
     this.state.shopName = clean;
     this.state.hasNamedShop = true;
     this.commit();
-    this.toast(`Đã đổi tên tiệm thành "${clean}"! ✨`);
+    this.toast(`Đã đổi tên tiệm thành "${clean}"!`);
   }
   debug(action: string) {
     const s = this.state;

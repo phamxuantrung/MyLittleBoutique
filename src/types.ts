@@ -79,7 +79,7 @@ export interface GameState {
   pendingOrders: PendingOrder[];
   onlineListings: string[]; onlineOrders: OnlineOrder[]; onlineNextOrderIn: number; onlineChannelEnabled: boolean;
   onlineRating: number; onlineReviews: number; onlineSales: number;
-  stats: DayStats; posts: SocialPost[]; claimed: string[]; sound: boolean; music: boolean; tutorialDone: boolean;
+  stats: DayStats; posts: SocialPost[]; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; tutorialDone: boolean;
   employees: StaffMember[]; staffApplicants: StaffCandidate[]; recruitmentPost: RecruitmentPost | null; staffLeaveRequests: StaffLeaveRequest[];
   shopName: string; hasNamedShop?: boolean;
 }

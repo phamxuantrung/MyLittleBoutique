@@ -12,6 +12,7 @@ import type { ShopScene } from '../scenes/ShopScene';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social';
 type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug';
+const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'buy-furniture']);
 const navItems: { id: Tab; label: string; icon: string; subtitle: string }[] = [
   { id: 'stock', label: 'Kho hàng', icon: 'hanger', subtitle: 'Hàng đang có' },
   { id: 'import', label: 'Nhập hàng', icon: 'bag', subtitle: 'Bổ sung kho & Lookbook' },
@@ -48,6 +49,7 @@ export class GameUI {
   private tutorialStep = 0;
   private tutorialRetry = 0;
   private onlineOrderId = '';
+  private suppressSuccessToastAudio = false;
   private onlineHandoverProductIds: string[] = [];
   private serveVisitId = '';
 
@@ -77,7 +79,11 @@ export class GameUI {
         if (this.modal === 'debug') this.dialog.querySelector('.dialog-inner')!.innerHTML = debugPanel(store.state);
         this.queueTutorialCue();
       }
-      if (event.type === 'toast') { this.toast(event.message, event.tone); audio.play(event.tone === 'error' ? 'error' : 'click'); }
+      if (event.type === 'toast') {
+        this.toast(event.message, event.tone);
+        if (event.tone === 'error') audio.play('error');
+        else if (!this.suppressSuccessToastAudio) audio.play('click');
+      }
       if (event.type === 'sale') {
         if (!event.result.isSelfPick && !event.result.isStaffAssisted) {
           this.openModal('result', resultModal(event.result));
@@ -292,11 +298,27 @@ export class GameUI {
       }
       const target = clicked.closest<HTMLElement>('[data-action]');
       if (!target || target instanceof HTMLButtonElement && target.disabled) return;
-      event.preventDefault(); void this.audio.unlock(); this.audio.play('click');
-      this.action(target.dataset.action!, target.dataset.id ?? '', target);
+      event.preventDefault();
+      void this.audio.unlock();
+      const action = target.dataset.action!;
+      const isMoneyPurchase = MONEY_PURCHASE_ACTIONS.has(action);
+      const moneyBefore = this.store.state.money;
+      if (!isMoneyPurchase) this.audio.play('click');
+      this.suppressSuccessToastAudio = isMoneyPurchase;
+      try {
+        this.action(action, target.dataset.id ?? '', target);
+      } finally {
+        this.suppressSuccessToastAudio = false;
+      }
+      if (isMoneyPurchase && this.store.state.money < moneyBefore) this.audio.play('spend');
     });
     document.addEventListener('change', event => {
       const target = event.target as HTMLSelectElement;
+      if (target.id === 'music-volume') {
+        const volume = Number(target.value) / 100;
+        this.store.setMusicVolume(volume);
+        this.audio.setMusicVolume(volume);
+      }
       if (target.id === 'stock-sort') { this.sort = target.value; this.renderPanel(); }
       if (target.dataset.price) {
         const rawPrice = target.value.trim();
@@ -311,6 +333,12 @@ export class GameUI {
     });
     document.addEventListener('input', event => {
       const target = event.target as HTMLInputElement;
+      if (target.id === 'music-volume') {
+        const volume = Number(target.value) / 100;
+        this.audio.setMusicVolume(volume);
+        const output = this.dialog.querySelector<HTMLOutputElement>('#music-volume-value');
+        if (output) output.value = `${Math.round(volume * 100)}%`;
+      }
       if (target.matches('.fixture-title-edit') && (target.textContent?.length ?? 0) > 28) {
         target.textContent = target.textContent!.slice(0, 28);
         const range = document.createRange(); range.selectNodeContents(target); range.collapse(false);
@@ -677,7 +705,7 @@ export class GameUI {
       }
       case 'upgrade': this.store.upgrade(); this.closeModal(); this.scene?.burst(500, 300, true); this.audio.play('reward'); break;
       case 'sound': this.store.settings('sound', !this.store.state.sound); this.audio.enabled = this.store.state.sound; if (this.modal === 'settings') this.showSettings(); break;
-      case 'music': this.store.settings('music', !this.store.state.music); this.audio.music(this.store.state.music); this.showSettings(); break;
+      case 'music': this.store.settings('music', !this.store.state.music); this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.music(this.store.state.music); this.showSettings(); break;
       case 'settings': {
         if (this.store.state.phase === 'open') {
           this.toast('Đang trong giờ bán hàng! Hãy chăm chút phục vụ khách nhé.', 'info');
@@ -717,7 +745,7 @@ export class GameUI {
       case 'tutorial-done': this.store.settings('tutorialDone', true); this.closeModal(); break;
       case 'rescue': this.store.rescue(); break;
       case 'reset-confirm': this.openModal('reset', `<div class="modal-heading"><h2>Bắt đầu một boutique mới?</h2><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div><p>Tiền, hàng hóa, ngày chơi và toàn bộ tiến trình hiện tại sẽ bị xóa khỏi trình duyệt này. Thao tác này không thể hoàn tác.</p><div class="reset-actions"><button class="btn btn-secondary" data-action="settings">Giữ boutique của mình</button><button class="btn btn-danger" data-action="reset">Xóa và chơi lại</button></div>`); break;
-      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.music(false); this.productImportQtys = {}; this.lookQtys = {}; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
+      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
     }
   }
   navigate(tab: Tab) {
@@ -1255,7 +1283,11 @@ export class GameUI {
 
     <div class="setting-row"><div><h3>Tên boutique của bạn</h3><p>${escapeHtml(s.shopName || 'My Little Boutique')}</p></div><button class="btn btn-small btn-primary" data-action="name-shop">${icon('edit')} Đổi tên</button></div>
     <div class="setting-row"><div><h3>Âm thanh tương tác</h3><p>Tiếng chuông cửa, đồng xu và những niềm vui nhỏ.</p></div><button role="switch" aria-checked="${s.sound}" aria-label="Âm thanh tương tác" data-action="sound" class="toggle ${s.sound ? 'on' : ''}"><span></span></button></div>
-    <div class="setting-row"><div><h3>Nhạc nền thư giãn</h3><p>Một giai điệu nhẹ nhàng trong lúc chăm shop.</p></div><button role="switch" aria-checked="${s.music}" aria-label="Nhạc nền" data-action="music" class="toggle ${s.music ? 'on' : ''}"><span></span></button></div>
+    <div class="setting-row setting-music-row"><div><h3>Nhạc nền boutique</h3><p>Giai điệu pastel pop nhẹ nhàng trong lúc chăm shop.</p></div><button role="switch" aria-checked="${s.music}" aria-label="Nhạc nền" data-action="music" class="toggle ${s.music ? 'on' : ''}"><span></span></button></div>
+    <label class="music-volume-control ${s.music ? '' : 'is-muted'}" for="music-volume">
+      <span><strong>Âm lượng nhạc</strong><small>Kéo để chọn mức âm lượng dịu tai.</small></span>
+      <span class="music-volume-slider">${icon('volume')}<input id="music-volume" type="range" min="0" max="100" step="5" value="${Math.round(s.musicVolume * 100)}" aria-label="Âm lượng nhạc"><output id="music-volume-value" for="music-volume">${Math.round(s.musicVolume * 100)}%</output></span>
+    </label>
     <div class="setting-row"><div><h3>Tiến trình của bạn</h3><p>${this.store.save.available ? 'Tự động lưu trên trình duyệt này sau mỗi thao tác.' : 'Trình duyệt đang chặn lưu trữ. Tiến trình có thể mất khi đóng trang.'}</p></div>${icon(this.store.save.available ? 'check' : 'help')}</div>
     <div class="setting-row"><div><h3>Một khởi đầu mới</h3><p>Xóa tiến trình hiện tại và bắt đầu từ ngày đầu tiên.</p></div><button class="btn btn-small btn-white" data-action="reset-confirm">Chơi lại</button></div>
     <button class="btn btn-secondary full-width" data-action="help">${icon('help')} Xem hướng dẫn chơi</button>`);

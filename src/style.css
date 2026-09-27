@@ -6403,6 +6403,30 @@ dialog.dialog-quests .dialog-inner {
   transform: translateX(18px);
 }
 
+.music-volume-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 42%);
+  align-items: center;
+  gap: 18px;
+  padding: 11px 12px;
+  margin: 8px 0 10px;
+  border: 1px solid #f1c9de;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff8fc, #fff0f8);
+}
+.music-volume-control > span:first-child { display: grid; gap: 2px; }
+.music-volume-control strong { color: var(--ink-900); font-size: 11px; }
+.music-volume-control small { color: var(--ink-500); font-size: 9px; }
+.music-volume-control.is-muted { opacity: .62; }
+.music-volume-slider { display: grid; grid-template-columns: 18px 1fr 38px; align-items: center; gap: 8px; color: #d83b92; }
+.music-volume-slider .icon { width: 18px; height: 18px; }
+.music-volume-slider output { color: #9f2d70; font-size: 10px; font-weight: 800; text-align: right; }
+.music-volume-slider input { width: 100%; height: 5px; margin: 0; border-radius: 999px; accent-color: #dc3c97; cursor: pointer; }
+
+@media (max-width: 620px) {
+  .music-volume-control { grid-template-columns: 1fr; gap: 8px; }
+}
+
 .reset-actions {
   display: flex;
   gap: 10px;

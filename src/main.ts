@@ -9,6 +9,7 @@ import { ShopScene } from './scenes/ShopScene';
 const store = new GameStore();
 const audio = new AudioSystem();
 audio.enabled = store.state.sound;
+audio.setMusicVolume(store.state.musicVolume);
 const ui = new GameUI(store, audio);
 const scene = new ShopScene(store, () => ui.openServe(), uid => ui.selectFurniture(uid), orderId => ui.openOnlineOrder(orderId));
 const game = new Phaser.Game({

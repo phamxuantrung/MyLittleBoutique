@@ -1,0 +1,30 @@
+import { expect, test } from '@playwright/test';
+import { SAVE_KEY } from '../../src/systems/save';
+import { openState } from './state';
+
+test('sale speed cycles 1x, 2x, 4x, 1x and resets after closing', async ({ page }) => {
+  const state = openState();
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.clock.install();
+  await page.goto('/');
+  await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  const speed = page.locator('[data-action="sale-speed"]');
+  const remaining = async () => {
+    const [minutes, seconds] = (await page.locator('#day-timer-label').innerText()).split(':').map(Number);
+    return minutes * 60 + seconds;
+  };
+  await expect(speed).toHaveText('1x');
+  for (const multiplier of [2, 4, 1]) {
+    await speed.click();
+    await expect(speed).toHaveAttribute('data-speed', String(multiplier));
+    const before = await remaining();
+    await page.clock.runFor(2000);
+    expect(before - await remaining()).toBe(2 * multiplier);
+  }
+  await page.locator('[data-action="close-shop"]').click();
+  await expect(speed).toHaveCount(0);
+  await page.locator('[data-action="next-day"]').click();
+  await page.locator('[data-action="open"]').click();
+  await expect(speed).toHaveAttribute('data-speed', '1');
+});

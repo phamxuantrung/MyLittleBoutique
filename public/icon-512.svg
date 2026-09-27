@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a705b"/>
+      <stop offset="50%" stop-color="#3b5e4c"/>
+      <stop offset="100%" stop-color="#2d4a3b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff8e7"/>
+      <stop offset="100%" stop-color="#e8cca4"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#1e3327" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- Background with iOS rounded rect -->
+  <rect width="512" height="512" rx="114" fill="url(#bg)"/>
+  
+  <!-- Subtle inner glow border -->
+  <rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="4"/>
+
+  <!-- Fashion Hanger Motif -->
+  <g filter="url(#shadow)">
+    <!-- Hook -->
+    <path d="M210 185 a46 46 0 0 1 92 0 c0 30 -46 36 -46 65" fill="none" stroke="url(#gold)" stroke-width="26" stroke-linecap="round"/>
+    
+    <!-- Triangle Hanger Body -->
+    <path d="M100 365 L256 265 L412 365 A16 16 0 0 1 404 395 L108 395 A16 16 0 0 1 100 365 Z" fill="none" stroke="url(#gold)" stroke-width="26" stroke-linejoin="round" stroke-linecap="round"/>
+    
+    <!-- Crossbar -->
+    <line x1="120" y1="382" x2="392" y2="382" stroke="url(#gold)" stroke-width="18" stroke-linecap="round"/>
+  </g>
+
+  <!-- Cute Sparkles / Stars -->
+  <path d="M380 130 Q380 160 410 160 Q380 160 380 190 Q380 160 350 160 Q380 160 380 130 Z" fill="#f8e5c2"/>
+  <path d="M130 200 Q130 218 148 218 Q130 218 130 236 Q130 218 112 218 Q130 218 130 200 Z" fill="#f8e5c2" opacity="0.8"/>
+  <circle cx="330" cy="115" r="7" fill="#fff8e7"/>
+  <circle cx="160" cy="160" r="5" fill="#fff8e7" opacity="0.7"/>
+
+  <!-- Cute Bow on Hanger -->
+  <g transform="translate(256, 265)">
+    <circle cx="0" cy="0" r="14" fill="#eed5b8"/>
+    <path d="M-8 -6 C-28 -24 -46 -4 -28 14 Z" fill="#eed5b8"/>
+    <path d="M8 -6 C28 -24 46 -4 28 14 Z" fill="#eed5b8"/>
+    <path d="M-6 8 C-14 26 -18 36 -12 38 C-6 38 -2 24 0 12" fill="#d9be9e"/>
+    <path d="M6 8 C14 26 18 36 12 38 C6 38 2 24 0 12" fill="#d9be9e"/>
+  </g>
+</svg>

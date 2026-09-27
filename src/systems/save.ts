@@ -30,7 +30,7 @@ export function initialState(): GameState {
       { uid: 'starter-plant', id: 'plant', x: 6, y: 0, rotation: 0 },
       { uid: 'starter-counter', id: 'counter', x: 4, y: 4, rotation: 0 },
       ...movableDecorStarters.map(item => ({ ...item })),
-    ], stats: emptyStats(), posts: [], claimed: [MOVABLE_DECOR_MIGRATION], sound: true, music: true, musicVolume: 0.55, tutorialDone: false,
+    ], stats: emptyStats(), posts: [], claimed: [MOVABLE_DECOR_MIGRATION], sound: true, music: true, musicVolume: 1, tutorialDone: false,
     employees: [], staffApplicants: [], recruitmentPost: null, staffLeaveRequests: [],
     shopName: 'My Little Boutique', hasNamedShop: false,
   };
@@ -255,7 +255,7 @@ export function parseSave(raw: string | null): GameState {
     }
     state.sound = typeof s.sound === 'boolean' ? s.sound : true;
     state.music = typeof s.music === 'boolean' ? s.music : true;
-    state.musicVolume = finite(s.musicVolume, 0.55, 1);
+    state.musicVolume = finite(s.musicVolume, 1, 1);
     state.tutorialDone = s.tutorialDone === true;
     state.onlineRating = finite(s.onlineRating, 5, 5);
     state.onlineReviews = Math.floor(finite(s.onlineReviews, 0, 999999));

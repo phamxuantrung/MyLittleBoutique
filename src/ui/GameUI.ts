@@ -150,7 +150,7 @@ export class GameUI {
             <div class="top-right-cluster">
               <section class="hud" id="hud" aria-label="Chỉ số cửa hàng"></section>
               <div class="quick-tools-bar">
-                <button class="hud-circle-btn" data-action="quests" title="Nhiệm vụ ngày" aria-label="Nhiệm vụ ngày">${icon('gift')}</button>
+                <button class="hud-circle-btn quest-hud-button" data-action="quests" title="Nhiệm vụ ngày" aria-label="Nhiệm vụ ngày">${icon('gift')}<b id="quest-ready-badge" class="quest-ready-badge" hidden></b></button>
                 <button class="hud-circle-btn" data-action="settings" id="settings-button" aria-label="Cài đặt boutique" title="Cài đặt">${icon('settings')}</button>
                 <button class="owner-avatar hud-circle-btn" data-action="home" aria-label="Về trang chủ boutique" title="Về trang chủ boutique">${ownerPortrait(36)}<span class="avatar-home-badge" title="Về trang chủ">${icon('home')}</span></button>
               </div>
@@ -928,7 +928,21 @@ export class GameUI {
 
     // Ẩn/hiện các nút công cụ nhanh trên đỉnh tùy theo giờ bán hàng:
     const questBtn = document.querySelector<HTMLElement>('[data-action="quests"]');
-    if (questBtn) questBtn.style.display = isOpen ? 'none' : '';
+    if (questBtn) {
+      questBtn.style.display = isOpen ? 'none' : '';
+      const readyQuestCount = [
+        s.stats.sold >= 3 && !s.claimed.includes(`${s.day}:sales`),
+        s.stats.trendSales >= 2 && !s.claimed.includes(`${s.day}:trend`),
+      ].filter(Boolean).length;
+      const badge = questBtn.querySelector<HTMLElement>('#quest-ready-badge');
+      if (badge) {
+        badge.hidden = readyQuestCount === 0;
+        badge.textContent = String(readyQuestCount);
+      }
+      questBtn.setAttribute('aria-label', readyQuestCount
+        ? `Nhiệm vụ ngày, ${readyQuestCount} phần thưởng chưa nhận`
+        : 'Nhiệm vụ ngày');
+    }
     const settingsBtn = document.querySelector<HTMLElement>('[data-action="settings"]');
     if (settingsBtn) settingsBtn.style.display = isOpen ? 'none' : '';
     const staffButton = document.querySelector<HTMLElement>('#staff-manager-button');

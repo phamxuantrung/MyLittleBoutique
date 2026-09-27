@@ -980,6 +980,37 @@ h1, h2, h3, h4, p {
   height: 17px;
 }
 
+.quest-hud-button {
+  position: relative;
+  overflow: visible;
+}
+
+.quest-ready-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(145deg, #f45a9f, #ce2f80);
+  box-shadow: 0 3px 8px rgba(177, 40, 111, .32);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.quest-ready-badge[hidden] {
+  display: none !important;
+}
+
 /* Avatar chủ shop - Nút Về Trang Chủ */
 .owner-avatar {
   position: relative;
@@ -10156,3 +10187,63 @@ dialog.dialog-close-shop-confirm {
   .top-left-cluster > #day-card { min-width: 72px; }
   .top-left-cluster > #shop-status .status-pill { min-width: 84px; }
 }
+
+/* Product-selection modals intentionally have no hover animation on any device. */
+  .dialog-serve .outfit-option,
+  .dialog-serve .outfit-option .product-art,
+  button.fixture-slot-card,
+  .fixture-display-group,
+  .fixture-stock-option,
+  .online-dashboard-stock-item,
+  .online-product-card .online-product-photo img,
+  .online-warehouse-product {
+    transition: none !important;
+  }
+
+  .dialog-serve .outfit-option:hover {
+    transform: none !important;
+  }
+
+  .dialog-serve .outfit-option:not(.selected):not(.is-matched-style):hover {
+    border-color: #f5e6f3 !important;
+    box-shadow: 0 2px 6px rgba(180, 50, 130, .04) !important;
+  }
+
+  .dialog-serve .outfit-option.is-matched-style:not(.selected):hover {
+    border-color: #fbcfe8 !important;
+    box-shadow: 0 2px 6px rgba(180, 50, 130, .04) !important;
+  }
+
+  .dialog-serve .outfit-option:hover .product-art,
+  .online-product-card:hover .online-product-photo img {
+    transform: none !important;
+  }
+
+  button.fixture-slot-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  .fixture-display-group:hover {
+    transform: none !important;
+    border-color: #ebafd1 !important;
+    box-shadow: none !important;
+  }
+
+  .fixture-stock-option:hover:not(:disabled) {
+    transform: none !important;
+    border-color: #efdce8 !important;
+    box-shadow: none !important;
+  }
+
+  .online-dashboard-stock-item:hover:not(:disabled) {
+    transform: none !important;
+    border-color: #eee2e9 !important;
+    background: #fff !important;
+  }
+
+  .online-warehouse-product:hover:not(:disabled) {
+    transform: none !important;
+    border-color: #e9dbe4 !important;
+    background: #fff !important;
+  }

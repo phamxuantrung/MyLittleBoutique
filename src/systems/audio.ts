@@ -1,13 +1,15 @@
 type AudioBus = 'sfx' | 'music';
 
 const midi = (note: number) => 440 * 2 ** ((note - 69) / 12);
+const MUSIC_OUTPUT_BOOST = 2.5;
+const SFX_OUTPUT_BOOST = 1.8;
 
 export class AudioSystem {
   private context?: AudioContext;
   private musicGain?: GainNode;
   private musicTimer?: ReturnType<typeof setInterval>;
   private musicStep = 0;
-  private musicVolume = 0.55;
+  private musicVolume = 1;
   enabled = true;
 
   async unlock() {
@@ -23,7 +25,7 @@ export class AudioSystem {
   }
 
   setMusicVolume(value: number) {
-    this.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
+    this.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
     if (this.context && this.musicGain) {
       this.musicGain.gain.setTargetAtTime(this.musicVolume, this.context.currentTime, 0.025);
     }
@@ -38,8 +40,11 @@ export class AudioSystem {
     oscillator.connect(gain);
     gain.connect(bus === 'music' && this.musicGain ? this.musicGain : this.context.destination);
     const t = this.context.currentTime + start;
+    const outputVolume = bus === 'music'
+      ? Math.min(.18, volume * MUSIC_OUTPUT_BOOST)
+      : Math.min(.2, volume * SFX_OUTPUT_BOOST);
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(volume, t + .018);
+    gain.gain.linearRampToValueAtTime(outputVolume, t + .018);
     gain.gain.exponentialRampToValueAtTime(.001, t + duration);
     oscillator.start(t);
     oscillator.stop(t + duration + .03);

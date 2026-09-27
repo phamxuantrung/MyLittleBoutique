@@ -9901,8 +9901,8 @@ body.guided-tutorial-active .import-grid:has(.tutorial-focus) {
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   /* Lift the selected-furniture actions above the iPhone home indicator. */
   .move-bottom-toolbar.is-selection-toolbar {
-    right: var(--mobile-safe-right) !important;
-    bottom: calc(var(--mobile-safe-bottom) + 12px) !important;
+    right: calc(var(--mobile-safe-right) + 68px) !important;
+    bottom: var(--mobile-safe-bottom) !important;
   }
 
   .dialog-serve .outfit-item-name {

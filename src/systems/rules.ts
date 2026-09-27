@@ -435,9 +435,9 @@ export function onlineOrderChance(s: GameState, availableProductIds: string[] = 
   const ratingTrust = Math.pow(Math.max(.02, Math.min(1, (trustedRating - 2.4) / 2.3)), 1.25);
   const reviewConfidence = .32 + .68 * Math.min(1, s.onlineReviews / 22);
   const shopTrust = Math.pow(Math.max(.03, Math.min(1, (s.reputation - 2.8) / 2.2)), 1.1);
-  const recognition = Math.max(.02, Math.min(1, Math.log10(s.followers + 1) / Math.log10(1001)));
+  const recognition = Math.max(.03, Math.min(1, Math.log10(s.followers + 1) / Math.log10(1001)));
   const assortment = .44 + .56 * Math.min(1, available.length / 7);
   const offerQuality = available.reduce((sum, product) => sum + onlineProductDemandWeight(s, product), 0) / available.length;
-  const deliveryHistory = Math.min(.14, s.onlineSales * .0035) * ratingTrust;
-  return Math.max(0, Math.min(.72, .001 + shopTrust * recognition * ratingTrust * reviewConfidence * assortment * offerQuality * .64 + deliveryHistory));
+  const deliveryHistory = Math.min(.18, s.onlineSales * .004) * ratingTrust;
+  return Math.max(0, Math.min(.78, .0025 + shopTrust * recognition * ratingTrust * reviewConfidence * assortment * offerQuality * .82 + deliveryHistory));
 }

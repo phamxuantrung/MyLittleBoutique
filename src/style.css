@@ -688,6 +688,50 @@ h1, h2, h3, h4, p {
   font-variant-numeric: tabular-nums !important;
 }
 
+/* The sale clock is the main header focus while the boutique is open. */
+#shop-status .status-countdown-pill {
+  position: fixed !important;
+  top: 5px !important;
+  left: 50% !important;
+  z-index: 105 !important;
+  min-width: 108px !important;
+  height: 40px !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  padding: 0 16px !important;
+  transform: translateX(-50%) !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #6a2755 !important;
+  box-shadow: none !important;
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  letter-spacing: .25px !important;
+  pointer-events: none !important;
+}
+
+#shop-status .status-countdown-pill .icon {
+  width: 18px !important;
+  height: 18px !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: #c43883 !important;
+  background: transparent !important;
+  box-sizing: content-box !important;
+}
+
+#shop-status .status-countdown-pill strong {
+  font-size: inherit !important;
+  line-height: 1 !important;
+}
+
+#shop-status .status-countdown-pill.is-urgent {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: #bb2748 !important;
+  box-shadow: none !important;
+}
+
 .status-countdown-pill .icon {
   width: 12px !important;
   height: 12px !important;
@@ -9627,6 +9671,14 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
     padding-left: var(--mobile-safe-left) !important;
   }
 
+  #shop-status .status-countdown-pill {
+    top: calc(var(--mobile-safe-top) + 2px) !important;
+    min-width: 116px !important;
+    height: 44px !important;
+    padding: 0 18px !important;
+    font-size: 18px !important;
+  }
+
   .game-bottom-hud {
     padding-right: var(--mobile-safe-right) !important;
     padding-bottom: var(--mobile-safe-bottom) !important;
@@ -9846,6 +9898,34 @@ body.guided-tutorial-active .import-grid:has(.tutorial-focus) {
   overflow: visible !important;
 }
 
+dialog.dialog-close-shop-confirm {
+  width: min(420px, calc(100vw - 28px));
+}
+
+.early-close-confirmation {
+  padding: 8px 4px 4px;
+  color: #57304f;
+  text-align: center;
+}
+
+.early-close-icon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 9px;
+  border: 1px solid #efc5dc;
+  border-radius: 16px;
+  color: #c43883;
+  background: #fff1f8;
+}
+
+.early-close-icon .icon { width: 25px; height: 25px; }
+.early-close-confirmation h2 { margin: 5px 0 7px; font: 800 23px/1.15 var(--font-serif); }
+.early-close-confirmation p { max-width: 340px; margin: 0 auto 16px; color: #8c6b80; font-size: 11px; line-height: 1.45; }
+.early-close-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 8px; }
+.early-close-actions .btn { min-height: 42px; margin: 0; }
+
 /* Prevent the large mobile type scale from breaking wardrobe product cards. */
 .dialog-serve .outfit-option > .outfit-meta-wrap {
   width: 100%;
@@ -10026,4 +10106,53 @@ body.guided-tutorial-active .import-grid:has(.tutorial-focus) {
   .cheer-text p { font-size: 11.5px !important; line-height: 1.4 !important; }
   .summary-actions-group { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px; margin-top: 0; }
   .summary-actions-group .btn { min-height: 46px; margin: 0; font-size: 12px !important; }
+}
+
+/* Keep the level, day and shop-state pills visually balanced. */
+.top-left-cluster {
+  gap: 7px;
+}
+
+.top-left-cluster > .level-capsule,
+.top-left-cluster > #day-card,
+.top-left-cluster > #shop-status .status-pill {
+  height: 36px !important;
+  min-height: 36px !important;
+  border-width: 1.5px !important;
+  border-radius: 19px !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 3px 10px rgba(126, 45, 101, .09) !important;
+}
+
+.top-left-cluster > .level-capsule {
+  padding: 2px 12px 2px 5px !important;
+}
+
+.top-left-cluster > .level-capsule .level-crown {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.top-left-cluster > #day-card {
+  min-width: 67px;
+  padding: 2px 12px !important;
+}
+
+.top-left-cluster > #shop-status .status-pill {
+  min-width: 78px;
+  justify-content: center;
+  padding: 0 12px !important;
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .top-left-cluster > .level-capsule,
+  .top-left-cluster > #day-card,
+  .top-left-cluster > #shop-status .status-pill {
+    height: 38px !important;
+    min-height: 38px !important;
+    border-radius: 19px !important;
+  }
+
+  .top-left-cluster > #day-card { min-width: 72px; }
+  .top-left-cluster > #shop-status .status-pill { min-width: 84px; }
 }

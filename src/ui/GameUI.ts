@@ -11,7 +11,7 @@ import { debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financ
 import type { ShopScene } from '../scenes/ShopScene';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social';
-type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug';
+type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm';
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'buy-furniture']);
 const navItems: { id: Tab; label: string; icon: string; subtitle: string }[] = [
   { id: 'stock', label: 'Kho hàng', icon: 'hanger', subtitle: 'Hàng đang có' },
@@ -601,7 +601,23 @@ export class GameUI {
         break;
       }
       case 'serve': this.store.serve(this.selected); break;
-      case 'close-shop': this.store.closeDay(); break;
+      case 'close-shop':
+        this.openModal('close-shop-confirm', `
+          <div class="early-close-confirmation">
+            <span class="early-close-icon">${icon('clock')}</span>
+            <span class="eyebrow">KẾT THÚC NGÀY BÁN</span>
+            <h2>Đóng cửa sớm ngay bây giờ?</h2>
+            <p>Khách đang ở trong shop sẽ rời đi và hôm nay sẽ được tổng kết ngay.</p>
+            <div class="early-close-actions">
+              <button class="btn btn-secondary" data-action="close-modal">Tiếp tục bán</button>
+              <button class="btn btn-primary" data-action="close-shop-confirm">Đóng cửa và tổng kết</button>
+            </div>
+          </div>`);
+        break;
+      case 'close-shop-confirm':
+        this.closeModal();
+        this.store.closeDay();
+        break;
       case 'sale-speed': {
         if (this.store.state.phase !== 'open') return;
         this.saleSpeed = this.saleSpeed === 1 ? 2 : this.saleSpeed === 2 ? 4 : 1;
@@ -1143,6 +1159,18 @@ export class GameUI {
     const customer = activeCustomer(this.store.state);
     const visit = activeVisit(this.store.state);
     if (!customer || !visit || !customerNeedsAdvice(this.store.state, customer)) return;
+    if (this.saleSpeed !== 1) {
+      this.saleSpeed = 1;
+      this.saleTickProgress = 0;
+      this.scene?.setSaleSpeed(1);
+      const speedButton = document.querySelector<HTMLButtonElement>('[data-action="sale-speed"]');
+      if (speedButton) {
+        speedButton.dataset.speed = '1';
+        speedButton.setAttribute('aria-label', 'Tốc độ bán hàng 1x');
+        const speedValue = speedButton.querySelector<HTMLElement>('.speed-val');
+        if (speedValue) speedValue.textContent = '1x';
+      }
+    }
     this.serveVisitId = visit.uid;
     this.selected = [];
     this.outfitCategory = 'all';

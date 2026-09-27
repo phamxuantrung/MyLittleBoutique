@@ -78,7 +78,7 @@ export function displayUpgradeCost(fixture: Furniture, placed: PlacedFurniture):
 // Traffic affects the idle interval, never the number of visits allowed per day.
 const customerTraffic = (state: GameState) => Math.max(2, Math.min(14,
   3 + Math.floor(state.level * .7) + Math.min(6, Math.floor(decorAppealScore(state) / 4)) + landExpansion[landTier(state)].traffic + currentEvent(state).extra));
-export const DAY_DURATION = 300;
+export const DAY_DURATION = 180;
 export const landExpansion = [
   { size: 7, cost: 0, rent: 0, traffic: 0 },
   { size: 8, cost: 350000, rent: 30000, traffic: 2 },

@@ -23,7 +23,7 @@ describe('timed shop and random visits', () => {
     const browse = make(() => .35); browse.openShop(); arrive(browse);
     expect(browse.state.customerMode).toBe('browse');
   });
-  it('starts a five-minute day with an empty shop and admits a random unlocked visitor', () => {
+  it('starts a three-minute day with an empty shop and admits a random unlocked visitor', () => {
     const store = make(); store.openShop();
     expect(store.state.dayTimer).toBe(DAY_DURATION);
     expect(activeCustomer(store.state)).toBeUndefined();
@@ -48,6 +48,7 @@ describe('timed shop and random visits', () => {
   it('leaves a gap after each visit and never closes on a customer quota', () => {
     const store = make(() => .5); store.openShop();
     for (let n = 0; n < 12; n++) {
+      store.state.dayTimer = DAY_DURATION;
       arrive(store); const previous = activeCustomer(store.state)!.id;
       store.skipCustomer();
       expect(activeCustomer(store.state)).toBeUndefined();
@@ -97,6 +98,6 @@ describe('timed shop and random visits', () => {
     expect(summaries).toBe(1); expect(store.state.money).toBe(money);
     expect(store.state.stats.rent).toBe(30000); expect(store.state.rentDue).toBe(30000); expect(activeCustomer(store.state)).toBeUndefined();
     expect(store.state.dayTimer).toBeGreaterThan(0);
-    store.nextDay(); expect(store.state.dayTimer).toBe(300); expect(store.state.currentCustomerId).toBeNull();
+    store.nextDay(); expect(store.state.dayTimer).toBe(DAY_DURATION); expect(store.state.currentCustomerId).toBeNull();
   });
 });

@@ -11,18 +11,12 @@ export function questPanel(s: GameState) {
     { id: 'sales', label: 'Bán 3 món đồ', desc: 'Tư vấn hoặc bán lẻ sản phẩm cho khách ghé tiệm', count: s.stats.sold, target: 3, art: 'bag', rewardMoney: 35000, rewardXp: 10 },
     { id: 'trend', label: 'Bán 2 món hợp xu hướng', desc: 'Bán các món đồ đúng hot trend thời trang thịnh hành', count: s.stats.trendSales, target: 2, art: 'trend', rewardMoney: 35000, rewardXp: 10 },
   ];
-  const completedCount = quests.filter(q => q.count >= q.target).length;
-
   return `
     <div class="quest-modal-container">
       <button class="quest-close-btn" data-action="close-modal" aria-label="Đóng nhiệm vụ" title="Đóng">${icon('close')}</button>
       <header class="quest-modal-heading">
         <span class="quest-eyebrow-chip">${icon('star')} NHIỆM VỤ HÔM NAY</span>
         <h2>Ngày ${s.day}</h2>
-        <span class="quest-overview-inline">${icon('gift')} Tiến độ hôm nay <strong>${completedCount}/${quests.length}</strong></span>
-        <div class="quest-progress-track total-progress-track">
-          <div class="quest-progress-fill" style="width: ${(completedCount / quests.length) * 100}%"></div>
-        </div>
       </header>
 
       <!-- Danh Sách Nhiệm Vụ -->
@@ -341,6 +335,7 @@ export function decorCatalog(s: GameState, currentCategory = 'all') {
       </div>
       <div class="panel-header-right">
         <div class="heading-badges">
+          <span class="panel-stat-chip panel-money-chip">${icon('coin')} ${money(s.money)}</span>
           <span class="panel-stat-chip highlight-decor">${icon('decor')} +${totalAppeal} Thẩm mỹ</span>
           <span class="panel-stat-chip">${icon('hanger')} ${s.layout.length} Đã đặt</span>
           ${storedList.length > 0 ? `<span class="panel-stat-chip store-chip">${icon('box')} ${storedList.length} Trong kho</span>` : ''}
@@ -1249,6 +1244,7 @@ export function summaryModal(s: GameState) {
           </div>
 
           <div class="finance-revenue-display">
+            <span class="finance-revenue-label">Doanh thu hôm nay</span>
             <strong class="finance-amount ${isSlowDay ? 'is-zero' : ''}">${money(s.stats.revenue)}</strong>
             <span class="finance-sub-info">
               ${isSlowDay ? 'Chưa phát sinh doanh thu hôm nay' : `Đạt được từ ${s.stats.sold} sản phẩm được yêu thích`}
@@ -1314,14 +1310,6 @@ export function summaryModal(s: GameState) {
               <span class="stat-name">${isSlowDay ? 'Độ uy tín' : 'Món hợp xu hướng'}</span>
             </div>
           </div>
-        </div>
-
-        <div class="summary-debt-card">
-          <div><span>Tiền thuê chưa thanh toán</span><strong>${money(s.rentDue)}</strong></div>
-          <button class="btn btn-secondary btn-small" data-action="pay-rent" ${s.rentDue <= 0 || s.money < s.rentDue ? 'disabled' : ''}>Trả tiền thuê</button>
-          <div><span>Kỳ vay cần trả</span><strong>${money(s.loan?.paymentDue ?? 0)}</strong></div>
-          <button class="btn btn-secondary btn-small" data-action="pay-loan" ${(s.loan?.paymentDue ?? 0) <= 0 || s.money < (s.loan?.paymentDue ?? 0) ? 'disabled' : ''}>Trả kỳ vay</button>
-          <button class="btn btn-ghost finance-detail-btn ${(s.rentDue > 0 || (s.loan?.paymentDue ?? 0) > 0) ? 'has-finance-alert' : ''}" data-action="finance-open">Xem tất cả tài chính</button>
         </div>
 
         <!-- Hộp bí kíp ngày ế hoặc Lời chúc mừng ngày đông khách -->
@@ -1472,8 +1460,8 @@ export function upgradeModal(s: GameState) {
       <!-- Hero Card Cấp Mới -->
       <div class="upgrade-hero-card">
         <div class="upgrade-crown-badge">
-          <span class="upgrade-crown-icon">${icon('crown')}</span>
-          <span class="upgrade-level-num">CẤP ${Math.min(7, s.level + 1)}</span>
+          <span class="upgrade-crown-icon">${icon('trophy')}</span>
+          <span class="upgrade-level-num">${String(Math.min(7, s.level + 1)).padStart(2, '0')}</span>
         </div>
         <div class="upgrade-hero-titles">
           <h3 class="upgrade-hero-name">${escapeHtml(next?.name ?? levels[6].name)}</h3>
@@ -1488,7 +1476,7 @@ export function upgradeModal(s: GameState) {
         <!-- Khối Unlock Điều Mới Đang Chờ Bạn -->
         <div class="upgrade-unlock-section">
           <div class="upgrade-section-header">
-            <h4>${icon('crown')} Đặc quyền & Mở khóa cấp ${s.level + 1}</h4>
+            <h4>${icon('trophy')} Đặc quyền & Mở khóa cấp ${s.level + 1}</h4>
             <span class="unlock-counter-pill">${newProducts.length + newFurniture.length + 1} điều mới</span>
           </div>
 
@@ -1571,7 +1559,7 @@ export function upgradeModal(s: GameState) {
         <!-- Nút CTA Nâng Cấp -->
         <div class="upgrade-modal-footer">
           <button class="btn btn-primary full-width upgrade-confirm-btn ${canUpgrade ? 'is-pulse' : ''}" data-action="upgrade" ${!canUpgrade ? 'disabled' : ''}>
-            ${icon('crown')} <span>Nâng cấp boutique lên Cấp ${s.level + 1}</span> ${icon('arrow')}
+            ${icon('trophy')} <span>Nâng cấp boutique lên Cấp ${s.level + 1}</span> ${icon('arrow')}
           </button>
         </div>
       ` : `

@@ -138,9 +138,9 @@ export class GameUI {
           <header class="game-top-bar">
             <!-- LEFT: Level + Day trong 1 capsule nhỏ gọn -->
             <div class="top-left-cluster">
-              <button class="level-capsule" data-action="upgrade-open" title="Nâng cấp boutique">
-                <span class="level-crown">${icon('crown')}</span>
-                <span class="level-title" id="shop-level-pill">Cấp 1</span>
+              <button class="level-capsule" data-action="upgrade-open" title="Nâng cấp boutique" aria-label="Cấp boutique 1">
+                <span class="level-crown">${icon('trophy')}</span>
+                <span class="level-copy"><strong class="level-title" id="shop-level-pill">01</strong></span>
               </button>
               <div id="day-card"></div>
               <div id="shop-status"></div>
@@ -899,14 +899,18 @@ export class GameUI {
     }
     const showShop = this.tab === 'shop';
 
-    document.querySelector('#day-card')!.innerHTML = `<span class="day-sun-icon">${icon('sun')}</span><strong class="day-num">${String(s.day).padStart(2, '0')}</strong>`;
-    document.querySelector('#hud')!.innerHTML = `<div class="hud-item wallet"><span class="hud-icon">${icon('coin')}</span><strong data-testid="money">${money(s.money)}</strong></div><div class="hud-item"><span class="hud-icon star-icon">${icon('star')}</span><strong>${s.reputation.toFixed(1)}</strong></div><div class="hud-item"><span class="hud-icon heart-icon">${icon('user')}</span><strong>${compact(s.followers)}</strong></div>`;
+    document.querySelector('#day-card')!.innerHTML = `<span class="day-sun-icon">${icon('daySun')}</span><strong class="day-num">${String(s.day).padStart(2, '0')}</strong>`;
+    document.querySelector('#hud')!.innerHTML = `<div class="hud-item wallet"><span class="hud-icon">${icon('coin')}</span><strong data-testid="money">${money(s.money)}</strong></div><div class="hud-item" title="Độ uy tín"><span class="hud-icon star-icon">${icon('star')}</span><strong>${s.reputation.toFixed(1)}</strong></div><div class="hud-item" title="Người theo dõi"><span class="hud-icon heart-icon">${icon('user')}</span><strong>${compact(s.followers)}</strong></div><div class="hud-item hud-appeal" title="Điểm thẩm mỹ"><span class="hud-icon appeal-icon">${icon('decor')}</span><strong>${decorAppealScore(s)}</strong></div>`;
     const soundBtn = document.querySelector('#sound-button');
     if (soundBtn) {
       soundBtn.innerHTML = icon(s.sound ? 'volume' : 'mute');
       soundBtn.setAttribute('aria-pressed', String(s.sound));
     }
-    const pill = document.querySelector('#shop-level-pill'); if (pill) pill.textContent = `Cấp ${s.level}`;
+    const pill = document.querySelector('#shop-level-pill');
+    if (pill) {
+      pill.textContent = String(s.level).padStart(2, '0');
+      pill.closest('.level-capsule')?.setAttribute('aria-label', `Cấp boutique ${s.level}`);
+    }
 
     const timerVal = s.dayTimer ?? DAY_DURATION;
     const formatTime = (sec: number) => {
@@ -924,22 +928,18 @@ export class GameUI {
             <strong class="speed-val">${this.saleSpeed}x</strong>
           </button>` : '';
     saleControls.hidden = !isOpen || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode;
-    const appeal = decorAppealScore(s);
-
     if (isOpen) {
       const isUrgent = timerVal <= 15;
       document.querySelector('#shop-status')!.innerHTML = `
-        <span class="status-pill is-open"><i class="status-dot"></i><span class="status-label">Mở cửa</span></span>
+        <span class="status-pill is-open"><i class="status-art">${icon('shopBadge')}</i><span class="status-label">Mở cửa</span></span>
         <span class="status-countdown-pill ${isUrgent ? 'is-urgent' : ''}" id="day-countdown-box" title="Thời gian bán hàng hôm nay">${icon('clock')} <strong id="day-timer-label">${formatTime(timerVal)}</strong></span>
       `;
     } else if (s.phase === 'preparation') {
-      const appeal = decorAppealScore(s);
       document.querySelector('#shop-status')!.innerHTML = `
-        <span class="status-pill is-prep"><i class="status-dot"></i><span class="status-label">Chuẩn bị</span></span>
-        <span class="status-appeal-pill" title="Điểm thẩm mỹ từ trang trí">${icon('decor')} <span>${appeal}</span></span>
+        <span class="status-pill is-prep"><i class="status-art">${icon('shopBadge')}</i><span class="status-label">Chuẩn bị</span></span>
       `;
     } else {
-      document.querySelector('#shop-status')!.innerHTML = `<span class="status-pill is-closed"><i class="status-dot"></i><span class="status-label">Đóng cửa</span></span>`;
+      document.querySelector('#shop-status')!.innerHTML = `<span class="status-pill is-closed"><i class="status-art">${icon('shopBadge')}</i><span class="status-label">Đóng cửa</span></span>`;
     }
 
     // Ẩn/hiện các nút công cụ nhanh trên đỉnh tùy theo giờ bán hàng:

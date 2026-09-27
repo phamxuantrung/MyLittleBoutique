@@ -537,6 +537,7 @@ export function importPanel(
         </div>
       </div>
       <div class="heading-badges">
+        <span class="panel-stat-chip panel-money-chip">${icon('coin')} ${money(s.money)}</span>
         <button class="panel-close-btn" data-action="nav" data-id="shop" aria-label="Quay lại shop">${icon('close')} <span>Quay lại</span></button>
       </div>
     </div>

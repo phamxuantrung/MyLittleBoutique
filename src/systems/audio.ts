@@ -4,6 +4,8 @@ const MUSIC_TRACK_URL = `${import.meta.env.BASE_URL}assets/audio/boutique-theme.
 export class AudioSystem {
   private context?: AudioContext;
   private musicTrack?: HTMLAudioElement;
+  private musicSource?: MediaElementAudioSourceNode;
+  private musicGain?: GainNode;
   private musicVolume = 0.55;
   enabled = true;
 
@@ -11,12 +13,33 @@ export class AudioSystem {
     try {
       this.context ??= new AudioContext();
       if (this.context.state === 'suspended') await this.context.resume();
+      this.connectMusicOutput();
     } catch { /* A browser without audio can still play the complete game. */ }
   }
 
   setMusicVolume(value: number) {
     this.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
-    if (this.musicTrack) this.musicTrack.volume = this.musicVolume;
+    if (this.musicGain && this.context) {
+      this.musicGain.gain.setValueAtTime(this.musicVolume, this.context.currentTime);
+    } else if (this.musicTrack) {
+      this.musicTrack.volume = this.musicVolume;
+    }
+  }
+
+  private connectMusicOutput() {
+    if (!this.context || !this.musicTrack || this.musicSource) return;
+    try {
+      this.musicSource = this.context.createMediaElementSource(this.musicTrack);
+      this.musicGain = this.context.createGain();
+      this.musicGain.gain.setValueAtTime(this.musicVolume, this.context.currentTime);
+      this.musicSource.connect(this.musicGain);
+      this.musicGain.connect(this.context.destination);
+      this.musicTrack.volume = 1;
+    } catch {
+      this.musicSource = undefined;
+      this.musicGain = undefined;
+      this.musicTrack.volume = this.musicVolume;
+    }
   }
 
   private tone(frequency: number, start: number, duration: number, volume = .045, type: OscillatorType = 'sine') {
@@ -55,6 +78,7 @@ export class AudioSystem {
       this.musicTrack.preload = 'auto';
       this.musicTrack.volume = this.musicVolume;
     }
+    this.connectMusicOutput();
     if (!enabled) {
       this.musicTrack.pause();
       return;

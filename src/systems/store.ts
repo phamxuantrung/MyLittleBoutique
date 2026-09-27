@@ -532,7 +532,7 @@ export class GameStore {
     const needsAdvice = this.random() < (isPicky ? .65 : .35);
     const mode = needsAdvice ? 'advice' : 'browse';
     const loyaltyBonus = loyaltyPatienceBonus(this.state, customer.id);
-    const maxPatience = (needsAdvice ? advicePatience(customer) : 12 + Math.floor(this.random() * 9)) + loyaltyBonus;
+    const maxPatience = (needsAdvice ? advicePatience(customer, this.state.level) : 12 + Math.floor(this.random() * 9)) + loyaltyBonus;
     const uid = `visit-${this.state.day}-${this.state.customerIndex}-${this.state.activeVisits.length}-${customer.id}-${Date.now().toString(36)}-${Math.floor(this.random() * 1e6).toString(36)}`;
     this.state.activeVisits.push({ uid, customerId: customer.id, mode, patience: maxPatience, maxPatience });
     if (!this.state.currentVisitId) this.state.currentVisitId = uid;
@@ -552,7 +552,7 @@ export class GameStore {
       const customer = activeCustomer(this.state);
       if (customer) {
         const mode = this.state.customerMode === 'browse' ? 'browse' : 'advice';
-        const maxPatience = mode === 'advice' ? advicePatience(customer) : Math.max(15, this.state.patience);
+        const maxPatience = mode === 'advice' ? advicePatience(customer, this.state.level) : Math.max(15, this.state.patience);
         const uid = `legacy-runtime-${this.state.day}-${this.state.customerIndex}-${customer.id}`;
         this.state.activeVisits.push({ uid, customerId: customer.id, mode, patience: this.state.patience || maxPatience, maxPatience });
         this.state.currentVisitId = uid;

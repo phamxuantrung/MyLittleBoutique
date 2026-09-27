@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 import { SAVE_KEY } from '../../src/systems/save';
 import { openState, preparedState } from './state';
 
-test('a new boutique is guided through six required clicks', async ({ page }) => {
+test('a new boutique completes seven tutorial steps and keeps preparing', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
   await page.goto('/');
   await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
   const dialog = page.getByRole('dialog');
@@ -12,6 +13,7 @@ test('a new boutique is guided through six required clicks', async ({ page }) =>
   await expect(dialog).not.toBeVisible();
   await expect(page.locator('#hud')).toContainText('500.000₫');
   await expect(page.locator('.tutorial-callout')).toContainText('Bấm Nhập hàng');
+  await expect(page.locator('.tutorial-callout')).toContainText('1/7');
   await page.locator('.tutorial-focus[data-id="import"]').click();
   await expect(page.locator('.tutorial-callout')).toContainText('nhập mẫu đầu tiên');
   await page.locator('.import-btn.tutorial-focus').click();
@@ -23,21 +25,33 @@ test('a new boutique is guided through six required clicks', async ({ page }) =>
   const displayCardBox = await dialog.locator('.fixture-stock-option').first().boundingBox();
   const displayCueBox = await dialog.locator('.tutorial-callout').boundingBox();
   expect(displayCueBox!.y).toBeGreaterThanOrEqual(displayCardBox!.y + displayCardBox!.height);
+  const stockGridBox = (await dialog.locator('.fixture-stock-grid').boundingBox())!;
+  expect(displayCueBox!.x).toBeGreaterThanOrEqual(stockGridBox.x);
+  expect(displayCueBox!.x + displayCueBox!.width).toBeLessThanOrEqual(stockGridBox.x + stockGridBox.width);
+  expect(displayCueBox!.y + displayCueBox!.height).toBeLessThanOrEqual(stockGridBox.y + stockGridBox.height);
   await dialog.locator('.tutorial-display-add-target.tutorial-focus').click();
   const closeCue = dialog.locator('.tutorial-cue-badge > .tutorial-callout');
   await expect(closeCue).toContainText('Bấm X để về shop');
   const closeCueBox = await closeCue.boundingBox();
   expect(closeCueBox!.x + closeCueBox!.width).toBeLessThanOrEqual((await dialog.boundingBox())!.x + (await dialog.boundingBox())!.width);
   await dialog.locator('[data-action="close-modal"].tutorial-focus').click();
+  await expect(dialog).toHaveClass('dialog-tutorial-recap');
+  await expect(dialog).toContainText('BƯỚC 7/7');
+  await expect(dialog.locator('.preparation-recap-steps li')).toHaveCount(5);
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).tutorialDone, SAVE_KEY)).toBe(false);
+  await dialog.getByRole('button', { name: 'Đã hiểu, tiếp tục chuẩn bị' }).click();
+  await expect(dialog).not.toBeVisible();
   await expect(page.locator('#move-toolbar')).toBeHidden();
   await expect(page.locator('.tutorial-callout')).toHaveCount(0);
-  await expect(page.locator('[data-action="open"]')).not.toHaveClass(/tutorial-focus/);
-  await page.locator('[data-action="open"]').click();
+  await expect(page.locator('.tutorial-focus')).toHaveCount(0);
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
   expect(saved.hasNamedShop).toBe(true);
   expect(saved.tutorialDone).toBe(true);
   expect(Object.values(saved.inventory).reduce((sum: number, value) => sum + Number(value), 0)).toBe(1);
-  expect(saved.phase).toBe('open');
+  expect(saved.phase).toBe('preparation');
+  await expect(page.locator('[data-action="open"]')).toBeVisible();
+  await page.locator('[data-action="open"]').click();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).phase, SAVE_KEY)).toBe('open');
 });
 
 test('the player can take a chosen loan on top of starting capital', async ({ page }) => {

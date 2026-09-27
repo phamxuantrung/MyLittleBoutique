@@ -1123,10 +1123,10 @@ export function resultModal(result: SaleResult) {
           <div class="result-character-img">
             ${avatarImage(c, isSuccess, result.products)}
           </div>
-          <span class="result-reaction-bubble ${isSuccess ? 'bubble-happy' : 'bubble-missed'}">
-            ${isViral ? 'Viral!' : isSuccess ? 'Mê ly!' : 'Hẹn sau'}
-          </span>
         </div>
+        <span class="result-reaction-bubble ${isSuccess ? 'bubble-happy' : 'bubble-missed'}">
+          ${isViral ? 'Viral!' : isSuccess ? 'Mê ly!' : 'Hẹn sau'}
+        </span>
       </div>
 
       <!-- Headline & Speech Quote -->

@@ -114,7 +114,7 @@ export function staffAdviceBonus(state: GameState) {
   const best = Math.max(...staff.map(employee => employee.service * .06 + employee.persuasion * .09));
   return Math.max(2, Math.min(14, Math.round(best)));
 }
-export const advicePatience = (customer: Customer) => Math.max(55, Math.min(90, Math.round(customer.patience * .5)));
+export const advicePatience = (customer: Customer, level = 1) => Math.max(55, Math.min(90, Math.round(customer.patience * .5))) + (Math.max(1, Math.min(7, Math.floor(level))) - 1) * 5;
 export function activeVisit(state: GameState): CustomerVisit | undefined {
   if (state.phase !== 'open') return;
   return state.activeVisits.find(visit => visit.uid === state.currentVisitId)

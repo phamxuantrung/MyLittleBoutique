@@ -17,6 +17,23 @@ const make = (random = () => 0) => {
 const arrive = (store: GameStore) => { for (let i = 0; i < 30 && !activeCustomer(store.state); i++) store.tick(); };
 
 describe('timed shop and random visits', () => {
+  it.each([0, .9])('scales only advice wait times by level and preserves timers on reload (random %s)', random => {
+    const baseline = make(() => random);
+    baseline.openShop(); arrive(baseline);
+    const baseWait = baseline.state.activeVisits[0].maxPatience;
+    for (let level = 2; level <= 7; level++) {
+      const store = make(() => random);
+      store.state.level = level;
+      store.openShop(); arrive(store);
+      const visit = store.state.activeVisits[0];
+      expect(visit.mode).toBe(baseline.state.activeVisits[0].mode);
+      expect(visit.maxPatience).toBe(baseWait + (visit.mode === 'advice' ? (level - 1) * 5 : 0));
+      store.tick();
+      const loaded = parseSave(JSON.stringify(store.state));
+      expect(loaded.activeVisits[0].maxPatience).toBe(visit.maxPatience);
+      expect(loaded.activeVisits[0].patience).toBe(visit.patience);
+    }
+  });
   it('uses the original random advice rate without forcing the first visit', () => {
     const advice = make(() => .34); advice.openShop(); arrive(advice);
     expect(advice.state.customerMode).toBe('advice');

@@ -10,16 +10,10 @@
   align-items: center;
   gap: 8px;
   pointer-events: auto;
-  padding: 5px 6px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1.5px solid rgba(244, 212, 235, 0.9);
-  box-shadow: 
-    0 8px 24px rgba(138, 48, 108, 0.12),
-    0 2px 6px rgba(138, 48, 108, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   z-index: 45;
   transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -120,13 +114,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ffeef7 0%, #fbd7ee 100%);
+  width: 18px;
+  height: 18px;
+  background: transparent;
   color: #c43888;
-  border: 1px solid #f6bede;
-  box-shadow: 0 1.5px 4px rgba(196, 56, 136, 0.16);
+  border: 0;
+  box-shadow: none;
   flex-shrink: 0;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease;
 }
@@ -150,10 +143,7 @@
     inset 0 1px 0 #ffffff;
 }
 
-.close-shop-button:hover .sale-btn-icon {
-  transform: scale(1.08) rotate(-4deg);
-  background: linear-gradient(135deg, #ffdcf0 0%, #f7bede 100%);
-}
+.close-shop-button:hover .sale-btn-icon { background: transparent; }
 
 .close-shop-button:active {
   transform: scale(0.96) translateY(0);
@@ -269,6 +259,22 @@
     box-shadow: 0 4px 22px rgba(249, 115, 22, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.6);
   }
 }
+
+.sale-controls > button {
+  min-height: 44px;
+  padding: 0 13px;
+  border-radius: 11px;
+  border-width: 1px;
+  box-shadow: 0 3px 10px rgba(91, 38, 75, .12);
+}
+
+.sale-controls .close-shop-button {
+  background: #fff8fa;
+  border-color: #edc4ce;
+  color: #a63b59;
+}
+
+.sale-controls .close-shop-button .sale-btn-icon { color: inherit; }
 /* ==========================================================================
    FITTING STUDIO MODAL (PHÒNG THỬ ĐỒ TƯ VẤN KHÁCH HÀNG)
    Cute Retro Anime Pastel x Luxury Fashion Boutique
@@ -1617,4 +1623,234 @@ dialog.dialog-serve {
   .dialog-serve .outfit-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
+}
+
+/* Sale results share the fitting room's open surfaces and simple dividers. */
+dialog.dialog-result {
+  width: min(620px, calc(100vw - 20px));
+  border: 1px solid #efdfeb;
+  background: linear-gradient(135deg, #fff8fc, #fff 65%);
+}
+
+.dialog-result .result-modal-container {
+  max-width: none;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 14px 20px;
+  padding: 4px;
+}
+
+.dialog-result .result-badge-wrap { min-height: 30px; align-items: center; }
+.dialog-result .result-status-pill {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  letter-spacing: .08em;
+}
+
+.dialog-result .result-hero-showcase { flex-direction: column; align-items: center; gap: 7px; }
+.dialog-result .result-avatar-arch {
+  border: 0;
+  background: radial-gradient(ellipse, #fff 15%, #f4e5f1 85%);
+  box-shadow: none;
+}
+
+.dialog-result .result-reaction-bubble {
+  position: static;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+}
+
+.dialog-result .result-main-title { font-size: clamp(20px, 2.6vw, 26px); line-height: 1.2; margin-bottom: 12px; }
+.dialog-result .result-quote-card {
+  padding: 0 0 0 12px;
+  border: 0;
+  border-left: 2px solid #e9afce;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dialog-result .quote-message { color: #886279; line-height: 1.5; }
+.dialog-result .result-review-stars { padding: 0; border: 0; background: transparent; }
+.dialog-result .result-rewards-tray {
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 14px 0;
+  border-block: 1px solid #efdfeb;
+}
+
+.dialog-result .reward-card-item {
+  min-width: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dialog-result .reward-card-item:first-child { padding-left: 0; }
+.dialog-result .reward-card-item + .reward-card-item { border-left: 1px solid #efdfeb; }
+.dialog-result .reward-icon-bubble { width: 18px; flex-basis: 18px; background: transparent; }
+.dialog-result .reward-icon-bubble .icon { width: 17px; height: 17px; }
+.dialog-result .reward-meta { gap: 4px; }
+.dialog-result .reward-lbl { order: -1; font-size: 10px; }
+.dialog-result .reward-val { font-size: 15px; overflow-wrap: anywhere; }
+.dialog-result .revenue .reward-val { font-size: 20px; color: #b52b7b; }
+.dialog-result :is(.staff-sale-credit, .loyalty-sale-credit) {
+  justify-content: flex-start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 11px;
+}
+
+.dialog-result .result-submit-cta { min-height: 42px; border-radius: 10px; box-shadow: none; margin-top: 2px; }
+.dialog-result .modal-close { border: 0; box-shadow: none; background: #fbeaf3; border-radius: 10px; }
+.dialog-result .result-feedback-guide { border: 0; border-top: 1px solid #efdfeb; border-radius: 0; background: transparent; box-shadow: none; padding: 12px 0 0; }
+
+@media (max-width: 500px), (max-height: 450px) {
+  .dialog-result .result-modal-container { grid-template-columns: 86px minmax(0, 1fr); gap: 10px 12px; }
+  .dialog-result .result-main-title { font-size: 20px; margin-bottom: 8px; }
+  .dialog-result .result-rewards-tray { padding: 10px 0; }
+  .dialog-result .reward-card-item { gap: 5px; padding-inline: 7px; }
+  .dialog-result .reward-icon-bubble { display: none; }
+  .dialog-result .revenue .reward-val { font-size: 17px; }
+  .dialog-result .reward-val { font-size: 13px; }
+}
+
+/* A continuous fitting room: use spacing and dividers instead of nested cards. */
+.dialog-serve .studio-col-left {
+  background: radial-gradient(ellipse at 50% 45%, #fff 0%, #fff5fa 65%, #f5eaf4 100%);
+  border-color: #efdfeb;
+}
+
+.dialog-serve :is(.customer-profile-card, .customer-pref-box) {
+  padding: 8px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dialog-serve .customer-profile-card {
+  border-bottom: 1px solid #eadbe5;
+}
+
+.dialog-serve .customer-speech-bubble {
+  padding: 4px 0 4px 9px;
+  border: 0;
+  border-left: 2px solid #e9afce;
+  border-radius: 0;
+  background: transparent;
+  color: #886279;
+  line-height: 1.45;
+}
+
+.dialog-serve .customer-pref-box {
+  gap: 7px;
+  border-top: 1px solid #eadbe5;
+}
+
+.dialog-serve :is(.personality-tag, .loyalty-profile-chip, .pref-chip, .stage-tag, .studio-stock-count, .item-style-badge, .match-badge) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dialog-serve :is(.pref-chip, .stage-tag, .studio-stock-count, .item-style-badge, .match-badge) {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.dialog-serve .pref-chips { gap: 8px; }
+.dialog-serve .pref-chip + .pref-chip::before {
+  content: '|';
+  margin-right: 8px;
+  color: #bda3b3;
+  font-weight: 400;
+}
+.dialog-serve .budget-row { border-top-style: solid; padding-top: 7px; }
+
+.dialog-serve .fitting-backdrop-arch {
+  border: 0;
+  background: radial-gradient(ellipse at 50% 50%, #fff 15%, #f4e5f1 85%);
+  box-shadow: none;
+}
+
+.dialog-serve .studio-wardrobe-header {
+  gap: 10px;
+  padding-bottom: 0;
+  border-bottom: 1px solid #efdfeb;
+}
+
+.dialog-serve .studio-stock-count {
+  color: #967b8d;
+  font-weight: 600;
+}
+
+.dialog-serve .studio-categories { gap: 12px; padding: 0; }
+
+.dialog-serve .studio-categories .category-pill {
+  padding: 7px 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #8a6c80;
+  box-shadow: none;
+  transform: none;
+}
+
+.dialog-serve .studio-categories .category-pill[aria-pressed="true"] {
+  border-bottom-color: #c93489;
+  color: #ae246f;
+}
+
+.dialog-serve .outfit-option,
+.dialog-serve .outfit-option:hover {
+  border: 0 !important;
+  border-bottom: 1px solid #f0e5ed !important;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none !important;
+  transform: none;
+}
+
+.dialog-serve .outfit-option.selected,
+.dialog-serve .outfit-option.selected:hover {
+  background: #fff0f7;
+  border-bottom-color: #d94a96 !important;
+  box-shadow: inset 3px 0 #d94a96 !important;
+}
+
+.dialog-serve .outfit-thumb-container {
+  border: 0;
+  background: transparent;
+}
+
+.dialog-serve .studio-checkout-dock {
+  border-top: 1px solid #e9d9e4;
+  background: #fffbfd;
+  gap: 10px;
+}
+
+.dialog-serve .checkout-summary-wrap { min-width: 0; gap: 5px 12px; }
+.dialog-serve .checkout-price-block { flex-wrap: wrap; }
+.dialog-serve .studio-serve-btn { border-radius: 10px; }
+.dialog-serve .studio-serve-btn .serve-btn-icon-wrap { background: transparent; }
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .dialog-serve :is(.customer-profile-card, .customer-pref-box) { padding: 4px 0; }
+  .dialog-serve .customer-pref-box { gap: 4px; }
+  .dialog-serve .studio-wardrobe-header { gap: 5px; }
+  .dialog-serve .studio-categories { gap: 10px; }
+  .dialog-serve .studio-categories .category-pill { padding: 5px 2px; }
 }

@@ -8,7 +8,7 @@ async function clickCustomer(page: Page) {
   await page.mouse.click(canvas.x + 426 * canvas.width / 1000, canvas.y + 390 * canvas.height / 700);
 }
 
-for (const [width, height] of [[390, 844], [1280, 800]]) {
+for (const [width, height] of [[390, 844], [844, 390], [1280, 800]]) {
   test(`fitting studio sale and loyalty at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     const state = openState();

@@ -11,7 +11,7 @@ import { debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financ
 import type { ShopScene } from '../scenes/ShopScene';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social';
-type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm';
+type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'tutorial-recap';
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'buy-furniture']);
 const navItems: { id: Tab; label: string; icon: string; subtitle: string }[] = [
   { id: 'stock', label: 'Kho hàng', icon: 'hanger', subtitle: 'Hàng đang có' },
@@ -674,7 +674,6 @@ export class GameUI {
         const closedDisplay = this.modal === 'display';
         this.closeModal();
         if (closedDisplay) this.scene?.setMoveMode(false);
-        if (this.tutorialStep === 5) this.finishGuidedTutorial();
         break;
       }
       case 'restock': {
@@ -1281,6 +1280,8 @@ export class GameUI {
     this.queueTutorialCue();
   }
   private closeModal() {
+    const showPreparationRecap = this.modal === 'display' && this.tutorialStep === 5 && this.tutorialActive();
+    if (this.modal === 'tutorial-recap') this.finishGuidedTutorial();
     if (this.modal === 'serve') this.serveVisitId = '';
     this.modal = 'none';
     this.dialog.close();
@@ -1295,6 +1296,11 @@ export class GameUI {
     if (this.beforeDialogFocus?.isConnected) this.beforeDialogFocus.focus({ preventScroll: true });
     this.updateDockVisibility();
     this.queueTutorialCue();
+    if (showPreparationRecap) {
+      this.scene?.setMoveMode(false);
+      this.advanceTutorial(6);
+      this.showPreparationRecap();
+    }
   }
 
   private tutorialActive() {
@@ -1312,6 +1318,7 @@ export class GameUI {
     });
     document.body.classList.toggle('guided-tutorial-active', this.tutorialActive());
     if (!this.tutorialActive()) return;
+    if (this.tutorialStep === 6) return;
     const steps = [
       { selector: '.dock-btn-import', label: 'Bấm Nhập hàng', placement: 'left' },
       { selector: '.import-btn:not([disabled])', label: 'Bấm để nhập mẫu đầu tiên', placement: 'above' },
@@ -1334,9 +1341,13 @@ export class GameUI {
     const callout = document.createElement('span');
     callout.className = 'tutorial-callout';
     callout.setAttribute('aria-hidden', 'true');
-    callout.innerHTML = `<b>${this.tutorialStep + 1}/6</b><span>${step.label}</span>`;
+    callout.innerHTML = `<b>${this.tutorialStep + 1}/7</b><span>${step.label}</span>`;
     target.append(callout);
-    target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    // Sticky header controls are already visible; centering their overflowing
+    // callout can shift the entire catalog horizontally.
+    if (!target.closest('.inv-panel-header, .game-panel-header-card')) {
+      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    }
   }
   private advanceTutorial(step: number) {
     this.tutorialStep = step;
@@ -1356,6 +1367,30 @@ export class GameUI {
       element.querySelector(':scope > .tutorial-callout')?.remove();
     });
     this.store.settings('tutorialDone', true);
+  }
+  private showPreparationRecap() {
+    this.openModal('tutorial-recap', `
+      <section class="preparation-recap" aria-labelledby="preparation-recap-title">
+        <header class="preparation-recap-heading">
+          <span class="eyebrow">BƯỚC 7/7 · CHUẨN BỊ BÁN HÀNG</span>
+          <h2 id="preparation-recap-title">Một lượt chuẩn bị trước khi mở cửa</h2>
+          <p>Mỗi ngày, hãy làm theo quy trình này để tiệm luôn có hàng sẵn sàng đón khách.</p>
+        </header>
+        <ol class="preparation-recap-steps">
+          ${[
+            ['trend', 'Xem xu hướng', 'Mở Xu hướng để chọn những mẫu đang được yêu thích.'],
+            ['bag', 'Nhập hàng vào kho', 'Vào Nhập hàng, chọn mẫu và số lượng phù hợp với số tiền đang có.'],
+            ['coin', 'Kiểm tra giá bán', 'Vào Kho hàng để chỉnh giá bán, xem giá vốn và lợi nhuận từng món.'],
+            ['hanger', 'Bày sản phẩm lên sào, kệ', 'Chạm thiết bị trong shop, bấm + để lấy hàng từ kho ra trưng. Chỉ hàng đang trưng mới bán được.'],
+            ['shop', 'Mở cửa và tư vấn khách', 'Bấm Mở cửa đón khách. Chạm khách cần tư vấn, chọn đồ hợp gu và ngân sách rồi chốt đơn.'],
+          ].map(([art, title, description], index) => `<li><span class="preparation-step-number">0${index + 1}</span><div><h3>${icon(art)} ${title}</h3><p>${description}</p></div></li>`).join('')}
+        </ol>
+        <p class="preparation-recap-note">${icon('clock')} Một ngày bán kéo dài ${DAY_DURATION / 60} phút ở tốc độ 1×. Cuối ngày, xem tổng kết và bổ sung hàng cho ngày tiếp theo.</p>
+        <footer class="preparation-recap-actions">
+          <button class="btn btn-primary" data-action="close-modal">${icon('check')} Đã hiểu, tiếp tục chuẩn bị</button>
+        </footer>
+      </section>
+    `);
   }
   private continueAfterSale() {
     if (this.store.state.phase === 'closed') this.openModal('summary', summaryModal(this.store.state));
@@ -1409,10 +1444,15 @@ export class GameUI {
     <button class="btn btn-secondary full-width" data-action="help">${icon('help')} Xem hướng dẫn chơi</button>`);
   }
   private toast(message: string, tone = 'success') {
+    const duration = Math.min(7000, Math.max(4000, message.length * 40));
     const el = document.createElement('div'); el.className = `toast toast-${tone}`;
+    el.style.setProperty('--toast-duration', `${duration}ms`);
     const ico = document.createElement('span'); ico.innerHTML = icon(tone === 'error' ? 'close' : tone === 'info' ? 'help' : 'check');
+    ico.className = 'toast-icon';
+    ico.setAttribute('aria-hidden', 'true');
     const text = document.createElement('span'); text.textContent = message; el.append(ico, text);
+    text.className = 'toast-message';
     const container = document.querySelector('#toasts')!; if (container.children.length > 2) container.firstElementChild?.remove(); container.append(el);
-    setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 250); }, 4000);
+    setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 250); }, duration);
   }
 }

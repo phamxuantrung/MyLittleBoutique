@@ -117,7 +117,7 @@ export function parseSave(raw: string | null): GameState {
         const visitCustomer = customers.find(c => c.id === rawVisit.customerId) ?? lookupCustomer(rawVisit.customerId);
         if (!visitCustomer) continue;
         const mode = rawVisit.mode === 'browse' ? 'browse' : 'advice';
-        const maxPatience = finite(rawVisit.maxPatience, mode === 'advice' ? advicePatience(visitCustomer) : 15, 180);
+        const maxPatience = finite(rawVisit.maxPatience, mode === 'advice' ? advicePatience(visitCustomer, state.level) : 15, 180);
         state.activeVisits.push({
           uid: rawVisit.uid.slice(0, 100),
           customerId: visitCustomer.id,
@@ -132,7 +132,7 @@ export function parseSave(raw: string | null): GameState {
       }
     }
     if (!state.activeVisits.length && state.currentCustomerId && visitor) {
-      const maxPatience = state.customerMode === 'advice' ? advicePatience(visitor) : 15;
+      const maxPatience = state.customerMode === 'advice' ? advicePatience(visitor, state.level) : 15;
       state.activeVisits.push({ uid: `legacy-${state.day}-${visitor.id}`, customerId: visitor.id, mode: state.customerMode ?? 'advice', patience: finite(s.patience, maxPatience, maxPatience), maxPatience });
     }
     const selectedVisit = state.activeVisits.find(visit => visit.uid === s.currentVisitId) ?? state.activeVisits.find(visit => visit.customerId === state.currentCustomerId) ?? state.activeVisits[0];

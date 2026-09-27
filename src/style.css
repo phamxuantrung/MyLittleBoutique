@@ -9592,3 +9592,106 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
   .handover-requested { grid-column: 1/-1; }
   .handover-actions > div > span { display: none; }
 }
+
+/* iPhone / mobile landscape safe areas and comfortable touch targets. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  :root {
+    --mobile-safe-left: max(14px, env(safe-area-inset-left));
+    --mobile-safe-right: max(14px, env(safe-area-inset-right));
+    --mobile-safe-top: max(4px, env(safe-area-inset-top));
+    --mobile-safe-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .game-top-bar {
+    min-height: 50px !important;
+    padding-top: var(--mobile-safe-top) !important;
+    padding-right: var(--mobile-safe-right) !important;
+    padding-bottom: 6px !important;
+    padding-left: var(--mobile-safe-left) !important;
+  }
+
+  .game-bottom-hud {
+    padding-right: var(--mobile-safe-right) !important;
+    padding-bottom: var(--mobile-safe-bottom) !important;
+    padding-left: var(--mobile-safe-left) !important;
+  }
+
+  .game-content-panel {
+    padding-right: var(--mobile-safe-right) !important;
+    padding-left: var(--mobile-safe-left) !important;
+    padding-bottom: calc(var(--mobile-safe-bottom) + 16px) !important;
+  }
+
+  .staff-manager-fab,
+  .online-channel-fab,
+  .land-expand-fab {
+    left: var(--mobile-safe-left) !important;
+    min-height: 44px;
+    height: 44px;
+    padding: 5px 9px 5px 6px;
+  }
+
+  .staff-manager-fab { top: 62px; }
+  .online-channel-fab { top: 114px; }
+  .land-expand-fab { top: 166px; }
+  .staff-fab-icon { width: 32px; height: 32px; }
+  .staff-fab-icon .icon { width: 17px; height: 17px; }
+
+  .right-dock-container,
+  .game-dock-container {
+    right: var(--mobile-safe-right) !important;
+  }
+
+  .standalone-dock-btn,
+  .dock-item {
+    width: 50px !important;
+    min-width: 50px !important;
+    max-width: 50px !important;
+    height: 54px !important;
+    min-height: 54px !important;
+  }
+
+  .dock-icon-bubble {
+    width: 27px !important;
+    min-width: 27px !important;
+    height: 27px !important;
+    min-height: 27px !important;
+  }
+
+  .level-capsule { min-height: 42px !important; height: 42px !important; }
+  #day-card { min-height: 38px !important; height: 38px !important; }
+  .hud-circle-btn { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+  .owner-avatar { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  .hud-circle-btn .icon { width: 19px; height: 19px; }
+
+  .sale-controls {
+    left: var(--mobile-safe-left);
+    bottom: var(--mobile-safe-bottom);
+  }
+
+  #toasts {
+    right: var(--mobile-safe-right);
+    bottom: var(--mobile-safe-bottom);
+    max-width: calc(100vw - var(--mobile-safe-left) - var(--mobile-safe-right));
+  }
+
+  dialog {
+    max-width: calc(100vw - var(--mobile-safe-left) - var(--mobile-safe-right)) !important;
+    max-height: calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom)) !important;
+  }
+
+  dialog .dialog-inner {
+    max-height: calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom) - 4px);
+  }
+
+  dialog .icon-button,
+  .panel-close-btn {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+
+  .land-expand-side.is-left { left: var(--mobile-safe-left); }
+  .land-expand-side.is-right { right: var(--mobile-safe-right); }
+}

@@ -9825,3 +9825,205 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
     line-height: 1.3 !important;
   }
 }
+
+/* Tutorial overlays must escape product-card clipping and stay above every panel. */
+body.guided-tutorial-active .tutorial-focus,
+body.guided-tutorial-active .tutorial-callout {
+  z-index: 2147483647 !important;
+}
+
+body.guided-tutorial-active .import-card:has(.tutorial-focus),
+body.guided-tutorial-active .look-card:has(.tutorial-focus) {
+  position: relative;
+  z-index: 2147483646 !important;
+  overflow: visible !important;
+  isolation: auto;
+}
+
+body.guided-tutorial-active .import-grid:has(.tutorial-focus) {
+  position: relative;
+  z-index: 2147483645 !important;
+  overflow: visible !important;
+}
+
+/* Prevent the large mobile type scale from breaking wardrobe product cards. */
+.dialog-serve .outfit-option > .outfit-meta-wrap {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  padding: 5px 7px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  place-items: initial;
+  overflow: hidden;
+  background: #fff;
+}
+
+.dialog-serve .outfit-item-name {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-serve .outfit-sub-info {
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.dialog-serve .outfit-sub-info > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-reaction-bubble {
+  top: -7px;
+  right: -14px;
+  max-width: none;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.result-avatar-arch {
+  overflow: visible;
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  /* Lift the selected-furniture actions above the iPhone home indicator. */
+  .move-bottom-toolbar.is-selection-toolbar {
+    right: var(--mobile-safe-right) !important;
+    bottom: calc(var(--mobile-safe-bottom) + 12px) !important;
+  }
+
+  .dialog-serve .outfit-item-name {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+  }
+
+  .dialog-serve .outfit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .dialog-serve .outfit-option {
+    grid-template-columns: 64px minmax(0, 1fr) !important;
+    min-height: 78px !important;
+  }
+
+  .dialog-serve .outfit-thumb-container {
+    min-height: 78px !important;
+    padding: 4px 3px 16px !important;
+  }
+
+  .dialog-serve .outfit-option .product-art {
+    width: 50px;
+    height: 54px;
+  }
+
+  .dialog-serve .outfit-option > .outfit-meta-wrap {
+    gap: 4px;
+    padding: 7px 9px;
+  }
+
+  .dialog-serve .outfit-sub-info {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 5px;
+    flex-wrap: nowrap;
+  }
+
+  .dialog-serve .outfit-sub-info > span,
+  .dialog-serve .outfit-price-row > span,
+  .dialog-serve .outfit-price {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+
+  .dialog-serve .outfit-match-tag {
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    gap: 1px;
+    padding: 2px 1px;
+    font-size: 8px !important;
+    line-height: 1 !important;
+  }
+
+  .dialog-serve .outfit-match-tag .icon {
+    width: 7px;
+    height: 7px;
+  }
+
+  .result-reaction-bubble {
+    top: -6px;
+    right: -12px;
+    font-size: 10.5px !important;
+  }
+
+  /* Compact, readable end-of-day report for iPhone landscape. */
+  dialog.dialog-summary {
+    width: min(720px, calc(100vw - var(--mobile-safe-left) - var(--mobile-safe-right))) !important;
+    max-height: calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom)) !important;
+    border-radius: 20px;
+  }
+
+  dialog.dialog-summary .dialog-inner {
+    max-height: calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom) - 4px) !important;
+    scroll-padding-top: 0;
+    font-size: 14px;
+  }
+
+  .summary-hero-banner { padding: 10px 15px 11px; }
+  .summary-hero-pattern { opacity: .45; }
+  .summary-hero-top { margin-bottom: 4px; }
+  .summary-celestial-wrapper { width: 40px; height: 40px; margin-bottom: 3px; }
+  .summary-celestial-icon { width: 36px; height: 36px; border-width: 2px; }
+  .summary-celestial-icon .icon { width: 21px; height: 21px; }
+  .summary-hero-title { margin-bottom: 2px; }
+  .summary-eyebrow-chip,
+  .summary-day-badge { font-size: 11px !important; }
+  .summary-hero-subtitle { max-width: 620px; font-size: 12.5px !important; line-height: 1.35 !important; }
+  .summary-body { gap: 10px; padding: 11px 14px 14px; }
+  .summary-finance-spotlight { padding: 10px 12px; border-radius: 14px; }
+  .finance-header-row { margin-bottom: 4px; }
+  .finance-label { font-size: 11.5px !important; }
+  .finance-happy-pill { font-size: 11px !important; }
+  .finance-revenue-display { padding: 2px 0 7px; }
+  .finance-amount { font-size: clamp(28px, 4.2vw, 34px) !important; }
+  .finance-sub-info { font-size: 12px !important; }
+  .finance-breakdown-box { gap: 5px; padding-top: 7px; }
+  .breakdown-item { min-height: 25px; font-size: 12px !important; }
+  .breakdown-title,
+  .breakdown-value { font-size: 12px !important; }
+  .net-profit-item .breakdown-title,
+  .net-profit-value { font-size: 13px !important; }
+  .summary-highlights-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+  .highlight-stat-card { min-width: 0; flex-direction: row; justify-content: center; padding: 8px; }
+  .stat-icon-bubble { width: 30px; height: 30px; flex: 0 0 30px; }
+  .stat-meta { min-width: 0; align-items: flex-start; }
+  .stat-val { font-size: 15px !important; }
+  .stat-name { font-size: 10.5px !important; line-height: 1.2 !important; }
+  .summary-debt-card { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 12px; margin-top: 0; padding: 10px 12px; border-radius: 14px; }
+  .summary-debt-card > div > span,
+  .summary-debt-card > div > strong { font-size: 11.5px !important; }
+  .summary-debt-card .finance-detail-btn { grid-column: 1 / -1; }
+  .summary-tips-card,
+  .summary-cheer-banner { padding: 9px 11px; border-radius: 13px; }
+  .tip-card-header,
+  .tip-bullet-list,
+  .cheer-text strong,
+  .cheer-text p { font-size: 11.5px !important; line-height: 1.4 !important; }
+  .summary-actions-group { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 8px; margin-top: 0; }
+  .summary-actions-group .btn { min-height: 46px; margin: 0; font-size: 12px !important; }
+}

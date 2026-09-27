@@ -21,7 +21,7 @@ export function initialState(): GameState {
     dayTimer: DAY_DURATION, dailyLuck: 'Nắng ấm nhẹ nhàng',
     inventory: {}, prices: {},
     pendingOrders: [],
-    onlineListings: [], onlineOrders: [], onlineNextOrderIn: 8, onlineChannelEnabled: true,
+    onlineListings: [], onlineOrders: [], onlineNextOrderIn: 8, onlineChannelEnabled: false,
     onlineRating: 5, onlineReviews: 0, onlineSales: 0,
     storedFurniture: [],
     layout: [
@@ -261,7 +261,9 @@ export function parseSave(raw: string | null): GameState {
     state.onlineReviews = Math.floor(finite(s.onlineReviews, 0, 999999));
     state.onlineSales = Math.floor(finite(s.onlineSales, 0, 999999));
     state.onlineNextOrderIn = Math.floor(finite(s.onlineNextOrderIn, 8, 60));
-    state.onlineChannelEnabled = s.onlineChannelEnabled !== false;
+    state.onlineChannelEnabled = typeof s.onlineChannelEnabled === 'boolean'
+      ? s.onlineChannelEnabled
+      : fresh.onlineChannelEnabled;
     state.onlineListings = Array.isArray(s.onlineListings)
       ? s.onlineListings.filter((id: unknown): id is string => typeof id === 'string' && products.some(product => product.id === id)).filter((id: string, index: number, all: string[]) => all.indexOf(id) === index)
       : [];

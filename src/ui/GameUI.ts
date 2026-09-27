@@ -621,13 +621,19 @@ export class GameUI {
       }
       case 'pay-loan': {
         this.store.payLoanDue();
-        if (this.modal === 'summary') this.dialog.querySelector('.dialog-inner')!.innerHTML = summaryModal(this.store.state);
+        if (this.modal === 'summary') {
+          this.dialog.querySelector('.dialog-inner')!.innerHTML = summaryModal(this.store.state);
+          this.scrollModalToTop();
+        }
         else if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state);
         break;
       }
       case 'pay-rent': {
         this.store.payRentDue();
-        if (this.modal === 'summary') this.dialog.querySelector('.dialog-inner')!.innerHTML = summaryModal(this.store.state);
+        if (this.modal === 'summary') {
+          this.dialog.querySelector('.dialog-inner')!.innerHTML = summaryModal(this.store.state);
+          this.scrollModalToTop();
+        }
         else if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state);
         break;
       }
@@ -1173,6 +1179,23 @@ export class GameUI {
       }, 120);
     }
   }
+  private scrollModalToTop() {
+    const reset = () => {
+      this.dialog.scrollTop = 0;
+      const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+      if (!inner) return;
+      inner.scrollTop = 0;
+      inner.querySelectorAll<HTMLElement>('*').forEach(element => {
+        if (element.scrollTop) element.scrollTop = 0;
+      });
+    };
+    reset();
+    requestAnimationFrame(() => {
+      reset();
+      requestAnimationFrame(reset);
+    });
+    window.setTimeout(reset, 80);
+  }
   private openModal(type: Modal, html: string) {
     if (!this.dialog.open) this.beforeDialogFocus = document.activeElement as HTMLElement;
     this.modal = type;
@@ -1186,19 +1209,16 @@ export class GameUI {
     this.dialog.querySelector('.dialog-inner')!.innerHTML = html;
     this.dialog.className = `dialog-${type}`;
     if (!this.dialog.open) this.dialog.showModal();
-    const resetModalScroll = () => {
-      this.dialog.scrollTop = 0;
-      const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
-      if (!inner) return;
-      inner.scrollTop = 0;
-      inner.querySelectorAll<HTMLElement>('*').forEach(element => {
-        if (element.scrollTop) element.scrollTop = 0;
-      });
-    };
-    resetModalScroll();
-    requestAnimationFrame(resetModalScroll);
-    // Focus the dismiss/continue action rather than a product to prevent accidental purchases.
-    this.dialog.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+    this.scrollModalToTop();
+    // Summary actions sit at the bottom. Focusing one makes iOS Safari scroll there.
+    if (type === 'summary') {
+      this.dialog.tabIndex = -1;
+      this.dialog.focus({ preventScroll: true });
+      this.scrollModalToTop();
+    } else {
+      // Focus the dismiss/continue action rather than a product to prevent accidental purchases.
+      this.dialog.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+    }
     this.updateDockVisibility();
     this.queueTutorialCue();
   }

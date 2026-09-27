@@ -427,16 +427,17 @@ export function onlineOrderChance(s: GameState, availableProductIds: string[] = 
     .filter((product): product is Product => !!product);
   if (!available.length) return 0;
 
-  // A displayed 5.0 with no reviews is not trusted yet. Six neutral prior
-  // reviews keep a new channel near 3.2 until real deliveries build evidence.
-  const priorReviews = 6;
-  const trustedRating = (s.onlineRating * s.onlineReviews + 3.2 * priorReviews) / (s.onlineReviews + priorReviews);
-  const ratingTrust = Math.pow(Math.max(.015, Math.min(1, (trustedRating - 2.45) / 2.35)), 1.35);
-  const reviewConfidence = .28 + .72 * Math.min(1, s.onlineReviews / 24);
-  const shopTrust = Math.pow(Math.max(.02, Math.min(1, (s.reputation - 3) / 2)), 1.15);
-  const recognition = Math.max(.012, Math.min(1, Math.log10(s.followers + 1) / Math.log10(1001)));
-  const assortment = .42 + .58 * Math.min(1, available.length / 9);
+  // A displayed 5.0 with no reviews still needs proof, but a new channel now
+  // gets a modest discovery boost so its first orders are difficult rather
+  // than vanishingly rare.
+  const priorReviews = 5;
+  const trustedRating = (s.onlineRating * s.onlineReviews + 3.3 * priorReviews) / (s.onlineReviews + priorReviews);
+  const ratingTrust = Math.pow(Math.max(.02, Math.min(1, (trustedRating - 2.4) / 2.3)), 1.25);
+  const reviewConfidence = .32 + .68 * Math.min(1, s.onlineReviews / 22);
+  const shopTrust = Math.pow(Math.max(.03, Math.min(1, (s.reputation - 2.8) / 2.2)), 1.1);
+  const recognition = Math.max(.02, Math.min(1, Math.log10(s.followers + 1) / Math.log10(1001)));
+  const assortment = .44 + .56 * Math.min(1, available.length / 7);
   const offerQuality = available.reduce((sum, product) => sum + onlineProductDemandWeight(s, product), 0) / available.length;
   const deliveryHistory = Math.min(.14, s.onlineSales * .0035) * ratingTrust;
-  return Math.max(0, Math.min(.68, .0005 + shopTrust * recognition * ratingTrust * reviewConfidence * assortment * offerQuality * .58 + deliveryHistory));
+  return Math.max(0, Math.min(.72, .001 + shopTrust * recognition * ratingTrust * reviewConfidence * assortment * offerQuality * .64 + deliveryHistory));
 }

@@ -987,24 +987,6 @@ export function serveModal(s: GameState, selected: string[], category = 'all') {
           </div>
         </div>
 
-        <!-- Dải đồ đã chọn (Selected items strip) -->
-        <div class="studio-selection-strip">
-          <div class="selection-strip-head">
-            <span class="selection-lbl">${icon('bag')} Đã chọn: <strong>${items.length}/${MAX_OUTFIT_ITEMS}</strong></span>
-            ${items.length ? `<button class="btn-clear-outfit" data-action="outfit-clear" title="Bỏ chọn tất cả">${icon('close')} Bỏ hết</button>` : ''}
-          </div>
-          <div class="selection-strip-items">
-            ${items.length ? items.map(p => `
-              <button class="selected-mini-pill" data-action="select-product" data-id="${p.id}" aria-label="Bỏ ${escapeHtml(p.name)}" title="Chạm để bỏ món này">
-                <span class="mini-pill-thumb">${productImage(p)}</span>
-                <span class="mini-pill-name">${escapeHtml(p.name)}</span>
-                <span class="mini-pill-close">${icon('close')}</span>
-              </button>
-            `).join('') : `
-              <span class="selection-empty-hint">Chưa chọn món đồ nào</span>
-            `}
-          </div>
-        </div>
       </aside>
 
       <!-- CỘT PHẢI: TỦ ĐỒ CỬA HÀNG & THANH CHỐT OUTFIT -->

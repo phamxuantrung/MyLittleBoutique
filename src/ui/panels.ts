@@ -1,3 +1,4 @@
+import { ownerPortrait } from '../art/svg';
 import { categories, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
 import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffCapacity } from '../systems/rules';
@@ -547,6 +548,44 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
       </div>
     </div>
 
+    <div class="social-profile-page">
+      <section class="social-profile-card" aria-label="Trang cá nhân boutique">
+        <div class="profile-cover-banner" aria-hidden="true">
+          <div class="profile-cover-art">
+            ${['ribbon', 'baby-tee', 'ribbon-dress', 'jeans', 'hoodie'].map(id => `<figure class="cover-fashion-print">${productImage(products.find(p => p.id === id)!)}</figure>`).join('')}
+          </div>
+          <span class="cover-fashion-sparkle is-left">${icon('sparkle')}</span>
+          <span class="cover-fashion-sparkle is-right">${icon('sparkle')}</span>
+          <span class="cover-fashion-heart">${icon('heart')}</span>
+        </div>
+        <div class="profile-card-content">
+          <div class="profile-identity-bar">
+            <div class="profile-avatar" role="img" aria-label="Ảnh đại diện chủ tiệm">${ownerPortrait(96)}</div>
+            <button class="profile-edit-button" data-action="name-shop">${icon('edit')} Chỉnh sửa tên</button>
+          </div>
+          <div class="profile-details">
+            <div class="profile-name-row">
+              <h3 class="profile-name">${escapeHtml(shopName)}</h3>
+              <span class="profile-verified-badge" title="Boutique chính hãng">${icon('check')}</span>
+            </div>
+            <span class="profile-handle">${handle}</span>
+            <p class="profile-bio">Góc nhỏ của những điều xinh xắn.<br>Tự do phối đồ, kể câu chuyện của riêng mình. 💕</p>
+            <div class="profile-facts" aria-label="Giới thiệu boutique">
+              <span>${icon('shop')} Tiệm thời trang</span>
+              <span>${icon('trophy')} Cấp ${String(s.level).padStart(2, '0')}</span>
+              <span>${icon('decor')} ${decorAppealScore(s)} điểm thẩm mỹ</span>
+              <span>${icon('sun')} ${escapeHtml(s.dailyLuck ?? 'Thời tiết dịu dàng')}</span>
+            </div>
+          </div>
+          <dl class="profile-statistics" aria-label="Thống kê boutique">
+            <div><dt>Bài viết</dt><dd>${s.posts.length}</dd></div>
+            <div><dt>Người theo dõi</dt><dd>${s.followers.toLocaleString('vi-VN')}</dd></div>
+            <div><dt>Độ uy tín</dt><dd>${s.reputation.toFixed(1)} <small>/ 5</small></dd></div>
+            <div><dt>Đã bán hôm nay</dt><dd>${s.stats.sold}</dd></div>
+          </dl>
+        </div>
+      </section>
+
     <nav class="social-inner-tabs" aria-label="Nội dung bảng tin">
       <button class="social-inner-tab ${section === 'feed' ? 'is-active' : ''}" data-action="social-section" data-id="feed" aria-pressed="${section === 'feed'}">
         <span>${icon('social')}</span><span><strong>Bảng tin</strong><small>Khoảnh khắc khách hàng</small></span>
@@ -562,78 +601,6 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
     </div>
 
     <div class="social-tab-content feed-tab-content" ${section === 'feed' ? '' : 'hidden'}>
-
-    <!-- Social Profile Card (Instagram/Threads Style) -->
-    <div class="social-profile-card">
-      <div class="profile-cover-banner" aria-hidden="true">
-        <div class="cover-overlay-pattern"></div>
-        <span class="cover-tag">${icon('star')} ${escapeHtml(shopName)} • Official Feed</span>
-        <span class="cover-badge">${icon('crown')} Cấp ${s.level}</span>
-      </div>
-
-      <div class="profile-card-content">
-        <div class="profile-main-row">
-          <div class="profile-avatar-wrapper">
-            <div class="profile-avatar-ring">
-              <div class="profile-avatar-inner">
-                ${icon('hanger')}
-              </div>
-            </div>
-          </div>
-
-          <div class="profile-details">
-            <div class="profile-name-row">
-              <h3 class="profile-name">${escapeHtml(shopName)}</h3>
-              <span class="profile-verified-badge" title="Boutique chính hãng">${icon('check')}</span>
-              <span class="profile-level-chip">Cấp ${s.level}</span>
-              <button class="edit-shop-name-btn" data-action="name-shop" title="Đổi tên tiệm">
-                ${icon('edit')}
-              </button>
-            </div>
-            <span class="profile-handle">${handle} · Tiệm thời trang của bạn</span>
-            <p class="profile-bio">
-              Góc nhỏ của những điều xinh xắn. Tự do phối đồ, tôn vinh phong cách riêng. Mở cửa đón khách mỗi ngày! 💕
-            </p>
-            <div class="profile-tags-row">
-              <span class="profile-tag-item">${icon('decor')} ${s.layout.length} nội thất</span>
-              <span class="profile-tag-item">${icon('trend')} Thẩm mỹ ${decorAppealScore(s)}</span>
-              <span class="profile-tag-item">${icon('sun')} ${s.dailyLuck ?? 'Thời tiết dịu dàng'}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="profile-stats-grid">
-          <div class="profile-stat-box">
-            <span class="stat-icon-wrap">${icon('edit')}</span>
-            <div class="stat-text-wrap">
-              <strong class="stat-number">${s.posts.length}</strong>
-              <span class="stat-label">Bài viết</span>
-            </div>
-          </div>
-          <div class="profile-stat-box">
-            <span class="stat-icon-wrap stat-heart-wrap">${icon('user')}</span>
-            <div class="stat-text-wrap">
-              <strong class="stat-number">${s.followers.toLocaleString('vi-VN')}</strong>
-              <span class="stat-label">Theo dõi</span>
-            </div>
-          </div>
-          <div class="profile-stat-box">
-            <span class="stat-icon-wrap stat-star-wrap">${icon('star')}</span>
-            <div class="stat-text-wrap">
-              <strong class="stat-number">${s.reputation.toFixed(1)} <small>/ 5.0</small></strong>
-              <span class="stat-label">Độ uy tín</span>
-            </div>
-          </div>
-          <div class="profile-stat-box">
-            <span class="stat-icon-wrap stat-bag-wrap">${icon('bag')}</span>
-            <div class="stat-text-wrap">
-              <strong class="stat-number">${s.stats.sold}</strong>
-              <span class="stat-label">Đã bán</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Feed Section -->
     <div class="social-feed-section">
@@ -658,25 +625,15 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
               <div class="post-author-meta">
                 <div class="post-author-name-row">
                   <strong class="post-author-name">${escapeHtml(p.name)}</strong>
-                  ${p.viral ? `<span class="post-viral-badge">${icon('social')} VIRAL MOMENT</span>` : ''}
+                  ${p.viral ? `<span class="post-viral-badge">${icon('trend')} Đang được yêu thích</span>` : ''}
                 </div>
-                <span class="post-author-handle">${escapeHtml(p.handle)} · Ngày ${p.day}</span>
+                <span class="post-author-handle">${escapeHtml(p.handle)}</span>
               </div>
-              <span class="post-heart-icon">${icon('heart')}</span>
+              <span class="post-date">Ngày ${p.day}</span>
             </div>
 
             <div class="post-card-body">
-              <div class="post-quote-bubble">
-                <p class="post-quote-text">“${escapeHtml(p.text)}”</p>
-              </div>
-              ${p.viral ? `
-                <div class="post-viral-showcase">
-                  <div class="viral-photo-frame">
-                    <span class="viral-icon">${icon('hanger')}</span>
-                    <span class="viral-quote-handwritten">small shop.<br><em>big main character energy.</em></span>
-                  </div>
-                </div>
-              ` : ''}
+              <p class="post-quote-text">${escapeHtml(p.text)}</p>
             </div>
 
             <div class="post-card-footer">
@@ -685,7 +642,10 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
                 <strong>${p.likes.toLocaleString('vi-VN')}</strong>
                 <span>lượt yêu thích</span>
               </div>
-              <span class="post-happy-tag">${icon('star')} ${reviewStars.toFixed(1)} sao · ${reviewLabel}</span>
+              <span class="post-review" aria-label="${reviewStars.toFixed(1)} trên 5 sao, ${reviewLabel}">
+                <span class="post-stars" aria-hidden="true"><span>★★★★★</span><span style="width:${reviewStars / 5 * 100}%">★★★★★</span></span>
+                <b>${reviewStars.toFixed(1)}</b><span class="post-review-label">${reviewLabel}</span>
+              </span>
             </div>
           </article>
         `; }).join('') : `
@@ -704,6 +664,7 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
         `}
       </div>
       <p class="social-subtle-footer">Mạng xã hội mô phỏng trong game • Mọi khoảnh khắc đều do chính tay bạn tạo dựng 💕</p>
+    </div>
     </div>
     </div>
   `;

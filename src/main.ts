@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import './style.css';
 import './ui/studio.css';
+import './ui/social.css';
 import { GameStore } from './systems/store';
 import { AudioSystem } from './systems/audio';
 import { GameUI } from './ui/GameUI';

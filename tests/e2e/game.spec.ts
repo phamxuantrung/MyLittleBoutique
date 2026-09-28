@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { SAVE_KEY } from '../../src/systems/save';
 import { openState, preparedState } from './state';
+import { gameView } from './viewport';
 
 test('a new boutique completes seven tutorial steps and keeps preparing', async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
@@ -182,11 +183,12 @@ for (const [width, height] of [[375, 667], [844, 390], [1280, 720]]) {
     const state = preparedState();
     await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
     await page.goto('/');
-    await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    const view = await gameView(page);
+    await expect(view.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await expect(page.locator('[data-action="open"]')).toBeVisible();
-    await page.locator('[data-action="open"]').click();
-    await expect(page.locator('[data-action="sale-speed"]')).toBeVisible();
-    await expect(page.locator('[data-action="close-shop"]')).toBeVisible();
+    await expect(view.locator('[data-action="open"]')).toBeVisible();
+    await view.locator('[data-action="open"]').click();
+    await expect(view.locator('[data-action="sale-speed"]')).toBeVisible();
+    await expect(view.locator('[data-action="close-shop"]')).toBeVisible();
   });
 }

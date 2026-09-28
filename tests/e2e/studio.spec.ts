@@ -1,11 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { SAVE_KEY } from '../../src/systems/save';
 import { openState } from './state';
+import { canvasPoint, gameView } from './viewport';
 
 async function clickCustomer(page: Page) {
   await page.waitForTimeout(1600);
-  const canvas = (await page.locator('#game-canvas canvas').boundingBox())!;
-  await page.mouse.click(canvas.x + 426 * canvas.width / 1000, canvas.y + 390 * canvas.height / 700);
+  const point = await canvasPoint(page, 426, 390);
+  await page.mouse.click(point.x, point.y);
 }
 
 for (const [width, height] of [[390, 844], [844, 390], [1280, 800]]) {
@@ -14,9 +15,10 @@ for (const [width, height] of [[390, 844], [844, 390], [1280, 800]]) {
     const state = openState();
     await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
     await page.goto('/');
-    await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    const view = await gameView(page);
+    await expect(view.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
     await clickCustomer(page);
-    const dialog = page.getByRole('dialog');
+    const dialog = view.getByRole('dialog');
     await expect(dialog).toHaveClass('dialog-serve');
     await expect(dialog).toContainText('Khách mới');
     await dialog.locator('[data-action="outfit-category"][data-id="tops"]').click();

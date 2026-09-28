@@ -1,0 +1,292 @@
+/* A continuous profile page: cover, identity, statistics, then the timeline. */
+.social-profile-page {
+  width: min(100%, 1080px);
+  margin: 18px auto 0;
+  background: #fff;
+  border: 1px solid #f0deea;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.social-profile-page .social-profile-card {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.social-profile-page .profile-cover-banner {
+  height: 194px;
+  padding: 24px 36px 38px;
+  align-items: center;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 50% 20%, #fff9f0e6, transparent 65%),
+    radial-gradient(ellipse at 95% 100%, #d8c7eab3, transparent 60%),
+    linear-gradient(115deg, #f2c9d8, #f9e7e9 48%, #e5d7ef);
+}
+
+.profile-cover-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, #ffffff80 1px, transparent 1.5px) 0 0 / 22px 22px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.profile-cover-banner::after {
+  content: '';
+  position: absolute;
+  width: 350px;
+  height: 350px;
+  left: calc(50% - 175px);
+  top: -72px;
+  border: 1px solid #fff9;
+  border-radius: 50%;
+  box-shadow: 0 0 0 24px #ffffff14, 0 0 0 48px #ffffff12;
+  z-index: -1;
+}
+
+.profile-cover-art {
+  position: absolute;
+  inset: 0;
+  width: min(76%, 720px);
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2vw, 24px);
+}
+
+.cover-fashion-print {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 116px;
+  margin: 0;
+  padding: 7px 7px 17px;
+  background: #fffcf7;
+  box-shadow: 0 8px 15px #855b781f, 0 1px 2px #855b781a;
+  transform: translateY(6px) rotate(-14deg);
+}
+
+.cover-fashion-print::before {
+  content: '';
+  position: absolute;
+  width: 35px;
+  height: 12px;
+  background: #f1cfbca6;
+  top: -6px;
+  left: calc(50% - 18px);
+  transform: rotate(-6deg);
+}
+
+.cover-fashion-print:nth-of-type(2) { transform: translateY(-9px) rotate(-7deg); z-index: 1; }
+.cover-fashion-print:nth-of-type(3) { transform: translateY(3px) rotate(3deg); z-index: 2; }
+.cover-fashion-print:nth-of-type(4) { transform: translateY(-8px) rotate(9deg); z-index: 1; }
+.cover-fashion-print:nth-of-type(5) { transform: translateY(8px) rotate(15deg); }
+.cover-fashion-print:nth-of-type(even)::before { background: #d9c9e6ad; transform: rotate(5deg); }
+.profile-cover-art .product-art {
+  display: block;
+  width: 100%;
+  height: 112px;
+  object-fit: contain;
+  background: linear-gradient(145deg, #fce7ee, #f3eaf1);
+  padding: 9px;
+}
+
+.cover-fashion-sparkle { position: absolute; color: #c799b3; }
+.cover-fashion-sparkle.is-left { top: 27px; left: 5%; transform: rotate(-12deg); }
+.cover-fashion-sparkle.is-right { bottom: 25px; right: 5%; transform: rotate(12deg); }
+.cover-fashion-sparkle .icon { width: 30px; height: 30px; stroke-width: 1.3; }
+.cover-fashion-heart { position: absolute; right: 8%; top: 22px; color: #d4a0b5; transform: rotate(18deg); }
+.cover-fashion-heart .icon { width: 18px; height: 18px; fill: #fff6f899; }
+
+.social-profile-page .profile-card-content {
+  margin: 0;
+  padding: 0 28px;
+  gap: 0;
+}
+
+.profile-identity-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: -42px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 100px;
+  height: 100px;
+  overflow: hidden;
+  border: 5px solid #fff;
+  border-radius: 50%;
+  background: #fff0f7;
+  box-shadow: 0 3px 10px #71365614;
+}
+
+.profile-avatar > svg { width: 100%; height: 100%; }
+
+.profile-edit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 9px 16px;
+  margin-bottom: 4px;
+  border: 1px solid #e8c8db;
+  border-radius: 10px;
+  background: #fff;
+  color: #824063;
+  font-size: 12px;
+  font-weight: 800;
+  transition: background .15s, border-color .15s;
+}
+
+.profile-edit-button:hover { background: #fff1f8; border-color: #d88ab4; }
+.profile-edit-button .icon { width: 15px; height: 15px; }
+
+.social-profile-page .profile-details {
+  padding: 0;
+  gap: 5px;
+  min-width: 0;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.social-profile-page .profile-name-row { justify-content: flex-start; gap: 8px; }
+.social-profile-page .profile-name { font-size: clamp(22px, 2.5vw, 28px) !important; overflow-wrap: anywhere; }
+.social-profile-page .profile-handle { color: #a08096; font-size: 12px; overflow-wrap: anywhere; }
+.social-profile-page .profile-bio { margin: 7px 0; font-size: 13px; line-height: 1.65; color: #75586a; }
+.social-profile-page .profile-verified-badge { width: 19px; height: 19px; box-shadow: none; }
+
+.profile-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: #977a8c;
+  font-size: 11px;
+}
+
+.profile-facts > span { display: inline-flex; align-items: center; gap: 5px; }
+.profile-facts .icon { width: 14px; height: 14px; color: #b77c9d; }
+
+.profile-statistics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 32px;
+  margin: 20px 0;
+}
+
+.profile-statistics > div { display: flex; align-items: baseline; gap: 6px; }
+.profile-statistics dt { color: #977a8c; font-size: 11px; }
+.profile-statistics dd { order: -1; margin: 0; color: #553047; font-size: 18px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.profile-statistics dd small { color: #977a8c; font-size: 10px; font-weight: 500; }
+
+.social-profile-page .social-inner-tabs {
+  display: flex;
+  gap: 28px;
+  margin: 0 28px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid #efdee8;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.social-profile-page .social-inner-tab {
+  min-height: 46px;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.social-profile-page .social-inner-tab.is-active { border-bottom-color: #d43c91; color: #b72a7b; }
+.social-profile-page .social-inner-tab > span:first-child { width: auto; height: auto; background: transparent; color: inherit; border-radius: 0; }
+.social-profile-page .social-inner-tab strong { font-size: 12px; }
+.social-profile-page .social-inner-tab small { display: none; }
+.social-profile-page .social-tab-content { padding: 20px 28px; }
+.social-profile-page .social-feed-section { max-width: 760px; margin: 0 auto; }
+.social-profile-page .social-section-title { margin: 0; }
+.social-profile-page .social-section-title .count-pill { display: none; }
+.social-profile-page .social-post-card { border-radius: 0; border-width: 0 0 1px; padding: 20px 0; box-shadow: none; }
+.social-profile-page .social-post-card:hover { transform: none; box-shadow: none; }
+.social-profile-page .post-quote-bubble { padding: 3px 0; background: none; border: 0; border-radius: 0; }
+.social-profile-page .post-quote-bubble::before { display: none; }
+.social-profile-page .social-empty-state { border: 0; background: none; box-shadow: none; }
+
+/* Customer reviews read as a timeline, with one quiet divider per post. */
+.social-profile-page .social-posts-feed { gap: 0; margin: 12px 0; }
+.social-profile-page .social-post-card { gap: 12px; background: transparent; }
+.social-profile-page .social-post-card:last-child { border-bottom: 0; }
+.social-profile-page .post-card-header { align-items: center; gap: 11px; }
+.social-profile-page .post-author-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  font: 800 18px/1 var(--font-serif);
+  box-shadow: inset 0 0 0 1px #ffffff80;
+}
+.social-profile-page .post-author-meta { min-width: 0; gap: 4px; }
+.social-profile-page .post-author-name { color: #5d314d; font-size: 13px; overflow-wrap: anywhere; }
+.social-profile-page .post-author-handle { color: #a18798; font-size: 10px; overflow-wrap: anywhere; }
+.post-date { margin-left: auto; align-self: flex-start; padding-top: 3px; color: #ad97a4; font-size: 10px; white-space: nowrap; }
+.social-profile-page .post-card-body,
+.social-profile-page .post-card-footer { margin-left: 51px; }
+.social-profile-page .post-quote-text { color: #71546a; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-line; }
+.social-profile-page .post-card-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 0; border: 0; }
+.social-profile-page .post-likes-count { gap: 5px; color: #a28296; font-size: 10px; }
+.social-profile-page .post-likes-count strong { color: #b94885; font-weight: 750; }
+.social-profile-page .post-like-heart { display: inline-flex; color: #db75a9; }
+.social-profile-page .post-like-heart .icon { width: 15px; height: 15px; }
+.post-review { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #9c7b8f; font-size: 10px; }
+.post-review > b { color: #967136; }
+.post-review-label { padding-left: 6px; border-left: 1px solid #ecdee6; }
+.post-stars { position: relative; display: inline-block; line-height: 1 !important; letter-spacing: 2px; white-space: nowrap; }
+.post-stars > span { color: #eadfe5; font-size: 12px !important; }
+.post-stars > span:last-child { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: #e6ae52; }
+.social-profile-page .post-viral-badge {
+  gap: 4px;
+  padding: 2px 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: #c55591;
+  font-size: 9px;
+  font-weight: 650;
+  animation: none;
+}
+.social-profile-page .post-viral-badge .icon { width: 12px; height: 12px; }
+
+@media (max-width: 700px), (max-height: 480px) {
+  .social-profile-page { margin-top: 10px; border-radius: 12px; }
+  .social-profile-page .profile-cover-banner { height: 148px; padding: 16px 24px 28px; }
+  .profile-cover-art { width: 78%; gap: 12px; }
+  .profile-cover-art .product-art { height: 82px; padding: 5px; }
+  .cover-fashion-print { max-width: 92px; padding: 5px 5px 12px; }
+  .social-profile-page .profile-card-content { padding: 0 20px; }
+  .profile-identity-bar { margin-top: -30px; margin-bottom: 8px; }
+  .profile-avatar { width: 78px; height: 78px; border-width: 4px; }
+  .profile-statistics { gap: 12px 24px; margin: 15px 0; }
+  .social-profile-page .social-inner-tabs { margin: 0 20px; }
+  .social-profile-page .social-tab-content { padding: 16px 20px; }
+}
+
+@media (max-width: 420px) {
+  .profile-cover-art { width: 72%; gap: 12px; }
+  .cover-fashion-print:first-of-type, .cover-fashion-print:last-of-type { display: none; }
+  .profile-statistics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

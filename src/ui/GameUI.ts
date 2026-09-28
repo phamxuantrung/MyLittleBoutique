@@ -79,7 +79,7 @@ export class GameUI {
         if (this.modal === 'quests') this.dialog.querySelector('.dialog-inner')!.innerHTML = questPanel(store.state);
         if (this.modal === 'staff') this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(store.state);
         if (this.modal === 'online') this.refreshOnlineChannel();
-        if (this.modal === 'online-order') this.dialog.querySelector('.dialog-inner')!.innerHTML = onlineOrderModal(store.state, this.onlineOrderId, this.onlineHandoverProductIds);
+        if (this.modal === 'online-order') this.refreshOnlineOrder();
         if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(store.state);
         if (this.modal === 'debug') this.dialog.querySelector('.dialog-inner')!.innerHTML = debugPanel(store.state);
         this.queueTutorialCue();
@@ -111,7 +111,7 @@ export class GameUI {
       if (event.type === 'customer') audio.play('bell');
     });
     setInterval(() => {
-      const modalPausesSale = this.modal !== 'none' && this.modal !== 'serve';
+      const modalPausesSale = !['none', 'serve', 'online-order'].includes(this.modal);
       const paused = document.hidden || this.moveMode || this.tab !== 'shop' || modalPausesSale;
       if (!paused && this.store.state.phase === 'open') {
         this.saleTickProgress += this.saleSpeed / 4;
@@ -542,7 +542,8 @@ export class GameUI {
         this.onlineHandoverProductIds = this.onlineHandoverProductIds.includes(id)
           ? this.onlineHandoverProductIds.filter(productId => productId !== id)
           : [...this.onlineHandoverProductIds, id];
-        this.dialog.querySelector('.dialog-inner')!.innerHTML = onlineOrderModal(this.store.state, this.onlineOrderId, this.onlineHandoverProductIds);
+        this.refreshOnlineOrder();
+        this.dialog.querySelector<HTMLButtonElement>(`[data-action="online-hand-over-select"][data-id="${id}"]`)?.focus({ preventScroll: true });
         break;
       }
       case 'online-hand-over': {
@@ -1245,6 +1246,18 @@ export class GameUI {
       const storefront = inner.querySelector<HTMLElement>('.storefront-product-grid');
       if (stock) stock.scrollTop = stockScroll;
       if (storefront) storefront.scrollTop = storefrontScroll;
+    };
+    restoreScroll();
+    requestAnimationFrame(restoreScroll);
+  }
+  private refreshOnlineOrder() {
+    const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+    if (!inner) return;
+    const scrollTop = inner.querySelector<HTMLElement>('.online-handover-grid')?.scrollTop ?? 0;
+    inner.innerHTML = onlineOrderModal(this.store.state, this.onlineOrderId, this.onlineHandoverProductIds);
+    const restoreScroll = () => {
+      const grid = inner.querySelector<HTMLElement>('.online-handover-grid');
+      if (grid) grid.scrollTop = scrollTop;
     };
     restoreScroll();
     requestAnimationFrame(restoreScroll);

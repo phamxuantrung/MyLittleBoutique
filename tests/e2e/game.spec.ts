@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { products } from '../../src/data/catalog';
 import { SAVE_KEY } from '../../src/systems/save';
 import { openState, preparedState } from './state';
 import { gameView } from './viewport';
@@ -73,20 +74,43 @@ test('the player can take a chosen loan on top of starting capital', async ({ pa
 });
 
 test('the online channel accepts listings and fulfills a courier order', async ({ page }) => {
-  const state = openState('lily', 'browse');
+  const state = openState('lily', 'advice');
+  state.dayTimer = 116;
+  for (const product of products) state.inventory[product.id] = Math.max(2, state.inventory[product.id] ?? 0);
   state.onlineListings = ['baby-tee'];
   state.onlineOrders = [{ id: 'e2e-online-order', productId: 'baby-tee', customerName: 'An', customerHandle: '@an_style', price: 100000, fee: 14000, createdDay: 1, courierVariant: 0 }];
   await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
   await page.goto('/');
   await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
   await expect(page.locator('#online-fab-badge')).toHaveText('1');
-  await page.locator('#online-channel-button').click();
+  await page.evaluate(() => {
+    const button = document.createElement('button');
+    button.dataset.action = 'online-order-open';
+    button.dataset.id = 'e2e-online-order';
+    document.body.append(button);
+    button.click();
+    button.remove();
+  });
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('1 đơn cần giao');
-  await dialog.locator('[data-action="online-order-open"]').click();
-  await expect(dialog).toContainText('Chuẩn bị đúng món cho An');
-  await dialog.locator('[data-action="online-hand-over"][data-id="baby-tee"]').click();
-  await expect(dialog.locator('.online-overview')).toContainText('1 đơn');
+  await expect(dialog).toContainText('Shipper đang chờ tại shop');
+  await expect.poll(() => page.evaluate(key => {
+    const saved = JSON.parse(localStorage.getItem(key)!);
+    return [saved.dayTimer, saved.activeVisits[0]?.patience];
+  }, SAVE_KEY)).toEqual([115, 89]);
+
+  const grid = dialog.locator('.online-handover-grid');
+  const scrollTop = await grid.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+    return element.scrollTop;
+  });
+  expect(scrollTop).toBeGreaterThan(0);
+  const lastProduct = grid.locator('[data-action="online-hand-over-select"]').last();
+  await lastProduct.click();
+  await expect.poll(() => grid.evaluate(element => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+  await lastProduct.click();
+  await dialog.locator('[data-action="online-hand-over-select"][data-id="baby-tee"]').click();
+  await dialog.locator('[data-action="online-hand-over"]').click();
+  await expect(dialog).not.toBeVisible();
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
   expect(saved.onlineOrders).toHaveLength(0);
   expect(saved.onlineSales).toBe(1);

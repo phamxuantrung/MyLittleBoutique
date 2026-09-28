@@ -10011,9 +10011,21 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
   }
 
   :root.landscape-game-frame {
-    /* The outer host already reserves the notch. iOS safe-area env values
-       refer to the physical screen, not this rotated landscape viewport. */
-    --mobile-safe-left: 14px;
+    /* Insets are rotated by the host; never shrink the actual game canvas. */
+    --mobile-safe-left: max(14px, var(--game-safe-left, 0px));
+    --mobile-safe-right: max(4px, var(--game-safe-right, 0px));
+    --mobile-safe-top: max(4px, var(--game-safe-top, 0px));
+    --mobile-safe-bottom: max(4px, var(--game-safe-bottom, 0px));
+  }
+
+  :root.landscape-game-frame :is(.game-panel-header-card, .inv-panel-header) {
+    padding-left: max(16px, var(--mobile-safe-left)) !important;
+    padding-right: max(8px, var(--mobile-safe-right)) !important;
+    padding-top: max(8px, var(--mobile-safe-top)) !important;
+  }
+
+  :root.landscape-game-frame dialog {
+    inset: var(--mobile-safe-top) var(--mobile-safe-right) var(--mobile-safe-bottom) var(--mobile-safe-left);
   }
 
   .game-top-bar {

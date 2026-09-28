@@ -6,6 +6,42 @@ import { canvasPoint } from './viewport';
 test.describe('automatic landscape on phones', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
+  test('safe areas move controls without shrinking the canvas', async ({ page }) => {
+    const state = preparedState();
+    await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+    await page.goto('/');
+    const game = page.frameLocator('#landscape-game');
+    await expect(game.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    // Simulate iPhone physical insets: notch at top, home indicator below.
+    await page.locator('#app').evaluate(el => {
+      (el as HTMLElement).style.setProperty('--device-top', '59px');
+      (el as HTMLElement).style.setProperty('--device-bottom', '34px');
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(await game.locator('html').evaluate(() => [innerWidth, innerHeight])).toEqual([844, 390]);
+    await expect(page.locator('#app')).toHaveCSS('padding', '0px');
+    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-left', '59px');
+    await expect(game.locator('.right-dock-container')).toHaveCSS('right', '34px');
+    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-top', '4px');
+    await game.locator('#settings-button').tap();
+    const dialog = (await game.getByRole('dialog').boundingBox())!;
+    expect(dialog.y).toBeGreaterThanOrEqual(59);
+    expect(dialog.y + dialog.height).toBeLessThanOrEqual(844 - 34);
+    await game.getByRole('dialog').locator('[data-action="close-modal"]').tap();
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.locator('#app').evaluate(el => {
+      const style = (el as HTMLElement).style;
+      style.setProperty('--device-top', '0px');
+      style.setProperty('--device-left', '59px');
+      style.setProperty('--device-bottom', '21px');
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(await game.locator('html').evaluate(() => [innerWidth, innerHeight])).toEqual([844, 390]);
+    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-left', '59px');
+    await expect(game.locator('.game-bottom-hud')).toHaveCSS('padding-bottom', '21px');
+    await expect(game.locator('.right-dock-container')).toHaveCSS('right', '4px');
+  });
+
   test('opens sideways immediately and preserves the panel through device rotation', async ({ page }) => {
     const state = preparedState();
     await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });

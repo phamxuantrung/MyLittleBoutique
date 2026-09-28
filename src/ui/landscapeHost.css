@@ -11,16 +11,13 @@ body {
   position: fixed;
   inset: 0;
   box-sizing: border-box;
-  /* Reserve the notch edge only. The game owns its small right-hand gutter;
-     padding every physical edge here doubles the insets inside the iframe. */
-  padding: 0 0 0 env(safe-area-inset-left, 0px);
+  /* Full-bleed canvas; pass physical safe areas to the game's controls only. */
+  --device-top: env(safe-area-inset-top, 0px);
+  --device-right: env(safe-area-inset-right, 0px);
+  --device-bottom: env(safe-area-inset-bottom, 0px);
+  --device-left: env(safe-area-inset-left, 0px);
+  padding: 0;
   overflow: hidden;
-}
-
-.landscape-host.is-rotated {
-  /* Physical top becomes the game's left edge after the clockwise rotation.
-     Physical bottom (home indicator) becomes its right edge, not its bottom. */
-  padding: env(safe-area-inset-top, 0px) 0 0;
 }
 
 .landscape-stage {

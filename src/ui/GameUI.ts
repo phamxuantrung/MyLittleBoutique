@@ -921,7 +921,7 @@ export class GameUI {
     const showShop = this.tab === 'shop';
 
     document.querySelector('#day-card')!.innerHTML = `<span class="day-sun-icon">${icon('daySun')}</span><strong class="day-num">${String(s.day).padStart(2, '0')}</strong>`;
-    document.querySelector('#hud')!.innerHTML = `<div class="hud-item wallet"><span class="hud-icon">${icon('coin')}</span><strong data-testid="money">${money(s.money)}</strong></div><div class="hud-item" title="Độ uy tín"><span class="hud-icon star-icon">${icon('star')}</span><strong>${s.reputation.toFixed(1)}</strong></div><div class="hud-item" title="Người theo dõi"><span class="hud-icon heart-icon">${icon('user')}</span><strong>${compact(s.followers)}</strong></div><div class="hud-item hud-appeal" title="Điểm thẩm mỹ"><span class="hud-icon appeal-icon">${icon('decor')}</span><strong>${decorAppealScore(s)}</strong></div>`;
+    document.querySelector('#hud')!.innerHTML = `<div class="hud-item wallet"><span class="hud-icon">${icon('coin')}</span><strong data-testid="money">${money(s.money)}</strong></div><div class="hud-item" title="Độ uy tín"><span class="hud-icon reputation-icon">${icon('shield')}</span><strong>${s.reputation.toFixed(1)}</strong></div><div class="hud-item" title="Người theo dõi"><span class="hud-icon heart-icon">${icon('user')}</span><strong>${compact(s.followers)}</strong></div><div class="hud-item hud-appeal" title="Điểm thẩm mỹ"><span class="hud-icon appeal-icon">${icon('decor')}</span><strong>${decorAppealScore(s)}</strong></div>`;
     const soundBtn = document.querySelector('#sound-button');
     if (soundBtn) {
       soundBtn.innerHTML = icon(s.sound ? 'volume' : 'mute');

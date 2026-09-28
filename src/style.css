@@ -9784,14 +9784,14 @@ dialog.dialog-online-order .dialog-inner { max-height: min(606px,calc(100dvh - 3
 .online-dashboard-metrics .icon { width: 12px; height: 12px; }
 .online-dashboard-metrics small { color: #9a7d8e; font-size: 5.8px; }
 .online-dashboard-metrics strong { overflow: hidden; color: #523149; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.online-dashboard-reach { flex: 0 0 auto; display: grid; gap: 4px; padding: 7px 8px; border: 1px solid #eadde5; border-radius: 11px; background: #fff9fc; }
+.online-dashboard-reach { flex: 0 0 auto; display: grid; gap: 4px; min-width: 0; container-type: inline-size; padding: 7px 8px; border: 1px solid #eadde5; border-radius: 11px; background: #fff9fc; }
 .online-dashboard-reach > div:first-child { display: flex; justify-content: space-between; gap: 8px; }
 .online-dashboard-reach small { color: #9a788b; font-size: 6.5px; }
 .online-dashboard-reach strong { color: #bc6042; font-size: 7.5px; }
 .online-dashboard-reach.is-ready strong { color: #348371; }
 .online-dashboard-reach-track { height: 5px; overflow: hidden; border-radius: 999px; background: #f0e4eb; }
 .online-dashboard-reach-track b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#ed8fba,#5dbba8); }
-.online-dashboard-reach > span { color: #a08394; font-size: 5.8px; }
+dialog.dialog-online .online-dashboard-reach > span { min-width: 0; color: #a08394; font-size: clamp(6px, 2cqw, 9px) !important; line-height: 1.35 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .online-dashboard-orders { flex: 0 0 auto; max-height: 126px; margin-top: 7px; padding: 7px; overflow: auto; border: 1px solid #bfe0d8; border-radius: 11px; background: #f5fffc; }
 .dashboard-block-heading { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 5px; }
 .dashboard-block-heading > div { min-width: 0; display: grid; gap: 1px; }

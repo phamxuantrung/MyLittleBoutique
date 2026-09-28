@@ -586,6 +586,18 @@ describe('decoration, upgrades and resilient saves', () => {
     expect(print).toMatchObject({ y: 0, rotation: 0 });
     expect(canPlace(store.state.layout, print)).toBe(true);
   });
+  it('finds the nearest free slot on the opposite wall and leaves full walls unchanged', () => {
+    const store = makeStore();
+    const print = { uid: 'rotating-print', id: 'fashion-print', x: 2, y: 0, rotation: 0 };
+    store.state.layout = [print, { uid: 'blocking-print', id: 'fashion-print', x: 0, y: 2, rotation: 1 }];
+    expect(store.moveFurniture(print.uid, print.x, print.y, true)).toBe(true);
+    expect(print).toMatchObject({ x: 0, y: 0, rotation: 1 });
+    expect(store.moveFurniture(print.uid, print.x, print.y, true)).toBe(true);
+    store.state.layout = [print, ...Array.from({ length: 3 }, (_, slot) => ({ uid: `full-${slot}`, id: 'fashion-print', x: 0, y: slot * 2, rotation: 1 }))];
+    const before = { ...print };
+    expect(store.moveFurniture(print.uid, print.x, print.y, true)).toBe(false);
+    expect(print).toEqual(before);
+  });
   it('expands the usable floor and persists custom display names', () => {
     const store = makeStore();
     expect(landSize(store.state)).toBe(7);

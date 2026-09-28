@@ -6,6 +6,7 @@ import { activeCustomer, activeVisit, currentEvent, currentTrend, DAY_DURATION, 
 import { defaultFilters } from '../systems/catalog';
 import { icon } from './icons';
 import { ownerPortrait } from '../art/svg';
+import { isWallFurnitureId } from '../systems/rules';
 import { compact, escapeHtml, money, productImage } from './format';
 import { debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, nameShopModal, onlineChannelModal, onlineOrderModal, questPanel, resultModal, serveModal, socialPanel, staffManagementModal, summaryModal, trendPanel, upgradeModal } from './panels';
 import type { ShopScene } from '../scenes/ShopScene';
@@ -47,6 +48,7 @@ export class GameUI {
   private lastAnnouncement = '';
   private moveMode = false;
   private tutorialStep = 0;
+  private welcomeCollapsed = false;
   private tutorialRetry = 0;
   private onlineOrderId = '';
   private suppressSuccessToastAudio = false;
@@ -435,6 +437,12 @@ export class GameUI {
       case 'open': {
         this.navigate('shop');
         this.store.openShop();
+        break;
+      }
+      case 'welcome-toggle': {
+        this.welcomeCollapsed = !this.welcomeCollapsed;
+        this.renderCustomer();
+        document.querySelector<HTMLButtonElement>('[data-action="welcome-toggle"]')?.focus({ preventScroll: true });
         break;
       }
       case 'serve-open': this.openServe(); break;
@@ -1022,7 +1030,14 @@ export class GameUI {
     const financeAlert = s.rentDue > 0 || (s.loan?.paymentDue ?? 0) > 0;
     let html = '';
     if (s.phase === 'preparation') {
-      html = `<div class="welcome-card"><div class="welcome-text"><span class="eyebrow">${s.day === 1 ? 'YOUR STORY STARTS HERE' : 'A FRESH LITTLE START'}</span><h3>${s.day === 1 ? 'Khởi đầu boutique của riêng bạn' : 'Mở cửa đón những điều dễ thương?'}</h3><p>${s.day === 1 ? 'Bạn bắt đầu với 500.000₫ và kho trống. Hãy nhập hàng, trưng sản phẩm rồi mở cửa; có thể vay thêm vốn nếu cần.' : currentEvent(s).description}</p></div><div class="welcome-actions"><button class="btn btn-secondary finance-entry-btn ${financeAlert ? 'has-finance-alert' : ''}" data-action="finance-open">Tài chính</button><button class="btn btn-primary" data-action="open">Mở cửa đón khách ${icon('arrow')}</button></div></div>`;
+      html = `<div class="welcome-card preparation-welcome ${this.welcomeCollapsed ? 'is-collapsed' : ''}">
+        <button class="welcome-toggle" data-action="welcome-toggle" aria-expanded="${!this.welcomeCollapsed}" aria-controls="welcome-details" aria-label="${this.welcomeCollapsed ? 'Mở phần chuẩn bị bán hàng' : 'Thu gọn phần chuẩn bị bán hàng'}">
+          ${icon(this.welcomeCollapsed ? 'shop' : 'minus')}<span>${this.welcomeCollapsed ? 'Chuẩn bị bán hàng' : 'Thu gọn'}</span>${this.welcomeCollapsed ? icon('plus') : ''}
+        </button>
+        <div id="welcome-details" ${this.welcomeCollapsed ? 'hidden' : ''}>
+          <div class="welcome-text"><span class="eyebrow">${s.day === 1 ? 'YOUR STORY STARTS HERE' : 'A FRESH LITTLE START'}</span><h3>${s.day === 1 ? 'Khởi đầu boutique của riêng bạn' : 'Mở cửa đón những điều dễ thương?'}</h3><p>${s.day === 1 ? 'Bạn bắt đầu với 500.000₫ và kho trống. Hãy nhập hàng, trưng sản phẩm rồi mở cửa; có thể vay thêm vốn nếu cần.' : currentEvent(s).description}</p></div><div class="welcome-actions"><button class="btn btn-secondary finance-entry-btn ${financeAlert ? 'has-finance-alert' : ''}" data-action="finance-open">Tài chính</button><button class="btn btn-primary" data-action="open">Mở cửa đón khách ${icon('arrow')}</button></div>
+        </div>
+      </div>`;
     } else if (c) {
       card.hidden = true;
       const announcement = `Khách ${c.name}. ${c.goal}`;
@@ -1142,7 +1157,7 @@ export class GameUI {
         </div>
         <div class="move-toolbar-actions">
           ${data?.display ? `<button class="move-tool-btn open-btn" data-action="display-open" title="Mở khu trưng bày hàng" aria-label="Mở"><span class="tool-btn-icon">${icon('hanger')}</span><span class="tool-btn-text">Mở</span></button>` : ''}
-          <button class="move-tool-btn rotate-btn" data-action="move-rotate" ${!sel ? 'disabled' : ''} title="Xoay hướng đồ vật" aria-label="Xoay">
+          <button class="move-tool-btn rotate-btn" data-action="move-rotate" ${!sel ? 'disabled' : ''} title="${sel && isWallFurnitureId(sel.id) ? 'Xoay để gắn sang tường bên kia' : 'Xoay hướng đồ vật'}" aria-label="${sel && isWallFurnitureId(sel.id) ? 'Xoay sang tường bên kia' : 'Xoay'}">
             <span class="tool-btn-icon">${icon('rotate')}</span>
             <span class="tool-btn-text">Xoay</span>
           </button>

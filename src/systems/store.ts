@@ -1065,10 +1065,16 @@ export class GameStore {
       }
     }
     if (!canPlace(this.state.layout, moved, this.state.landLevel)) {
+      if (rotate && wallMounted) {
+        this.toast('Tường bên kia không còn đủ chỗ. Hãy dời hoặc cất bớt đồ treo tường rồi xoay lại.', 'error');
+        return false;
+      }
       this.toast(isWallFurnitureId(item.id) ? 'Tranh và biển hiệu chỉ treo được sát tường. Hãy xoay món đồ để chuyển sang tường còn lại.' : 'Vị trí bị trùng hoặc chắn lối đi.', 'error');
       return false;
     }
-    Object.assign(item, moved); this.commit(); return true;
+    Object.assign(item, moved); this.commit();
+    if (rotate && wallMounted) this.toast(`Đã chuyển sang tường ${nextRotation === 1 ? 'trái' : 'phải'}.`);
+    return true;
   }
   sellFurniture(uid: string) {
     const p = this.state.layout.find(p => p.uid === uid); if (!p) return;

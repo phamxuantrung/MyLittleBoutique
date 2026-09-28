@@ -335,16 +335,6 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
   const signDecorY = signLines.length === 1 ? 128 : 140;
   const demoTop = (x: number, y: number, color: string) => `<path d="M${x - 12} ${y + 5}L${x - 20} ${y + 13}L${x - 16} ${y + 22}L${x - 9} ${y + 18}V${y + 38}Q${x} ${y + 42} ${x + 9} ${y + 38}V${y + 18}L${x + 16} ${y + 22}L${x + 20} ${y + 13}L${x + 12} ${y + 5}Q${x} ${y + 9} ${x - 12} ${y + 5}Z" fill="${color}" stroke="#4a2d5a" stroke-width="1.6"/><path d="M${x - 4} ${y + 7}Q${x} ${y + 13} ${x + 4} ${y + 7}" fill="none" stroke="#fff2f8" stroke-width="1.5"/>`;
   const demoIsoTop = (x: number, y: number, color: string) => `<g transform="matrix(.62,.31,0,.62,${x},${y})" stroke-linejoin="round"><path d="M-11 3L-20 10L-16 19L-9 15V37Q0 41 9 37V15L16 19L20 10L11 3Q0 8-11 3Z" fill="${color}" stroke="#4a2d5a" stroke-width="2"/><path d="M-5 4Q0 11 5 4" fill="none" stroke="#fff7fb" stroke-width="2"/></g>`;
-  const displayIsoGarment = (x: number, y: number, color: string, kind: 'jacket' | 'cardigan' | 'dress' | 'skirt') => {
-    const shape = kind === 'dress'
-      ? `<path d="M-8 10L-4 7L0 15L4 7L8 10L10 27L22 61Q0 70-22 61L-10 27Z" fill="${color}" stroke="#4a2d5a" stroke-width="2"/><path d="M-9 27Q0 32 9 27M-16 54Q0 62 16 54" fill="none" stroke="#fff" stroke-width="2.2"/>`
-      : kind === 'skirt'
-        ? `<path d="M-15 11H15V18H-15Z" fill="#fff6d9" stroke="#4a2d5a" stroke-width="2"/><path d="M-13 18L-21 54Q0 64 21 54L13 18Z" fill="${color}" stroke="#4a2d5a" stroke-width="2"/><path d="M-7 20L-10 57M0 20V60M7 20L10 57" stroke="#fff" stroke-width="1.6" opacity=".75"/>`
-        : kind === 'cardigan'
-          ? `<path d="M-13 9L-22 20L-17 38L-11 34L-9 58Q0 64 10 57L11 34L17 38L22 20L13 9L6 7L0 18L-6 7Z" fill="${color}" stroke="#4a2d5a" stroke-width="2"/><path d="M-6 7L0 18L6 7M0 18V60M-7 50Q0 55 8 50" fill="none" stroke="#fff7fb" stroke-width="2"/><circle cx="1" cy="29" r="1.5" fill="#d59a4c"/><circle cx="1" cy="38" r="1.5" fill="#d59a4c"/>`
-          : `<path d="M-14 9L-24 19L-18 34L-11 29L-9 55Q0 61 10 55L11 29L18 34L24 19L14 9L7 7L0 17L-7 7Z" fill="${color}" stroke="#4a2d5a" stroke-width="2"/><path d="M-7 7L0 17L7 7L10 16L3 20L10 54M-10 16L-3 20L-9 54" fill="none" stroke="#fff7fb" stroke-width="2"/><path d="M-7 35H7" stroke="#4a2d5a" stroke-width="1.2" opacity=".5"/>`;
-    return `<g transform="matrix(.6,.3,0,.72,${x},${y})" stroke-linejoin="round">${shape}<path d="M0 2Q0-7 5-7Q10-7 7-2L2 2M-18 9L0 3L18 9" fill="none" stroke="#4a2d5a" stroke-width="3.4"/><path d="M0 2Q0-7 5-7Q10-7 7-2L2 2M-18 9L0 3L18 9" fill="none" stroke="#d9ae6f" stroke-width="1.8"/></g>`;
-  };
   const sundayGarment = (id: string, dx: number, dy: number) => {
     const garment = rackSvg().match(new RegExp(`<g id="${id}">[\\s\\S]*?</g>`))?.[0] ?? '';
     return garment ? `<g transform="translate(${dx} ${dy})">${garment}</g>` : '';
@@ -375,7 +365,18 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
     <path d="M31 195V92Q31 43 72 50L141 85Q151 90 151 106V217" fill="none" stroke="#4a2d5a" stroke-width="8" stroke-linecap="round"/>
     <path d="M31 195V92Q31 43 72 50L141 85Q151 90 151 106V217" fill="none" stroke="url(#coutureGold)" stroke-width="4.5" stroke-linecap="round"/>
     <path d="M30 91L149 150" stroke="#4a2d5a" stroke-width="7"/><path d="M30 91L149 150" stroke="#d9a95f" stroke-width="3.5"/>
-    ${displayIsoGarment(51, 82, '#272832', 'jacket')}${displayIsoGarment(80, 97, '#e5d8c7', 'dress')}${displayIsoGarment(109, 112, '#9a6d78', 'cardigan')}${displayIsoGarment(136, 126, '#6f7384', 'skirt')}
+    <!-- Reuse Sunday's silhouettes and back-to-front order. A uniform scale
+         preserves the garment tilt; the hooks follow this rail's 1:2 slope. -->
+    <g transform="translate(-44 6) scale(1.2)" stroke-linecap="round" stroke-linejoin="round">
+      ${sundayGarment('garment-1-tweed-jacket', 0, 0)}
+      ${sundayGarment('garment-2-cream-cardigan', 0, 0)}
+      ${sundayGarment('garment-3-lavender-dress', 0, 0)}
+      ${sundayGarment('garment-4-mint-blouse', 0, 0)}
+      ${sundayGarment('garment-5-pleated-skirt', 0, 0)}
+    </g>
+    <!-- The near upright sits in front of the hanging clothes. -->
+    <path d="M151 106V217" stroke="#4a2d5a" stroke-width="8" stroke-linecap="round"/>
+    <path d="M151 106V217" stroke="url(#coutureGold)" stroke-width="4.5" stroke-linecap="round"/>
     <path d="M20 192L43 203M139 211L162 222" stroke="#4a2d5a" stroke-width="8" stroke-linecap="round"/><path d="M21 191L42 201M140 210L161 220" stroke="#d7a45a" stroke-width="4" stroke-linecap="round"/>
     <circle cx="31" cy="90" r="5" fill="#fff1bd" stroke="#4a2d5a" stroke-width="1.5"/><circle cx="150" cy="149" r="5" fill="#fff1bd" stroke="#4a2d5a" stroke-width="1.5"/>
   `, 180, 230);
@@ -388,6 +389,10 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
     <path d="M28 87L123 134L138 126M28 127L123 174L138 166M28 167L123 214L138 206" fill="none" stroke="#d9b96e" stroke-width="4"/>
     <path d="M30 84L123 130L136 123M30 124L123 170L136 163M30 164L123 210L136 203" fill="none" stroke="#fff3bd" stroke-width="1.5"/>
     ${displayIsoShoe(51, 76, '#e5ded1', 'heel')}${displayIsoShoe(91, 96, '#31323a', 'loafer')}${displayIsoShoe(51, 116, '#aa8991', 'heel')}${displayIsoShoe(91, 136, '#dadde4', 'sneaker')}${displayIsoShoe(51, 156, '#756457', 'loafer')}${displayIsoShoe(91, 176, '#efe7db', 'heel')}
+    <!-- Close the top plane between the rear panel and the front uprights. -->
+    <path d="M27 51L43 42L139 90L123 99Z" fill="#c8bbd3" stroke="#4a2d5a" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M27 51L123 99L139 90" fill="none" stroke="#d9b96e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 50L43 44L134 90" fill="none" stroke="#fff1c3" stroke-width="1.2" stroke-linejoin="round"/>
     <path d="M27 172V51M123 220V99" stroke="#4a2d5a" stroke-width="6"/><path d="M27 170V54M123 217V102" stroke="#c79b53" stroke-width="2.8"/>
   `, 180, 230);
   if (art === 'atelier-island') return wrap(`
@@ -413,6 +418,10 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
     <path d="M47 35L145 84V211L47 162Z" fill="#534b61" stroke="#4a2d5a" stroke-width="3"/><path d="M26 47L124 96V223L26 174Z" fill="url(#flagshipGlass)" stroke="#4a2d5a" stroke-width="3"/><path d="M124 96L145 84V211L124 223Z" fill="#74677f" stroke="#4a2d5a" stroke-width="2"/>
     <path d="M27 91L124 139L144 128M27 133L124 181L144 170M27 174L124 222L144 211" fill="none" stroke="#ffd76f" stroke-width="4"/><path d="M30 87L124 134L141 125M30 129L124 176L141 167M30 170L124 217L141 208" fill="none" stroke="#fff8d6" stroke-width="1.6"/>
     ${displayIsoBag(51, 77, '#e9e0d4', 'baguette')}${displayIsoBag(91, 97, '#32333b', 'tote')}${displayIsoBag(51, 119, '#9a7a73', 'saddle')}${displayIsoBag(91, 139, '#d8d4dd', 'baguette')}${displayIsoBag(51, 161, '#6e617d', 'tote')}${displayIsoBag(91, 181, '#c4a263', 'saddle')}
+    <!-- A complete glass top and gold rim join all four upper corners. -->
+    <path d="M26 47L47 35L145 84L124 96Z" fill="#b8accb" stroke="#4a2d5a" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M26 47L124 96L145 84" fill="none" stroke="#ffd76f" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M31 46L47 37L140 84M57 46L66 50M73 54L94 64" fill="none" stroke="#fff8df" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M26 174V47M124 223V96" stroke="#4a2d5a" stroke-width="6"/><path d="M26 171V50M124 220V99" stroke="#d5aa5e" stroke-width="2.8"/><circle cx="26" cy="46" r="5" fill="#fff" stroke="#ffd76f" stroke-width="2"/><circle cx="124" cy="95" r="5" fill="#fff" stroke="#ffd76f" stroke-width="2"/>
   `, 180, 230);
   if (art === 'champagne-sofa') return wrap(`
@@ -426,6 +435,49 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
   if (art === 'rack') {
     return wrap(rackSvg(), 180, 230);
   }
+  if (art === 'lux-rack') return wrap(`
+    <defs>
+      <linearGradient id="luxGold" x1="0" y1="0" x2="1" y2="0">
+        <stop stop-color="#916021"/><stop offset=".18" stop-color="#eebc48"/>
+        <stop offset=".36" stop-color="#fff3b0"/><stop offset=".49" stop-color="#d59a27"/>
+        <stop offset=".72" stop-color="#ffdc70"/><stop offset="1" stop-color="#a56b20"/>
+      </linearGradient>
+      <linearGradient id="luxBase" x1="0" y1="0" x2="0" y2="1">
+        <stop stop-color="#fff1bd"/><stop offset=".42" stop-color="#eec45a"/><stop offset="1" stop-color="#ad7528"/>
+      </linearGradient>
+    </defs>
+    <ellipse cx="92" cy="201" rx="68" ry="13" transform="rotate(26.565 92 201)" fill="#6c4d30" opacity=".15"/>
+    <g stroke-linecap="round" stroke-linejoin="round">
+      <!-- A continuous golden arch, projected along the shop floor. -->
+      <path d="M43 181V70C43 13 139 61 139 118V229" transform="translate(0 -10)" fill="none" stroke="#654329" stroke-width="10"/>
+      <path d="M43 181V70C43 13 139 61 139 118V229" transform="translate(0 -10)" fill="none" stroke="url(#luxGold)" stroke-width="7"/>
+      <path d="M41 165V60C41 32 68 36 87 46" fill="none" stroke="#fff7cc" stroke-width="1.7"/>
+      <path d="M46 72L136 117" stroke="#654329" stroke-width="8"/>
+      <path d="M46 72L136 117" stroke="url(#luxGold)" stroke-width="5.5"/>
+      <path d="M47 70L135 114" stroke="#fff6c4" stroke-width="1.3"/>
+      <!-- Move Sunday's complete row together: preserve its tilt, spacing and
+           overlap while aligning every hook with the gold rail. -->
+      <g transform="translate(-18 0)">
+        ${sundayGarment('garment-1-tweed-jacket', 0, 0)}
+        ${sundayGarment('garment-2-cream-cardigan', 0, 0)}
+        ${sundayGarment('garment-3-lavender-dress', 0, 0)}
+        ${sundayGarment('garment-4-mint-blouse', 0, 0)}
+        ${sundayGarment('garment-5-pleated-skirt', 0, 0)}
+      </g>
+      <!-- Gold shelf, bevelled edge and matching stabilising feet. -->
+      <path d="M32 172L49 163L150 214L133 223Z" fill="#ffeb9e" stroke="#79502c" stroke-width="2"/>
+      <path d="M32 172L133 223V228L32 177Z" fill="url(#luxBase)" stroke="#79502c" stroke-width="1.5"/>
+      <path d="M133 223L150 214V219L133 228Z" fill="#b47c28" stroke="#79502c" stroke-width="1.5"/>
+      <path d="M44 171L137 217M47 169L140 215" stroke="#bc8c34" stroke-width="1.2"/>
+      <path d="M43 79V174M139 118V220" stroke="#654329" stroke-width="9"/>
+      <path d="M43 79V174M139 118V220" stroke="url(#luxGold)" stroke-width="6"/>
+      <path d="M41 82V168M137 121V214" stroke="#fff5b9" stroke-width="1.5"/>
+      <path d="M32 179L52 169M128 225L150 214" stroke="#654329" stroke-width="8"/>
+      <path d="M32 179L52 169M128 225L150 214" stroke="url(#luxGold)" stroke-width="5"/>
+      <path d="M43 94V105M139 153V165" stroke="#fffdf0" stroke-width="2.2"/>
+      <path d="M87 39L89 45L95 47L89 49L87 55L85 49L79 47L85 45Z" fill="#fff9d8" stroke="#dfb64b" stroke-width=".8"/>
+    </g>
+  `, 180, 240);
   if (art === 'wall-rack') {
     return wrap(`
       <ellipse cx="86" cy="204" rx="64" ry="14" transform="rotate(26.565 86 204)" fill="#65406f" opacity=".12"/>

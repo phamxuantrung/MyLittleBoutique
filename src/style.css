@@ -1285,6 +1285,32 @@ body:has(#content-panel:not([hidden])) .game-content-panel {
 }
 
 /* Welcome / Closing Card in Customer Slot */
+.preparation-welcome { position: relative; }
+.preparation-welcome .welcome-text > .eyebrow { display: block; padding-right: 78px; min-height: 24px; }
+.welcome-toggle {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 7px;
+  border: 0;
+  background: transparent;
+  color: #91537d;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.welcome-toggle .icon { width: 14px; height: 14px; flex-shrink: 0; }
+.welcome-toggle:focus-visible { outline: 2px solid #d4429a; outline-offset: 2px; border-radius: 6px; }
+.preparation-welcome.is-collapsed { width: fit-content; padding: 3px 8px; }
+.preparation-welcome.is-collapsed .welcome-toggle { position: static; min-height: 36px; gap: 8px; font-size: 11px; }
+#customer-card:has(.preparation-welcome.is-collapsed) { width: fit-content; }
+
 .welcome-card {
   gap: 4px;
   padding: 8px 10px;
@@ -8269,26 +8295,27 @@ select.inv-price-select:focus {
 /* Decor Catalog Grid - Responsive & Roomy */
 .decor-catalog-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  min-width: 0;
+  width: 100%;
   gap: 12px;
 }
 
 @media (min-width: 650px) {
   .decor-catalog-grid {
-    grid-template-columns: repeat(3, 1fr);
     gap: 14px;
   }
 }
 
 @media (min-width: 950px) {
   .decor-catalog-grid {
-    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
   }
 }
 
 /* Thẻ Nội Thất Hiện Đại Tone Pastel */
 .decor-card {
+  min-width: 0;
   background: #ffffff;
   border: 1.5px solid #f4d8f0;
   border-radius: 16px;
@@ -8398,6 +8425,7 @@ select.inv-price-select:focus {
 }
 
 .decor-card-body {
+  min-width: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -8440,9 +8468,8 @@ select.inv-price-select:focus {
   color: #3e1b38;
   margin: 2px 0 0 0;
   line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .decor-card-desc {

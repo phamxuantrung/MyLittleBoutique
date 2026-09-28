@@ -6,6 +6,29 @@ import { canvasPoint } from './viewport';
 test.describe('automatic landscape on phones', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
+  test('installed game fills the screen through rotation and return from background', async ({ page }) => {
+    const state = preparedState();
+    await page.addInitScript(({ key, state }) => {
+      Object.defineProperty(navigator, 'standalone', { get: () => true });
+      localStorage.setItem(key, JSON.stringify(state));
+    }, { key: SAVE_KEY, state });
+    await page.goto('/');
+    const game = page.frameLocator('#landscape-game');
+    await expect(game.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    await expect(page.locator('#app')).toHaveClass(/is-standalone/);
+    for (const size of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 430, height: 932 }]) {
+      await page.setViewportSize(size);
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+      await expect.poll(async () => {
+        const rect = (await page.locator('#landscape-game').boundingBox())!;
+        return [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)];
+      }).toEqual([0, 0, size.width, size.height]);
+      await expect.poll(() => game.locator('#app').evaluate(el => [el.clientWidth, el.clientHeight]))
+        .toEqual([Math.max(size.width, size.height), Math.min(size.width, size.height)]);
+    }
+    await page.screenshot({ path: 'test-results/mobile-fullscreen-edge.png' });
+  });
+
   test('safe areas move controls without shrinking the canvas', async ({ page }) => {
     const state = preparedState();
     await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
@@ -19,6 +42,11 @@ test.describe('automatic landscape on phones', () => {
       window.dispatchEvent(new Event('resize'));
     });
     expect(await game.locator('html').evaluate(() => [innerWidth, innerHeight])).toEqual([844, 390]);
+    const canvasBounds = await game.locator('#game-canvas canvas').evaluate(el => {
+      const rect = el.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+    });
+    expect(canvasBounds).toEqual({ left: 0, top: 0, right: 844, bottom: 390 });
     await expect(page.locator('#app')).toHaveCSS('padding', '0px');
     await expect(game.locator('.game-top-bar')).toHaveCSS('padding-left', '59px');
     await expect(game.locator('.right-dock-container')).toHaveCSS('right', '34px');

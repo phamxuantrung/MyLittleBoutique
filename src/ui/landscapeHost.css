@@ -27,6 +27,13 @@ body {
   overflow: hidden;
 }
 
+@supports (height: 100lvh) {
+  .landscape-host.is-standalone {
+    bottom: auto;
+    height: 100lvh;
+  }
+}
+
 #landscape-game {
   display: block;
   position: absolute;

@@ -3,6 +3,11 @@ import './landscapeHost.css';
 export function mountLandscapeHost() {
   const host = document.querySelector<HTMLElement>('#app')!;
   host.className = 'landscape-host';
+  // Installed iOS apps can report a shorter fixed-position containing block
+  // near the home indicator. Their large viewport still spans the screen.
+  const standalone = matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  host.classList.toggle('is-standalone', standalone);
   const stage = document.createElement('div');
   stage.className = 'landscape-stage';
   const frame = document.createElement('iframe');
@@ -39,9 +44,13 @@ export function mountLandscapeHost() {
   const observer = new ResizeObserver(resize);
   observer.observe(stage);
   window.addEventListener('resize', resize);
+  window.visualViewport?.addEventListener('resize', resize);
+  window.addEventListener('pageshow', resize);
   if (import.meta.hot) import.meta.hot.dispose(() => {
     observer.disconnect();
     window.removeEventListener('resize', resize);
+    window.visualViewport?.removeEventListener('resize', resize);
+    window.removeEventListener('pageshow', resize);
     frame.removeEventListener('load', resize);
   });
 }

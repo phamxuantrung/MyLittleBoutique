@@ -335,6 +335,13 @@ h1, h2, h3, h4, p {
   background: #fdf0f8;
 }
 
+/* Inside the rotated frame use its actual layout size. Safari's dynamic
+   viewport units can subtract system chrome again and leave a blank edge. */
+html.landscape-game-frame #app {
+  width: 100%;
+  height: 100%;
+}
+
 .game-viewport {
   width: 100%;
   height: 100%;
@@ -439,6 +446,8 @@ h1, h2, h3, h4, p {
 
 #game-canvas canvas {
   display: block !important;
+  flex: 0 0 100%;
+  margin: 0 !important;
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;

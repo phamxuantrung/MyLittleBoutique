@@ -10007,9 +10007,9 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   :root {
     --mobile-safe-left: max(14px, env(safe-area-inset-left));
-    --mobile-safe-right: max(4px, env(safe-area-inset-right));
+    --mobile-safe-right: 12px;
     --mobile-safe-top: max(4px, env(safe-area-inset-top));
-    --mobile-safe-bottom: max(4px, env(safe-area-inset-bottom));
+    --mobile-safe-bottom: 2px;
   }
 
   :is(.game-panel-header-card, .inv-panel-header) {

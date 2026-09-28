@@ -15,7 +15,6 @@ test.describe('automatic landscape on phones', () => {
     await page.goto('/');
     const game = page.frameLocator('#landscape-game');
     await expect(game.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
-    await expect(page.locator('#app')).toHaveClass(/is-standalone/);
     for (const size of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 430, height: 932 }]) {
       await page.setViewportSize(size);
       await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
@@ -27,6 +26,40 @@ test.describe('automatic landscape on phones', () => {
         .toEqual([Math.max(size.width, size.height), Math.min(size.width, size.height)]);
     }
     await page.screenshot({ path: 'test-results/mobile-fullscreen-edge.png' });
+  });
+
+  test('right controls stay visible when iOS exposes less than the layout viewport', async ({ page }) => {
+    const state = preparedState();
+    await page.addInitScript(({ key, state }) => {
+      Object.defineProperty(navigator, 'standalone', { get: () => true });
+      localStorage.setItem(key, JSON.stringify(state));
+    }, { key: SAVE_KEY, state });
+    await page.goto('/');
+    const game = page.frameLocator('#landscape-game');
+    await expect(game.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    const documentId = await game.locator('html').evaluate(() => performance.timeOrigin);
+    // Simulate system UI clipping the physical bottom of an installed app.
+    // The rotated game's right edge must follow visualViewport on resize/scroll.
+    for (const [height, offsetTop, event] of [[780, 0, 'resize'], [760, 20, 'scroll']] as const) {
+      await page.evaluate(({ height, offsetTop, event }) => {
+        Object.defineProperty(visualViewport!, 'height', { configurable: true, value: height });
+        Object.defineProperty(visualViewport!, 'offsetTop', { configurable: true, value: offsetTop });
+        const host = document.querySelector<HTMLElement>('#app')!;
+        host.style.setProperty('--device-top', '59px');
+        host.style.setProperty('--device-bottom', '34px');
+        visualViewport!.dispatchEvent(new Event(event));
+      }, { height, offsetTop, event });
+      await expect.poll(() => game.locator('html').evaluate(() => innerWidth)).toBe(height);
+      const frameBounds = (await page.locator('#landscape-game').boundingBox())!;
+      expect(frameBounds.y).toBe(offsetTop);
+      expect(frameBounds.height).toBe(height);
+      const dockBounds = (await game.locator('.right-dock-container').boundingBox())!;
+      expect(dockBounds.y + dockBounds.height).toBeLessThanOrEqual(offsetTop + height - 34);
+      const headerControls = (await game.locator('#settings-button').boundingBox())!;
+      expect(headerControls.y + headerControls.height).toBeLessThanOrEqual(offsetTop + height - 34);
+      await expect(game.locator('.right-dock-container')).toHaveCSS('right', '34px');
+      expect(await game.locator('html').evaluate(() => performance.timeOrigin)).toBe(documentId);
+    }
   });
 
   test('safe areas move controls without shrinking the canvas', async ({ page }) => {

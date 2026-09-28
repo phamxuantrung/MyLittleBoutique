@@ -3,11 +3,6 @@ import './landscapeHost.css';
 export function mountLandscapeHost() {
   const host = document.querySelector<HTMLElement>('#app')!;
   host.className = 'landscape-host';
-  // Installed iOS apps can report a shorter fixed-position containing block
-  // near the home indicator. Their large viewport still spans the screen.
-  const standalone = matchMedia('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  host.classList.toggle('is-standalone', standalone);
   const stage = document.createElement('div');
   stage.className = 'landscape-stage';
   const frame = document.createElement('iframe');
@@ -21,9 +16,22 @@ export function mountLandscapeHost() {
   host.append(stage);
 
   const resize = () => {
-    const rotated = host.clientHeight > host.clientWidth;
+    // Use the visible viewport, not lvh: iOS can clip the large viewport
+    // while its system UI is visible. In portrait that clips the game's right.
+    const bounds = host.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const left = Math.max(bounds.left, viewport?.offsetLeft ?? 0);
+    const top = Math.max(bounds.top, viewport?.offsetTop ?? 0);
+    const right = Math.min(bounds.right, viewport ? viewport.offsetLeft + viewport.width : innerWidth);
+    const bottom = Math.min(bounds.bottom, viewport ? viewport.offsetTop + viewport.height : innerHeight);
+    const width = Math.max(1, right - left);
+    const height = Math.max(1, bottom - top);
+    stage.style.left = `${left - bounds.left}px`;
+    stage.style.top = `${top - bounds.top}px`;
+    stage.style.width = `${width}px`;
+    stage.style.height = `${height}px`;
+    const rotated = height > width;
     host.classList.toggle('is-rotated', rotated);
-    const { width, height } = stage.getBoundingClientRect();
     stage.style.setProperty('--frame-width', `${width}px`);
     frame.style.width = `${rotated ? height : width}px`;
     frame.style.height = `${rotated ? width : height}px`;
@@ -42,14 +50,16 @@ export function mountLandscapeHost() {
   resize();
   stage.append(frame);
   const observer = new ResizeObserver(resize);
-  observer.observe(stage);
+  observer.observe(host);
   window.addEventListener('resize', resize);
   window.visualViewport?.addEventListener('resize', resize);
+  window.visualViewport?.addEventListener('scroll', resize);
   window.addEventListener('pageshow', resize);
   if (import.meta.hot) import.meta.hot.dispose(() => {
     observer.disconnect();
     window.removeEventListener('resize', resize);
     window.visualViewport?.removeEventListener('resize', resize);
+    window.visualViewport?.removeEventListener('scroll', resize);
     window.removeEventListener('pageshow', resize);
     frame.removeEventListener('load', resize);
   });

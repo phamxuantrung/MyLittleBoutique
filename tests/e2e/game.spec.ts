@@ -185,6 +185,11 @@ for (const [width, height] of [[375, 667], [844, 390], [1280, 720]]) {
     await page.goto('/');
     const view = await gameView(page);
     await expect(view.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    if (height > width) {
+      await expect(view.locator('#landscape-hint')).toBeVisible();
+      await page.setViewportSize({ width: height, height: width });
+      await expect(view.locator('#landscape-hint')).toBeHidden();
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expect(view.locator('[data-action="open"]')).toBeVisible();
     await view.locator('[data-action="open"]').click();

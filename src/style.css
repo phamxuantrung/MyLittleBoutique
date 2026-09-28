@@ -335,13 +335,6 @@ h1, h2, h3, h4, p {
   background: #fdf0f8;
 }
 
-/* Inside the rotated frame use its actual layout size. Safari's dynamic
-   viewport units can subtract system chrome again and leave a blank edge. */
-html.landscape-game-frame #app {
-  width: 100%;
-  height: 100%;
-}
-
 .game-viewport {
   width: 100%;
   height: 100%;
@@ -10014,26 +10007,18 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   :root {
     --mobile-safe-left: max(14px, env(safe-area-inset-left));
-    --mobile-safe-right: 4px;
-    --mobile-safe-top: 4px;
-    --mobile-safe-bottom: 4px;
+    --mobile-safe-right: max(4px, env(safe-area-inset-right));
+    --mobile-safe-top: max(4px, env(safe-area-inset-top));
+    --mobile-safe-bottom: max(4px, env(safe-area-inset-bottom));
   }
 
-  :root.landscape-game-frame {
-    /* Insets are rotated by the host; never shrink the actual game canvas. */
-    --mobile-safe-left: max(14px, var(--game-safe-left, 0px));
-    --mobile-safe-right: max(4px, var(--game-safe-right, 0px));
-    --mobile-safe-top: max(4px, var(--game-safe-top, 0px));
-    --mobile-safe-bottom: max(4px, var(--game-safe-bottom, 0px));
-  }
-
-  :root.landscape-game-frame :is(.game-panel-header-card, .inv-panel-header) {
+  :is(.game-panel-header-card, .inv-panel-header) {
     padding-left: max(16px, var(--mobile-safe-left)) !important;
     padding-right: max(8px, var(--mobile-safe-right)) !important;
     padding-top: max(8px, var(--mobile-safe-top)) !important;
   }
 
-  :root.landscape-game-frame dialog {
+  dialog {
     inset: var(--mobile-safe-top) var(--mobile-safe-right) var(--mobile-safe-bottom) var(--mobile-safe-left);
   }
 

@@ -17,6 +17,11 @@ for (const [width, height] of [[390, 844], [844, 390], [1280, 800]]) {
     await page.goto('/');
     const view = await gameView(page);
     await expect(view.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    if (height > width) {
+      await expect(view.locator('#landscape-hint')).toBeVisible();
+      await page.setViewportSize({ width: height, height: width });
+      await expect(view.locator('#landscape-hint')).toBeHidden();
+    }
     await clickCustomer(page);
     const dialog = view.getByRole('dialog');
     await expect(dialog).toHaveClass('dialog-serve');

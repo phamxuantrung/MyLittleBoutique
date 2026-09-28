@@ -33,36 +33,8 @@ game.events.once('shop-ready', () => {
   document.querySelector('.game-loading')?.remove();
   document.querySelector('#game-canvas')?.setAttribute('data-ready', 'true');
 });
-type LockableScreenOrientation = ScreenOrientation & {
-  lock?: (orientation: 'landscape') => Promise<void>;
-};
-
-const isPortraitMobile = () => window.matchMedia('(orientation: portrait) and (max-width: 900px)').matches;
-
-const lockLandscape = async (requestFullscreen: boolean) => {
-  if (!isPortraitMobile()) return;
-
-  // Mobile browsers generally require fullscreen and a user gesture before
-  // allowing an orientation lock. Installed PWAs use the manifest setting.
-  if (requestFullscreen && !document.fullscreenElement && document.documentElement.requestFullscreen) {
-    try {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-    } catch (_) {}
-  }
-
-  try {
-    const orientation = screen.orientation as LockableScreenOrientation | undefined;
-    if (orientation?.lock) await orientation.lock('landscape');
-  } catch (_) {}
-};
-
 document.addEventListener('pointerdown', () => {
-  void lockLandscape(true);
   void audio.unlock().then(() => { if (store.state.music) audio.music(true); });
 }, { once: true });
 
-void lockLandscape(false);
-document.addEventListener('fullscreenchange', () => {
-  if (document.fullscreenElement) void lockLandscape(false);
-});
 if (import.meta.hot) import.meta.hot.dispose(() => { audio.music(false); game.destroy(true); });

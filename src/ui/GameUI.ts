@@ -132,7 +132,7 @@ export class GameUI {
   private shell() {
     document.querySelector('#app')!.innerHTML = `
       <div class="game-viewport">
-        <!-- Blocking fallback for mobile browsers that cannot lock orientation. -->
+        <!-- Ask players to rotate the device before playing. -->
         <div class="landscape-banner" id="landscape-hint">
           <span class="banner-icon">${icon('rotate')}</span>
           <strong class="banner-title">Vui lòng xoay ngang màn hình</strong>

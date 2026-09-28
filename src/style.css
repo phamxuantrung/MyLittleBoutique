@@ -10005,9 +10005,15 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   :root {
     --mobile-safe-left: max(14px, env(safe-area-inset-left));
-    --mobile-safe-right: max(14px, env(safe-area-inset-right));
-    --mobile-safe-top: max(4px, env(safe-area-inset-top));
-    --mobile-safe-bottom: max(8px, env(safe-area-inset-bottom));
+    --mobile-safe-right: 8px;
+    --mobile-safe-top: 0px;
+    --mobile-safe-bottom: 0px;
+  }
+
+  :root.landscape-game-frame {
+    /* The outer host already reserves the notch. iOS safe-area env values
+       refer to the physical screen, not this rotated landscape viewport. */
+    --mobile-safe-left: 14px;
   }
 
   .game-top-bar {

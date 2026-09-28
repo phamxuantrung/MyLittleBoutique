@@ -15,6 +15,16 @@ test.describe('automatic landscape on phones', () => {
     await expect(page.locator('#app')).toHaveClass(/is-rotated/);
     expect(await game.locator('html').evaluate(() => [innerWidth, innerHeight])).toEqual([844, 390]);
     await expect(game.locator('#landscape-hint')).toBeHidden();
+    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-top', '0px');
+    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-right', '8px');
+    await expect(game.locator('.game-bottom-hud')).toHaveCSS('padding-bottom', '0px');
+    await expect(game.locator('.right-dock-container')).toHaveCSS('right', '8px');
+    const hostPadding = await page.locator('#app').evaluate(el => {
+      const css = getComputedStyle(el);
+      return [css.paddingLeft, css.paddingRight, css.paddingBottom];
+    });
+    expect(hostPadding).toEqual(['0px', '0px', '0px']);
+    await page.screenshot({ path: 'test-results/mobile-edge-spacing.png' });
 
     await game.locator('[data-action="nav"][data-id="import"]').tap();
     const panel = game.locator('#content-panel');
@@ -36,6 +46,8 @@ test.describe('automatic landscape on phones', () => {
     const documentId = await game.locator('html').evaluate(() => performance.timeOrigin);
     await page.setViewportSize({ width: 844, height: 390 });
     await expect(page.locator('#app')).not.toHaveClass(/is-rotated/);
+    await expect(page.locator('#app')).toHaveCSS('padding-top', '0px');
+    await expect(page.locator('#app')).toHaveCSS('padding-bottom', '0px');
     await expect(panel).toBeVisible();
     expect(await game.locator('html').evaluate(() => performance.timeOrigin)).toBe(documentId);
     expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).money, SAVE_KEY)).toBe(moneyAfterPurchase);

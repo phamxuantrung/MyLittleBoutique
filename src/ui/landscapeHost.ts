@@ -16,9 +16,11 @@ export function mountLandscapeHost() {
   host.append(stage);
 
   const resize = () => {
-    const { width, height } = stage.getBoundingClientRect();
-    const rotated = height > width;
+    // Decide orientation before subtracting safe areas so changing the host
+    // padding cannot flip orientation or leave stale iframe dimensions.
+    const rotated = host.clientHeight > host.clientWidth;
     host.classList.toggle('is-rotated', rotated);
+    const { width, height } = stage.getBoundingClientRect();
     stage.style.setProperty('--frame-width', `${width}px`);
     frame.style.width = `${rotated ? height : width}px`;
     frame.style.height = `${rotated ? width : height}px`;

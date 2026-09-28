@@ -57,6 +57,22 @@
 
   --dock-height: 64px;
   --header-height: auto;
+
+  /* ── iOS Safe Area Insets & Screen Corner Guard Defaults ── */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Corner padding fallback for rounded screens (iPhone X/11/12/13/14/15/16) */
+  --corner-safe-x: 18px;
+  --corner-safe-y: 6px;
+
+  /* Unified mobile safe margins */
+  --mobile-safe-left: max(var(--corner-safe-x), env(safe-area-inset-left, 0px));
+  --mobile-safe-right: max(var(--corner-safe-x), env(safe-area-inset-right, 0px));
+  --mobile-safe-top: max(var(--corner-safe-y), env(safe-area-inset-top, 0px));
+  --mobile-safe-bottom: max(10px, env(safe-area-inset-bottom, 0px));
 }
 
 
@@ -356,7 +372,7 @@ h1, h2, h3, h4, p {
     align-items: center;
     justify-content: center;
     gap: 12px;
-    padding: 28px;
+    padding: max(36px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) max(36px, env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
     background:
       radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.22), transparent 38%),
       linear-gradient(145deg, #d9479f, #8e35aa);
@@ -500,7 +516,7 @@ h1, h2, h3, h4, p {
   align-items: center !important;
   justify-content: space-between !important;
   gap: 6px !important;
-  padding: 4px 10px 6px !important;
+  padding: max(6px, var(--mobile-safe-top, 6px)) max(18px, var(--mobile-safe-right, 18px)) 6px max(18px, var(--mobile-safe-left, 18px)) !important;
   z-index: 100 !important;
   pointer-events: none !important;
   background: linear-gradient(180deg, rgba(255, 244, 252, 0.98) 0%, rgba(255, 244, 252, 0.88) 75%, rgba(255, 244, 252, 0) 100%) !important;
@@ -1137,7 +1153,7 @@ body:has(#content-panel:not([hidden])) .game-content-panel {
   gap: 8px;
   width: 100%;
   pointer-events: none;
-  padding: 0 4px 2px;
+  padding: 0 max(16px, var(--mobile-safe-right, 16px)) max(10px, var(--mobile-safe-bottom, 10px)) max(16px, var(--mobile-safe-left, 16px));
 }
 
 /* Customer Card (Game Dialogue Bubble Box) */
@@ -1357,7 +1373,7 @@ body:has(#content-panel:not([hidden])) .game-content-panel {
   justify-content: center !important;
   align-items: center !important;
   position: fixed !important;
-  right: 12px !important;
+  right: max(16px, var(--mobile-safe-right, 16px)) !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
   bottom: auto !important;
@@ -1540,7 +1556,7 @@ body:has(#content-panel:not([hidden])) .game-content-panel {
 
 @media (max-height: 480px) {
   .right-dock-container {
-    right: 8px !important;
+    right: max(16px, var(--mobile-safe-right, 16px)) !important;
   }
   .vertical-dock {
     gap: 5px !important;
@@ -1989,12 +2005,12 @@ body:has(#content-panel:not([hidden])) .game-content-panel {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 56px 12px 40px !important;
+  padding: max(10px, var(--mobile-safe-top, 10px)) max(18px, var(--mobile-safe-right, 18px)) calc(var(--mobile-safe-bottom, 12px) + 20px) max(18px, var(--mobile-safe-left, 18px)) !important;
 }
 
 @media (max-width: 600px) {
   .game-content-panel {
-    padding: 54px 8px 40px !important;
+    padding: max(8px, var(--mobile-safe-top, 8px)) max(18px, var(--mobile-safe-right, 18px)) calc(var(--mobile-safe-bottom, 12px) + 16px) max(18px, var(--mobile-safe-left, 18px)) !important;
   }
 }
 
@@ -4131,7 +4147,8 @@ dialog {
   inset: 0;
   margin: auto;
   width: min(540px, calc(100vw - 20px));
-  max-height: min(580px, calc(100dvh - 24px));
+  max-width: calc(100vw - var(--mobile-safe-left, 18px) - var(--mobile-safe-right, 18px) - 8px);
+  max-height: calc(100dvh - var(--mobile-safe-top, 8px) - var(--mobile-safe-bottom, 12px) - 8px);
   padding: 0;
   border: 2px solid #f0d4ec;
   border-radius: 22px;
@@ -6773,8 +6790,8 @@ dialog.dialog-quests .dialog-inner {
 /* Toasts (Sát mép dưới góc phải - Bottom-Right Corner) */
 #toasts {
   position: fixed;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, var(--mobile-safe-bottom, 12px));
+  right: max(16px, var(--mobile-safe-right, 16px));
   left: auto;
   transform: none;
   width: auto;
@@ -6801,7 +6818,7 @@ dialog.dialog-quests .dialog-inner {
 }
 
 #toasts.is-move-mode {
-  top: max(54px, calc(env(safe-area-inset-top) + 54px));
+  top: max(54px, calc(env(safe-area-inset-top, 0px) + 54px));
   bottom: auto;
   right: auto;
   left: 50%;
@@ -9500,7 +9517,7 @@ button.fixture-slot-card:hover { transform: translateY(-2px); box-shadow: 0 7px 
 /* ========================================================================== 
    STAFF & RECRUITMENT — Boutique team management
    ========================================================================== */
-.staff-manager-fab { position: absolute; top: 68px; left: 12px; z-index: 26; pointer-events: auto; width: 126px; min-width: 126px; height: 38px; min-height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 5px; border: 1.5px solid #efc8df; border-radius: 13px; background: rgba(255,255,255,.95); color: #603055; box-shadow: 0 4px 0 #eab8d5,0 8px 17px rgba(114,48,91,.16); backdrop-filter: blur(10px); }
+.staff-manager-fab { position: absolute; top: 68px; left: var(--mobile-safe-left, 16px); z-index: 26; pointer-events: auto; width: 126px; min-width: 126px; height: 38px; min-height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 5px; border: 1.5px solid #efc8df; border-radius: 13px; background: rgba(255,255,255,.95); color: #603055; box-shadow: 0 4px 0 #eab8d5,0 8px 17px rgba(114,48,91,.16); backdrop-filter: blur(10px); }
 .staff-manager-fab:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #eab8d5,0 12px 24px rgba(114,48,91,.2); }
 .staff-manager-fab[hidden] { display: none !important; }
 .staff-fab-icon { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 9px; background: linear-gradient(135deg,#ffe4f2,#e9dcff); color: #c23d8a; }
@@ -9509,12 +9526,12 @@ button.fixture-slot-card:hover { transform: translateY(-2px); box-shadow: 0 7px 
 .staff-fab-copy strong { font-size: 10px; font-weight: 900; }
 .staff-fab-copy small { max-width: 78px; margin-top: 2px; overflow: hidden; color: #987487; font-size: 7.5px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .staff-manager-fab > b { position: absolute; top: -6px; right: -5px; min-width: 19px; height: 19px; display: grid; place-items: center; padding: 0 5px; border: 2px solid #fff; border-radius: 999px; background: #db3b91; color: #fff; font-size: 9px; }
-.online-channel-fab { position: absolute; top: 114px; left: 12px; z-index: 26; pointer-events: auto; width: 126px; min-width: 126px; height: 38px; min-height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 5px; border: 1.5px solid #bcded7; border-radius: 13px; background: rgba(250,255,253,.96); color: #315e59; box-shadow: 0 4px 0 #acd3ca,0 8px 17px rgba(47,107,98,.14); backdrop-filter: blur(10px); }
+.online-channel-fab { position: absolute; top: 114px; left: var(--mobile-safe-left, 16px); z-index: 26; pointer-events: auto; width: 126px; min-width: 126px; height: 38px; min-height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 5px; border: 1.5px solid #bcded7; border-radius: 13px; background: rgba(250,255,253,.96); color: #315e59; box-shadow: 0 4px 0 #acd3ca,0 8px 17px rgba(47,107,98,.14); backdrop-filter: blur(10px); }
 .online-channel-fab:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #acd3ca,0 12px 24px rgba(47,107,98,.18); }
 .online-channel-fab[hidden] { display: none !important; }
 .online-fab-icon { color: #287c70; background: linear-gradient(135deg,#dff8f0,#dceeff); }
 .online-channel-fab > b { position: absolute; top: -6px; right: -5px; min-width: 19px; height: 19px; display: grid; place-items: center; padding: 0 5px; border: 2px solid #fff; border-radius: 999px; background: #e34982; color: #fff; box-shadow: 0 3px 8px rgba(173,40,96,.25); font-size: 9px; }
-.land-expand-fab { --hold-progress: 0%; position: absolute; top: 160px; left: 12px; z-index: 26; pointer-events: auto; width: 126px; min-width: 126px; height: 38px; min-height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; overflow: hidden; padding: 4px 8px 4px 5px; border: 1.5px solid #ddcce9; border-radius: 13px; background: rgba(255,255,255,.95); color: #59345f; box-shadow: 0 4px 0 #cfbde0,0 8px 17px rgba(76,49,103,.14); backdrop-filter: blur(10px); touch-action: none !important; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.land-expand-fab { --hold-progress: 0%; position: absolute; top: 160px; left: var(--mobile-safe-left, 16px); z-index: 26; pointer-events: auto; width: 126px; min-width: 126px; height: 38px; min-height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; overflow: hidden; padding: 4px 8px 4px 5px; border: 1.5px solid #ddcce9; border-radius: 13px; background: rgba(255,255,255,.95); color: #59345f; box-shadow: 0 4px 0 #cfbde0,0 8px 17px rgba(76,49,103,.14); backdrop-filter: blur(10px); touch-action: none !important; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .land-expand-fab:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #cfbde0,0 12px 24px rgba(76,49,103,.18); }
 .land-expand-fab[hidden] { display: none !important; }
 .land-expand-fab > :not(.land-expand-progress) { position: relative; z-index: 1; }
@@ -10004,12 +10021,13 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
 }
 
 /* iPhone / mobile landscape safe areas and comfortable touch targets. */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+@media (orientation: landscape) and (max-height: 540px),
+       (hover: none) and (pointer: coarse) and (orientation: landscape) {
   :root {
-    --mobile-safe-left: max(14px, env(safe-area-inset-left));
-    --mobile-safe-right: 16px;
-    --mobile-safe-top: max(4px, env(safe-area-inset-top));
-    --mobile-safe-bottom: 4px;
+    --mobile-safe-left: max(22px, env(safe-area-inset-left, 0px));
+    --mobile-safe-right: max(22px, env(safe-area-inset-right, 0px));
+    --mobile-safe-top: max(8px, env(safe-area-inset-top, 0px));
+    --mobile-safe-bottom: max(14px, env(safe-area-inset-bottom, 0px));
   }
 
   :is(.game-panel-header-card, .inv-panel-header) {

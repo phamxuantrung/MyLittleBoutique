@@ -10005,9 +10005,9 @@ dialog.dialog-online-order .dialog-inner { width: 100%; height: fit-content; min
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
   :root {
     --mobile-safe-left: max(14px, env(safe-area-inset-left));
-    --mobile-safe-right: 8px;
-    --mobile-safe-top: 0px;
-    --mobile-safe-bottom: 0px;
+    --mobile-safe-right: 4px;
+    --mobile-safe-top: 4px;
+    --mobile-safe-bottom: 4px;
   }
 
   :root.landscape-game-frame {

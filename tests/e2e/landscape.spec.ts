@@ -15,10 +15,10 @@ test.describe('automatic landscape on phones', () => {
     await expect(page.locator('#app')).toHaveClass(/is-rotated/);
     expect(await game.locator('html').evaluate(() => [innerWidth, innerHeight])).toEqual([844, 390]);
     await expect(game.locator('#landscape-hint')).toBeHidden();
-    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-top', '0px');
-    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-right', '8px');
-    await expect(game.locator('.game-bottom-hud')).toHaveCSS('padding-bottom', '0px');
-    await expect(game.locator('.right-dock-container')).toHaveCSS('right', '8px');
+    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-top', '4px');
+    await expect(game.locator('.game-top-bar')).toHaveCSS('padding-right', '4px');
+    await expect(game.locator('.game-bottom-hud')).toHaveCSS('padding-bottom', '4px');
+    await expect(game.locator('.right-dock-container')).toHaveCSS('right', '4px');
     const hostPadding = await page.locator('#app').evaluate(el => {
       const css = getComputedStyle(el);
       return [css.paddingLeft, css.paddingRight, css.paddingBottom];

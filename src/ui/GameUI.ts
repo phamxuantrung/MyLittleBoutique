@@ -10,9 +10,10 @@ import { isWallFurnitureId } from '../systems/rules';
 import { compact, escapeHtml, money, productImage } from './format';
 import { debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, nameShopModal, onlineChannelModal, onlineOrderModal, questPanel, resultModal, serveModal, socialPanel, staffManagementModal, summaryModal, trendPanel, upgradeModal } from './panels';
 import type { ShopScene } from '../scenes/ShopScene';
+import { DISPLAY_GUIDE_SEEN, displayGuideModal, needsDisplayGuide } from './displayGuide';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social';
-type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'tutorial-recap';
+type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'tutorial-recap' | 'display-guide';
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'buy-furniture']);
 const navItems: { id: Tab; label: string; icon: string; subtitle: string }[] = [
   { id: 'stock', label: 'Kho hàng', icon: 'hanger', subtitle: 'Hàng đang có' },
@@ -50,6 +51,7 @@ export class GameUI {
   private tutorialStep = 0;
   private welcomeCollapsed = false;
   private tutorialRetry = 0;
+  private displayGuideTimer = 0;
   private onlineOrderId = '';
   private suppressSuccessToastAudio = false;
   private onlineHandoverProductIds: string[] = [];
@@ -57,6 +59,7 @@ export class GameUI {
 
   constructor(private store: GameStore, private audio: AudioSystem) {
     this.shell(); this.render(); this.bind();
+    this.queueDisplayGuide();
     if (this.store.state.gameOverReason) {
       setTimeout(() => this.openModal('gameover', financialGameOverModal(this.store.state)), 100);
     } else if (this.store.state.loanOverdueDays >= 5 || this.store.state.rentOverdueDays >= 5) {
@@ -80,6 +83,7 @@ export class GameUI {
         if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(store.state);
         if (this.modal === 'debug') this.dialog.querySelector('.dialog-inner')!.innerHTML = debugPanel(store.state);
         this.queueTutorialCue();
+        this.queueDisplayGuide();
       }
       if (event.type === 'toast') {
         this.toast(event.message, event.tone);
@@ -678,6 +682,15 @@ export class GameUI {
         break;
       }
       case 'next-day': this.closeModal(); this.store.nextDay(); this.navigate('shop'); break;
+      case 'display-guide-start': {
+        this.closeModal();
+        this.navigate('shop');
+        const fixture = this.store.state.layout.find(item => furniture.find(def => def.id === item.id)?.display?.kind === 'clothing')
+          ?? this.store.state.layout.find(item => furniture.find(def => def.id === item.id)?.display);
+        if (fixture) this.openDisplayFixture(fixture.uid);
+        else this.navigate('decor');
+        break;
+      }
       case 'close-modal': {
         const closedDisplay = this.modal === 'display';
         this.closeModal();
@@ -852,6 +865,7 @@ export class GameUI {
     panel.scrollTop = 0;
     requestAnimationFrame(() => { panel.scrollTop = 0; });
     requestAnimationFrame(() => this.scene?.scale?.refresh());
+    this.queueDisplayGuide();
   }
   private beginFurniturePlacement(uid: string) {
     this.navigate('shop');
@@ -1078,7 +1092,7 @@ export class GameUI {
       contentHtml = decorCatalog(this.store.state, this.decorCategory);
     }
     if (contentHtml) {
-      panel.innerHTML = `<div class="game-panel-body">${contentHtml}</div>`;
+      panel.innerHTML = `<div class="game-panel-body${this.tab === 'social' ? ' social-profile-page' : ''}">${contentHtml}</div>`;
     } else {
       panel.innerHTML = '';
     }
@@ -1295,6 +1309,10 @@ export class GameUI {
     this.queueTutorialCue();
   }
   private closeModal() {
+    if (this.modal === 'display-guide' && !this.store.state.claimed.includes(DISPLAY_GUIDE_SEEN)) {
+      this.store.state.claimed.push(DISPLAY_GUIDE_SEEN);
+      this.store.commit();
+    }
     const showPreparationRecap = this.modal === 'display' && this.tutorialStep === 5 && this.tutorialActive();
     if (this.modal === 'tutorial-recap') this.finishGuidedTutorial();
     if (this.modal === 'serve') this.serveVisitId = '';
@@ -1316,6 +1334,17 @@ export class GameUI {
       this.advanceTutorial(6);
       this.showPreparationRecap();
     }
+    this.queueDisplayGuide();
+  }
+
+  private queueDisplayGuide() {
+    window.clearTimeout(this.displayGuideTimer);
+    if (!needsDisplayGuide(this.store.state)) return;
+    this.displayGuideTimer = window.setTimeout(() => {
+      if (needsDisplayGuide(this.store.state) && this.modal === 'none' && this.tab === 'shop' && !this.moveMode) {
+        this.openModal('display-guide', displayGuideModal());
+      }
+    }, 450);
   }
 
   private tutorialActive() {

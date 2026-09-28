@@ -65,6 +65,7 @@ export interface CustomerLoyalty {
 }
 export interface GameState {
   version: 1; money: number; xp: number; level: number; reputation: number; reviews: number; followers: number;
+  shopReviewTotal: number; shopReviewCount: number;
   day: number; phase: 'preparation' | 'open' | 'closed'; customerIndex: number; patience: number;
   dayTimer: number; dailyLuck?: string;
   currentCustomerId: string | null; customerMode: 'advice' | 'browse' | null;

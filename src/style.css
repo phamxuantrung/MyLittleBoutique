@@ -956,7 +956,8 @@ body:has(#content-panel:not([hidden])) .game-content-panel {
   border: 1px solid #ebd39b;
 }
 
-.star-icon {
+.star-icon,
+.reputation-icon {
   background: linear-gradient(135deg, #f0ecff, #e0d4f8);
   color: #8060d0;
   border: 1px solid #d0c0f0;
@@ -9423,7 +9424,7 @@ dialog.dialog-name-shop .dialog-inner {
 .fixture-modal-header .icon-button { width: 32px; height: 32px; border: 1px solid #ecd4e2; border-radius: 10px; background: #fff; box-shadow: 0 3px 9px rgba(113,48,91,.07); }
 .fixture-capacity-chip { flex: 0 0 auto; min-width: 48px; padding: 6px 9px; border-radius: 999px; background: #fbe8f3; color: #b63b7e; border: 1px solid #efc7dc; font-size: 10px; font-weight: 900; text-align: center; box-shadow: none; }
 .fixture-capacity-chip i { font-style: normal; opacity: .62; margin: 0 2px; }
-.fixture-upgrade-strip,.fixture-fixed-strip { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 42px; margin: 0; padding: 7px 0; border: 0; border-bottom: 1px solid #f3e2eb; border-radius: 0; background: transparent; color: #5b3154; text-align: left; font: inherit; }
+.fixture-upgrade-strip,.fixture-fixed-strip { width: 100%; display: flex; flex-shrink: 0; align-items: center; gap: 8px; min-height: 42px; margin: 0; padding: 7px 0 0; border: 0; border-top: 1px solid #f3e2eb; border-radius: 0; background: transparent; color: #5b3154; text-align: left; font: inherit; }
 button.fixture-upgrade-strip { cursor: pointer; transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease; }
 button.fixture-upgrade-strip:hover:not(:disabled) { transform: none; border-color: #e7bdd4; background: linear-gradient(90deg,rgba(255,239,247,.8),transparent); box-shadow: none; }
 button.fixture-upgrade-strip:disabled { color: #8d7184; cursor: default; opacity: .7; }

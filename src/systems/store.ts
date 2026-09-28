@@ -3,6 +3,7 @@ import type { Customer, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingO
 import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, bulkDiscountFactor, bulkDiscountRate, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
+import { recordPublicShopReview } from './reviews';
 
 export class GameStore {
   state: GameState;
@@ -395,6 +396,7 @@ export class GameStore {
       s.followers += followers; s.stats.followers += followers;
       if (assistingStaff) { assistingStaff.sales++; assistingStaff.shiftSales = (assistingStaff.shiftSales ?? 0) + 1; assistingStaff.tipsEarned += tip; assistingStaff.morale = Math.min(100, assistingStaff.morale + 1); }
       this.applyShopReview(reviewStars);
+      recordPublicShopReview(s, reviewStars);
       s.posts.unshift({ id: `${s.day}-${s.customerIndex}`, name: customer.name, handle: customer.handle, text: viral ? 'Một chiếc boutique nhỏ xinh vừa xuất hiện trên feed của mình! Outfit đúng gu, chủ shop siêu có tâm. Mọi người phải ghé thử! #LittleBoutique #OOTD' : `${items.map(p => p.name).join(' + ')} xinh hơn mình tưởng! ${score >= 88 ? 'Đúng gu 100%, chắc chắn sẽ quay lại!' : 'Cảm ơn shop đã chọn đồ giúp mình.'}`, likes: viral ? 2431 : Math.round(score / 3), day: s.day, viral, color: customer.outfit, reviewStars });
       s.posts = s.posts.slice(0, 40);
     } else {
@@ -437,6 +439,7 @@ export class GameStore {
     s.stats.trendSales += items.filter(p => isTrending(s, p)).length;
     s.followers += followers; s.stats.followers += followers;
     this.applyShopReview(reviewStars);
+    recordPublicShopReview(s, reviewStars);
     s.posts.unshift({
       id: `${s.day}-${s.customerIndex}-self`,
       name: customer.name,

@@ -1,4 +1,5 @@
 import { ownerPortrait } from '../art/svg';
+import { shopReviewStats } from '../systems/reviews';
 import { categories, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
 import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffCapacity } from '../systems/rules';
@@ -526,6 +527,8 @@ export function staffManagementModal(s: GameState) {
 export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'feed') {
   const shopName = s.shopName || 'My Little Boutique';
   const handle = toShopHandle(shopName);
+  const rating = shopReviewStats(s);
+  const ratingText = rating.average === null ? '—' : rating.average.toFixed(1);
 
   return `
     <div class="game-panel-header-card social-panel-header">
@@ -540,7 +543,8 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
       <div class="panel-header-right">
         <div class="heading-badges">
           <span class="panel-stat-chip heart-chip">${icon('user')} ${s.followers.toLocaleString('vi-VN')} theo dõi</span>
-          <span class="panel-stat-chip star-chip">${icon('star')} ${s.reputation.toFixed(1)} / 5</span>
+          <span class="panel-stat-chip star-chip" title="Uy tín tổng hợp từ trải nghiệm phục vụ và bán hàng">${icon('shield')} Uy tín ${s.reputation.toFixed(1)}</span>
+          <span class="panel-stat-chip star-chip" title="Điểm trung bình các phản hồi công khai">${icon('star')} Đánh giá ${ratingText}</span>
           <button class="panel-close-btn" data-action="nav" data-id="shop" aria-label="Quay lại shop">
             ${icon('close')} <span>Quay lại</span>
           </button>
@@ -548,7 +552,6 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
       </div>
     </div>
 
-    <div class="social-profile-page">
       <section class="social-profile-card" aria-label="Trang cá nhân boutique">
         <div class="profile-cover-banner" aria-hidden="true">
           <div class="profile-cover-art">
@@ -581,8 +584,10 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
             <div><dt>Bài viết</dt><dd>${s.posts.length}</dd></div>
             <div><dt>Người theo dõi</dt><dd>${s.followers.toLocaleString('vi-VN')}</dd></div>
             <div><dt>Độ uy tín</dt><dd>${s.reputation.toFixed(1)} <small>/ 5</small></dd></div>
+            <div class="profile-shop-rating"><dt>Đánh giá shop <small>(${rating.count.toLocaleString('vi-VN')} lượt)</small></dt><dd>${ratingText}${rating.count ? ' <small>/ 5</small>' : ''}</dd></div>
             <div><dt>Đã bán hôm nay</dt><dd>${s.stats.sold}</dd></div>
           </dl>
+          <p class="profile-rating-note">${rating.count ? 'Đánh giá shop là trung bình sao từ phản hồi công khai.' : 'Shop chưa có đánh giá công khai.'} Uy tín còn tính trải nghiệm phục vụ, khách rời đi và bán online.</p>
         </div>
       </section>
 
@@ -604,14 +609,6 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
 
     <!-- Feed Section -->
     <div class="social-feed-section">
-      <div class="section-title social-section-title">
-        <div>
-          <h3>${icon('heart')} Dòng thời gian Boutique</h3>
-          <p>${s.posts.length ? `${s.posts.length} khách hàng đã chia sẻ khoảnh khắc tại boutique` : 'Hãy phục vụ khách để tạo nên câu chuyện đầu tiên'}</p>
-        </div>
-        <span class="count-pill">${icon('social')} ${s.posts.length} bài viết</span>
-      </div>
-
       <div class="social-posts-feed">
         ${s.posts.length ? s.posts.map(p => {
           const reviewStars = Math.max(1, Math.min(5, p.reviewStars));
@@ -619,9 +616,7 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
           return `
           <article class="social-post-card ${p.viral ? 'is-viral-card' : ''}">
             <div class="post-card-header">
-              <div class="post-author-avatar" style="background:${escapeHtml(p.color)}">
-                ${escapeHtml(p.name.slice(0, 1))}
-              </div>
+              <span class="post-initial-avatar" style="background:${escapeHtml(p.color)}" aria-hidden="true">${escapeHtml(p.name.slice(0, 1))}</span>
               <div class="post-author-meta">
                 <div class="post-author-name-row">
                   <strong class="post-author-name">${escapeHtml(p.name)}</strong>
@@ -664,7 +659,6 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
         `}
       </div>
       <p class="social-subtle-footer">Mạng xã hội mô phỏng trong game • Mọi khoảnh khắc đều do chính tay bạn tạo dựng 💕</p>
-    </div>
     </div>
     </div>
   `;
@@ -773,7 +767,6 @@ export function displayFixtureModal(s: GameState, uid: string) {
         <span class="fixture-capacity-chip">${displayItems.length}<i>/</i>${capacity}</span>
         <button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
       </header>
-      ${fixture.display.upgrade ? `<button class="fixture-upgrade-strip" data-action="display-upgrade" data-fixture="${uid}" ${upgradeCost === undefined ? 'disabled' : ''}><span class="fixture-upgrade-icon">${icon('trend')}</span><span><strong>${upgradeCost === undefined ? 'Đã đạt cấp trưng bày tối đa' : `Nâng lên cấp ${upgradeLevel + 1}`}</strong><small>${upgradeCost === undefined ? `${capacity} slot tối đa` : `Thêm ${fixture.display.upgrade.slotsPerLevel} slot · ${money(upgradeCost)}`}</small></span><span class="fixture-upgrade-level">${upgradeLevel}/${fixture.display.upgrade.maxLevel}</span><span class="fixture-upgrade-action">${upgradeCost === undefined ? 'Hoàn tất' : 'Nâng cấp'}</span></button>` : `<div class="fixture-fixed-strip"><span>${icon('hanger')}</span><span>Ma-nơ-canh trưng duy nhất 1 sản phẩm set outfit.</span></div>`}
       <div class="fixture-studio">
         <section class="fixture-slot-panel">
           <div class="fixture-section-title"><div><span class="fixture-section-kicker">SÀN TRƯNG BÀY</span><h3>Slot ${kindLabels[fixture.display.kind]}</h3></div><span>${displayItems.length}/${capacity}</span></div>
@@ -793,6 +786,7 @@ export function displayFixtureModal(s: GameState, uid: string) {
           </div>
         </section>
       </div>
+      ${fixture.display.upgrade ? `<button class="fixture-upgrade-strip" data-action="display-upgrade" data-fixture="${uid}" ${upgradeCost === undefined ? 'disabled' : ''}><span class="fixture-upgrade-icon">${icon('trend')}</span><span><strong>${upgradeCost === undefined ? 'Đã đạt cấp trưng bày tối đa' : `Nâng lên cấp ${upgradeLevel + 1}`}</strong><small>${upgradeCost === undefined ? `${capacity} slot tối đa` : `Thêm ${fixture.display.upgrade.slotsPerLevel} slot · ${money(upgradeCost)}`}</small></span><span class="fixture-upgrade-level">${upgradeLevel}/${fixture.display.upgrade.maxLevel}</span><span class="fixture-upgrade-action">${upgradeCost === undefined ? 'Hoàn tất' : 'Nâng cấp'}</span></button>` : `<div class="fixture-fixed-strip"><span>${icon('hanger')}</span><span>Ma-nơ-canh trưng duy nhất 1 sản phẩm set outfit.</span></div>`}
     </div>`;
 }
 

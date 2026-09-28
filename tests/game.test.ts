@@ -4,6 +4,7 @@ import { activeCustomer, buyPrice, canPlace, currentEvent, DAY_DURATION, display
 import { initialState, parseSave, SaveSystem } from '../src/systems/save';
 import { GameStore } from '../src/systems/store';
 import type { GameState } from '../src/types';
+import { shopReviewStats } from '../src/systems/reviews';
 
 class MemorySave extends SaveSystem { snapshot = ''; override write(s: GameState) { this.snapshot = JSON.stringify(s); } }
 const stockStarter = (s: GameState) => {
@@ -227,6 +228,7 @@ describe('customer interactions and day progression', () => {
     expect(store.state.inventory['baby-tee']).toBe(1); expect(store.state.inventory.ribbon).toBe(1);
     expect(store.state.stats.sold).toBe(2); expect(store.state.xp).toBe(12); expect(store.state.posts).toHaveLength(1);
     expect(store.state.posts[0].reviewStars).toBe(result?.reviewStars);
+    expect(shopReviewStats(store.state)).toMatchObject({ count: 1, average: result?.reviewStars });
     expect(store.state.customerIndex).toBe(1);
   });
   it('builds customer loyalty, grants a tier reward once and persists it', () => {

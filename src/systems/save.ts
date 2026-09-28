@@ -16,6 +16,7 @@ export const emptyStats = (): DayStats => ({ revenue: 0, spent: 0, costOfGoods: 
 export function initialState(): GameState {
   return {
     version: 1, money: 500000, xp: 0, level: 1, reputation: 4.5, reviews: 0, followers: 0,
+    shopReviewTotal: 0, shopReviewCount: 0,
     day: 1, phase: 'preparation', customerIndex: 0, patience: 0,
     currentCustomerId: null, customerMode: null, activeVisits: [], currentVisitId: null, nextArrivalIn: 0, lastCustomerId: null, landLevel: 0, customerLoyalty: {}, loan: null, rentDue: 0, loanOverdueDays: 0, rentOverdueDays: 0, gameOverReason: null,
     dayTimer: DAY_DURATION, dailyLuck: 'Nắng ấm nhẹ nhàng',
@@ -194,8 +195,19 @@ export function parseSave(raw: string | null): GameState {
     }
     if (Array.isArray(s.posts)) state.posts = s.posts
       .filter((p: Record<string, unknown>) => p && ['id', 'name', 'handle', 'text', 'color'].every(k => typeof p[k] === 'string') && typeof p.viral === 'boolean' && typeof p.likes === 'number' && typeof p.day === 'number')
-      .map((p: Record<string, unknown>) => ({ ...p, reviewStars: Math.round(finite(p.reviewStars, p.viral ? 5 : 4.5, 5) * 2) / 2 }))
+      .map((p: Record<string, unknown>) => ({ ...p, reviewStars: Math.max(1, Math.round(finite(p.reviewStars, p.viral ? 5 : 4.5, 5) * 2) / 2) }))
       .slice(0, 40) as GameState['posts'];
+    // Older saves only retain the latest 40 public posts. Use that known
+    // history, then keep lifetime totals independently of the feed limit.
+    const publicCount = s.shopReviewCount;
+    const publicTotal = s.shopReviewTotal;
+    if (Number.isInteger(publicCount) && publicCount >= state.posts.length && Number.isFinite(publicTotal) && publicTotal >= publicCount && publicTotal <= publicCount * 5) {
+      state.shopReviewCount = publicCount;
+      state.shopReviewTotal = publicTotal;
+    } else {
+      state.shopReviewCount = state.posts.length;
+      state.shopReviewTotal = state.posts.reduce((sum, post) => sum + post.reviewStars, 0);
+    }
     if (Array.isArray(s.staffApplicants)) state.staffApplicants = s.staffApplicants.map(parseStaffCandidate).filter((candidate: StaffCandidate | undefined): candidate is StaffCandidate => !!candidate).slice(0, 5);
     if (Array.isArray(s.employees)) {
       state.employees = s.employees.map((rawEmployee: unknown) => {

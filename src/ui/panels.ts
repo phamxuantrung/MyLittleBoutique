@@ -1315,19 +1315,8 @@ export function serveModal(s: GameState, selected: string[], category = 'all') {
                     ? `<span class="outfit-match-tag color-match">${icon('sparkle')} Đúng màu</span>` 
                     : isTrendingItem 
                     ? `<span class="outfit-match-tag trend-match">${icon('trend')} Hot trend</span>` 
-                    : ''}
-                </div>
-                <div class="outfit-meta-wrap">
-                  <strong class="outfit-item-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</strong>
-                  <div class="outfit-sub-info">
-                    <span class="item-style-badge">${p.style}</span>
-                  </div>
-                  <div class="outfit-price-row">
-                    <b class="outfit-price ${isProductOverBudget ? 'text-error' : ''}">
-                      ${money(sellPrice(s, p))}
-                    </b>
-                    ${isProductOverBudget ? `<span class="over-budget-tag">Vượt ví</span>` : ''}
-                  </div>
+                    : `<span class="outfit-match-tag style-label">${escapeHtml(p.style)}</span>`}
+                  <b class="outfit-price ${isProductOverBudget ? 'text-error' : ''}">${money(sellPrice(s, p))}</b>
                 </div>
               </button>
             `;

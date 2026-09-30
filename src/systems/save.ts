@@ -1,6 +1,6 @@
 import { customers, furniture, levels, products } from '../data/catalog';
 import type { ActiveBrandCampaign, AtelierCraftHistoryEntry, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, CustomProduct, DayStats, GameState, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, ReputationCrisis, ReturnCase, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, TailoringJob, VipAppointment } from '../types';
-import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, displayLevel, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, STAFF_SALARY_MIN } from './rules';
+import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, displayLevel, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, STAFF_SALARY_MIN } from './rules';
 import { generateDayCustomers, lookupCustomer, registerCustomer } from './customerGen';
 import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProducts } from '../data/atelier';
 
@@ -70,7 +70,7 @@ export function parseSave(raw: string | null): GameState {
     state.rentOverdueDays = Math.floor(finite(s.rentOverdueDays, 0, 8));
     state.gameOverReason = s.gameOverReason === 'creditor' || s.gameOverReason === 'landlord' ? s.gameOverReason : null;
     if (s.loan && typeof s.loan === 'object') {
-      const principal = Math.round(finite(s.loan.principal, 0, 3000000));
+      const principal = Math.round(finite(s.loan.principal, 0, LOAN_MAX));
       const balance = Math.round(finite(s.loan.balance, 0, 10000000));
       if (principal > 0) state.loan = {
         principal,

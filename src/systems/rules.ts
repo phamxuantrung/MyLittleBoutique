@@ -290,7 +290,7 @@ export const loyaltyMilestones = [
   { points: 120, tier: 'VIP' as LoyaltyTier, rewardMoney: 100000, rewardFollowers: 30 },
 ];
 export const LOAN_MIN = 300000;
-export const LOAN_MAX = 3000000;
+export const LOAN_MAX = 10000000;
 export const LOAN_DAILY_RATE = .015;
 export const LOAN_PAYMENT_RATE = .05;
 export function loyaltyTier(relation?: CustomerLoyalty): LoyaltyTier {

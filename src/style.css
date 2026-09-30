@@ -6665,6 +6665,7 @@ dialog.dialog-debt-warning .dialog-inner {
 }
 
 .finance-report-header {
+  position: relative;
   flex: 0 0 auto;
   min-height: 42px;
   display: grid;
@@ -6679,8 +6680,15 @@ dialog.dialog-debt-warning .dialog-inner {
 }
 
 .finance-report-header>div {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 220px);
   min-width: 0;
   text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .finance-report-header .eyebrow {
@@ -22929,6 +22937,97 @@ dialog.dialog-close-shop-confirm {
     margin: 0;
     font-size: 12px !important;
   }
+
+  /* Keep the end-of-day report inside one landscape viewport. */
+  dialog.dialog-summary .summary-body {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 6px;
+    padding: 7px;
+    overflow: hidden;
+  }
+
+  dialog.dialog-summary .summary-finance-spotlight {
+    height: auto;
+    align-self: stretch;
+    padding: 7px 8px;
+  }
+
+  dialog.dialog-summary .summary-highlights-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(46px, auto);
+    gap: 5px;
+  }
+
+  dialog.dialog-summary .highlight-stat-card,
+  dialog.dialog-summary .highlight-stat-card:hover {
+    height: auto;
+    min-height: 46px;
+    grid-template-columns: 25px minmax(0, 1fr);
+    gap: 5px;
+    padding: 5px 6px;
+  }
+
+  dialog.dialog-summary .stat-icon-bubble {
+    width: 25px;
+    height: 25px;
+  }
+
+  dialog.dialog-summary .stat-meta {
+    height: auto;
+    display: flex;
+  }
+
+  dialog.dialog-summary .stat-val {
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+
+  dialog.dialog-summary .stat-name {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 7.5px !important;
+    line-height: 1.15 !important;
+    text-overflow: clip;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  dialog.dialog-summary :is(.summary-tips-card, .summary-cheer-banner) {
+    min-height: 0;
+    padding: 7px 8px;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  dialog.dialog-summary :is(.tip-card-header, .tip-bullet-list, .cheer-text strong, .cheer-text p) {
+    font-size: 8px !important;
+    line-height: 1.3 !important;
+  }
+
+  dialog.dialog-summary .tip-card-header {
+    margin-bottom: 4px;
+  }
+
+  dialog.dialog-summary .tip-bullet-list {
+    gap: 3px;
+    padding-left: 14px;
+  }
+
+  dialog.dialog-summary .summary-actions-group {
+    position: relative;
+    z-index: 2;
+    gap: 5px;
+    padding-top: 1px;
+    background: #fff8fc;
+  }
+
+  dialog.dialog-summary .summary-actions-group .btn {
+    min-height: 31px;
+    padding: 4px 7px;
+    font-size: 8px !important;
+  }
 }
 
 /* Keep the level, day and shop-state pills visually balanced. */
@@ -25303,7 +25402,7 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
   z-index: 2;
   right: 0;
   left: 0;
-  bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 46px);
+  bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 65px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -25357,8 +25456,8 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
   bottom: max(8px, var(--mobile-safe-bottom, 8px));
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 50px;
-  gap: 5px;
+  grid-auto-columns: 58px;
+  gap: 7px;
   width: max-content;
   margin-inline: auto;
   transform: none;
@@ -25368,16 +25467,16 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
 }
 
 .selection-toolbar-actions .move-tool-btn {
-  width: 50px;
-  min-width: 50px;
-  height: 50px;
-  min-height: 50px;
+  width: 58px;
+  min-width: 58px;
+  height: 58px;
+  min-height: 58px;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   padding: 0;
   border: 1.25px solid rgba(222, 177, 205, .9);
-  border-radius: 9px;
+  border-radius: 11px;
   color: var(--ink-900);
   background: linear-gradient(180deg, rgba(255, 255, 255, .94), rgba(255, 236, 247, .88));
   box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .98), 0 2px 0 rgba(183, 112, 155, .55), 0 4px 7px rgba(94, 40, 74, .16);
@@ -25385,16 +25484,16 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
 }
 
 .selection-toolbar-actions .move-tool-btn .tool-btn-icon .icon {
-  width: 27px;
-  height: 27px;
+  width: 31px;
+  height: 31px;
   filter: drop-shadow(0 1px 1px rgba(89, 40, 72, .16));
 }
 
 .selection-toolbar-actions .move-tool-btn .tool-btn-text {
   display: block;
-  max-width: 46px;
+  max-width: 54px;
   overflow: hidden;
-  font-size: 6.5px;
+  font-size: 7.5px;
   font-weight: 900;
   line-height: 1;
   text-align: center;
@@ -25444,12 +25543,12 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
 /* Replace the right-side Decor shortcut with Move while an item is selected. */
 body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-move-fab {
   right: max(10px, var(--mobile-safe-right, 10px)) !important;
-  bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 140px) !important;
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 132px) !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
   padding: 0 !important;
   border: 1.5px solid #d5c2eb !important;
   border-radius: 9px !important;
@@ -27054,13 +27153,13 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 9px 8px max(10px, var(--mobile-safe-bottom, 10px));
+  padding: 9px 8px max(10px, var(--mobile-safe-bottom, 10px)) max(8px, var(--mobile-safe-left, 8px));
   scrollbar-width: thin;
   scrollbar-color: #d59fbe transparent;
 }
 
 .social-drawer-content:has(.drawer-review-feed) {
-  padding: 0 0 max(10px, var(--mobile-safe-bottom, 10px));
+  padding: 0 0 max(10px, var(--mobile-safe-bottom, 10px)) max(8px, var(--mobile-safe-left, 8px));
 }
 
 .drawer-review-feed {
@@ -32643,7 +32742,7 @@ dialog.dialog-atelier-result{width:min(500px,calc(100vw - 22px));padding:0;borde
 .production-card-meta > span {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   color: #88657a;
   font-size: 5.5px;
 }
@@ -32681,7 +32780,7 @@ dialog.dialog-atelier-result{width:min(500px,calc(100vw - 22px));padding:0;borde
 .production-material-status > span {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   white-space: nowrap;
 }
 

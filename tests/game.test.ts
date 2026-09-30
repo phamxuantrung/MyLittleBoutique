@@ -190,9 +190,9 @@ describe('inventory and economy', () => {
     expect(store.takeLoan(700000)).toBe(true);
     expect(store.state.money).toBe(1200000);
     expect(store.state.loan).toMatchObject({ principal: 700000, balance: 700000, paymentDue: 0 });
-    expect(store.takeLoan(2300000)).toBe(true);
+    expect(store.takeLoan(9300000)).toBe(true);
     expect(store.takeLoan(10000)).toBe(false);
-    expect(store.state.loan?.principal).toBe(3000000);
+    expect(store.state.loan?.principal).toBe(10000000);
   });
 });
 

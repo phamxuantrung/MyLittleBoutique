@@ -19,8 +19,8 @@ dialog.dialog-display-guide .dialog-inner { padding: 0; }
 .display-guide-steps { margin: 14px 0 0; padding: 13px 0 0 19px; border-top: 1px solid #eedfe8; font-size: 12px; line-height: 1.5; }
 .display-guide-steps li { padding: 3px 0 3px 3px; }
 .display-guide-steps li::marker { color: #c7458b; font-weight: 800; }
-.display-guide-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 17px; }
-.display-guide-actions .btn { min-height: 40px; border-radius: 10px; }
+.display-guide-actions { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 9px; width: 100%; margin-top: 17px; }
+.display-guide-actions .btn { width: 100%; min-width: 0; min-height: 40px; margin: 0; border-radius: 10px; }
 @media (max-height: 480px) {
   .display-guide { padding: 14px 18px; }
   .display-guide-heading h2 { font-size: 21px; }
@@ -29,6 +29,5 @@ dialog.dialog-display-guide .dialog-inner { padding: 0; }
 }
 @media (max-width: 480px) {
   .display-guide-types { grid-template-columns: 1fr; }
-  .display-guide-actions { flex-wrap: wrap; }
-  .display-guide-actions .btn { flex: 1 1 140px; }
+  .display-guide-actions { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
 }

@@ -452,6 +452,10 @@ const staffStat = (label: string, value: number, tone: string) => `
   <div class="staff-stat"><span><i style="background:${tone}"></i>${label}</span><strong>${value}</strong><div><b style="width:${value}%;background:${tone}"></b></div></div>`;
 
 export function debugPanel(s: GameState) {
+  const atelierMaterialCount = Object.values(s.materialInventory).reduce((sum, quantity) => sum + quantity, 0);
+  const atelierOwnershipLabel = s.level < 8
+    ? 'Chưa mở khóa'
+    : s.atelierOwned ? 'Đã sở hữu vĩnh viễn' : 'Chưa mua xưởng';
   const phaseLabel = s.phase === 'open' ? 'Đang bán hàng' : s.phase === 'closed' ? 'Đã đóng cửa' : 'Chuẩn bị';
   return `<div class="debug-panel">
     <header class="debug-panel-header">
@@ -480,6 +484,18 @@ export function debugPanel(s: GameState) {
     <section class="debug-section debug-feature-section">
       <div class="debug-section-title"><span>TÍNH NĂNG VẬN HÀNH MỚI</span><small>Tạo toàn bộ tình huống để kiểm tra ngay</small></div>
       <button class="debug-customer-button debug-feature-seed" data-action="debug-action" data-id="advanced-features">${icon('shield')} <span><strong>Fake dữ liệu tính năng mới</strong><small>Cấp 5 · nhân viên · đổi trả · VIP · couture · khủng hoảng · hai đơn đang giao</small></span>${icon('arrow')}</button>
+    </section>
+    <section class="debug-section debug-atelier-section">
+      <div class="debug-section-title"><span>XƯỞNG MAY CÁ NHÂN</span><small>${atelierOwnershipLabel} · ${atelierMaterialCount} vật liệu · ${s.customProducts.length} bản thiết kế · ${s.tailoringJobs.length} đơn đang may</small></div>
+      <div class="debug-action-grid">
+        <button data-action="debug-action" data-id="atelier-ready"><span>${icon('hanger')}</span><div><strong>Mở xưởng cấp 8</strong><small>Sở hữu xưởng · vật liệu cơ bản</small></div></button>
+        <button data-action="debug-action" data-id="atelier-max"><span>${icon('crown')}</span><div><strong>Mở toàn bộ cấp 10</strong><small>Mặt bằng tối đa · vật liệu hiếm</small></div></button>
+        <button data-action="debug-action" data-id="atelier-sample"><span>${icon('edit')}</span><div><strong>Tạo mẫu chờ duyệt</strong><small>Mở Xưởng may để thêm hoặc xóa</small></div></button>
+        <button data-action="debug-action" data-id="atelier-wrong-recipe"><span>${icon('close')}</span><div><strong>Thử công thức sai</strong><small>Mất Cotton ×1 và Ruy băng ×1</small></div></button>
+        <button data-action="debug-action" data-id="atelier-blueprint"><span>${icon('check')}</span><div><strong>Duyệt bản thiết kế</strong><small>Thêm mẫu cá nhân vào Kho hàng</small></div></button>
+        <button data-action="debug-action" data-id="atelier-batch"><span>${icon('box')}</span><div><strong>Tạo đơn may ×10</strong><small>Đơn hoàn thành sau 2 ngày</small></div></button>
+        <button data-action="debug-action" data-id="atelier-deliver"><span>${icon('truck')}</span><div><strong>Hoàn tất đơn may</strong><small>Nhập ngay toàn bộ hàng vào kho</small></div></button>
+      </div>
     </section>
     <section class="debug-section">
       <div class="debug-section-title"><span>NHÂN VIÊN</span><small>${s.employees.length} nhân viên · ${s.staffApplicants.length} hồ sơ · ${s.staffLeaveRequests.length} đơn nghỉ</small></div>
@@ -1634,12 +1650,12 @@ export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' 
   const payrollEmployees = s.employees.filter(employee => (employee.unpaidWages ?? 0) > 0);
   const payrollDue = payrollEmployees.reduce((sum, employee) => sum + (employee.unpaidWages ?? 0), 0);
   const payrollContent = `<section class="finance-tab-card finance-payroll-box">
-    <div class="finance-section-title"><div><span class="eyebrow">BẢNG LƯƠNG</span><h3>Thanh toán theo ca thực tế</h3></div>${payrollDue > 0 ? `<button class="btn btn-primary btn-small" data-action="pay-all-staff-wages" ${s.money < payrollDue || s.phase === 'open' ? 'disabled' : ''}>Trả tất cả · ${money(payrollDue)}</button>` : '<span class="finance-rate">Đã thanh toán</span>'}</div>
+    <div class="finance-section-title finance-payroll-title"><div><span class="eyebrow">BẢNG LƯƠNG</span><h3>Thanh toán theo ca thực tế</h3></div>${payrollDue > 0 ? `<button class="btn btn-primary btn-small finance-payroll-pay-all" data-action="pay-all-staff-wages" ${s.money < payrollDue || s.phase === 'open' ? 'disabled' : ''}>${icon('coin')}<span>Trả tất cả</span><b>${money(payrollDue)}</b></button>` : `<span class="finance-rate">${icon('check')} Đã thanh toán</span>`}</div>
     <p class="finance-payroll-note">Chỉ nhân viên có mặt trong ca mới phát sinh lương. Quá 3 công chưa trả, nhân viên sẽ nghỉ việc và công nợ bị trừ tự động.</p>
     <div class="finance-payroll-list">${s.employees.length ? s.employees.map(employee => {
       const shifts = employee.unpaidShifts ?? 0;
       const due = employee.unpaidWages ?? 0;
-      return `<article class="finance-payroll-row ${shifts >= 3 ? 'is-danger' : ''}"><div class="finance-payroll-avatar">${staffImage(employee.appearance, employee.name)}</div><div><strong>${escapeHtml(employee.name)}</strong><span>${money(employee.salary)}/ca · đã làm ${employee.totalShiftsWorked ?? 0} ca</span></div><div class="finance-payroll-debt"><b>${money(due)}</b><small>${shifts}/3 công nợ</small></div><button class="btn btn-secondary btn-small" data-action="pay-staff-wages" data-id="${employee.uid}" ${due <= 0 || s.money < due || s.phase === 'open' ? 'disabled' : ''}>Trả lương</button></article>`;
+      return `<article class="finance-payroll-row ${shifts >= 3 ? 'is-danger' : ''} ${due <= 0 ? 'is-paid' : ''}"><div class="finance-payroll-avatar">${staffImage(employee.appearance, employee.name)}</div><div class="finance-payroll-person"><strong>${escapeHtml(employee.name)}</strong><span>${money(employee.salary)}<small>/ca</small></span><em>${icon('clock')} Đã làm ${employee.totalShiftsWorked ?? 0} ca</em></div><div class="finance-payroll-debt"><small>${due > 0 ? 'Công nợ' : 'Trạng thái'}</small><b>${due > 0 ? money(due) : `${icon('check')} Đã trả`}</b><em>${shifts}/3 công</em></div><button class="btn btn-secondary btn-small" data-action="pay-staff-wages" data-id="${employee.uid}" ${due <= 0 || s.money < due || s.phase === 'open' ? 'disabled' : ''}>${due > 0 ? 'Trả lương' : 'Hoàn tất'}</button></article>`;
     }).join('') : '<p class="finance-payroll-empty">Chưa có nhân viên trong đội ngũ.</p>'}</div>
   </section>`;
   const loanContent = `<section class="finance-tab-card finance-loan-box">
@@ -1741,17 +1757,24 @@ export function upgradeModal(s: GameState) {
   const canUpgrade = !!next && canAfford && hasXp;
   const newProducts = next ? products.filter(p => p.level === s.level + 1) : [];
   const newFurniture = next ? furniture.filter(f => f.level === s.level + 1) : [];
+  const atelierUnlocks = next && s.level + 1 === 8
+    ? [{ icon: 'hanger', title: 'Xưởng may cá nhân', copy: 'Thuê xưởng, mua nguyên liệu và tạo thiết kế chữ ký' }]
+    : next && s.level + 1 === 9
+      ? [{ icon: 'star', title: 'Nguyên liệu cao cấp', copy: 'Mở khóa wool, lụa Mulberry và da Nappa' }]
+      : next && s.level + 1 === 10
+        ? [{ icon: 'crown', title: 'Vật liệu couture', copy: 'Mở khóa pha lê Aurora và cashmere Ivory' }]
+        : [];
   if (!next) return `<section class="upgrade-modal-wrapper is-max-level">
         <section class="max-level-celebration">
           <span class="max-level-sparkle sparkle-one">${icon('star')}</span>
           <span class="max-level-sparkle sparkle-two">${icon('star')}</span>
           <span class="max-level-sparkle sparkle-three">${icon('star')}</span>
           <div class="max-level-emblem">${ownerPortrait(92)}<b>${icon('trophy')}</b></div>
-          <span class="max-level-kicker">GLOBAL FASHION ICON</span>
-          <h3>Đỉnh Cao Thời Trang</h3>
-          <p>Boutique của bạn đã trở thành một thương hiệu toàn cầu. Đây là dấu ấn cao nhất của hành trình bạn đã xây dựng.</p>
+          <span class="max-level-kicker">FASHION LEGACY</span>
+          <h3>Di Sản Thời Trang</h3>
+          <p>Boutique và xưởng may của bạn đã đạt cấp độ tối đa, tạo nên những thiết kế mang chữ ký riêng được cả thế giới biết đến.</p>
           <div class="max-level-legacy-stats">
-            <article><span>${icon('crown')}</span><div><small>Cấp boutique</small><strong>07 · Tối đa</strong></div></article>
+            <article><span>${icon('crown')}</span><div><small>Cấp boutique</small><strong>10 · Tối đa</strong></div></article>
             <article><span>${icon('star')}</span><div><small>Kinh nghiệm</small><strong>${s.xp.toLocaleString('vi-VN')} XP</strong></div></article>
             <article><span>${icon('hudFollowers')}</span><div><small>Người theo dõi</small><strong>${s.followers.toLocaleString('vi-VN')}</strong></div></article>
             <article><span>${icon('star')}</span><div><small>Danh tiếng ngành</small><strong>${s.industryReputation}</strong></div></article>
@@ -1760,7 +1783,7 @@ export function upgradeModal(s: GameState) {
         </section>
       </section>`;
 
-  const unlockCount = newProducts.length + newFurniture.length + 1;
+  const unlockCount = newProducts.length + newFurniture.length + atelierUnlocks.length + 1;
   const xpPercent = Math.min(100, Math.round((s.xp / next.xp) * 100));
   return `<section class="upgrade-workspace">
     <header class="app-modal-header upgrade-workspace-header">
@@ -1773,6 +1796,7 @@ export function upgradeModal(s: GameState) {
         <header><h3>${icon('gift')} Đặc quyền mở khóa</h3><span>${unlockCount} điều mới</span></header>
         <ul class="upgrade-benefit-list">
           <li><span class="upgrade-benefit-art is-perk">${icon('users')}</span><p><strong>Thêm khách ghé shop</strong><small>Nhiều cơ hội tư vấn và tăng doanh thu</small></p><i>${icon('check')}</i></li>
+          ${atelierUnlocks.map(unlock => `<li><span class="upgrade-benefit-art is-perk">${icon(unlock.icon)}</span><p><strong>${unlock.title}</strong><small>${unlock.copy}</small></p><i>${icon('check')}</i></li>`).join('')}
           ${newProducts.map(product => `<li><span class="upgrade-benefit-art">${productImage(product)}</span><p><strong title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong><small>${product.style} · Thời trang</small></p><i>${icon('check')}</i></li>`).join('')}
           ${newFurniture.map(item => `<li><span class="upgrade-benefit-art">${furnitureImage(item)}</span><p><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>+${item.appeal} Thẩm mỹ · Nội thất</small></p><i>${icon('check')}</i></li>`).join('')}
         </ul>

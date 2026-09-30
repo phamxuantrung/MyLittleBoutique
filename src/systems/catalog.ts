@@ -11,6 +11,7 @@ export const searchText = (value: string) => value.normalize('NFD').replace(/[\u
 export function filterProducts(s: GameState, f: CatalogFilters) {
   const query = searchText(f.query);
   return products.filter(p =>
+    !('custom' in p && p.custom === true) &&
     (f.category === 'all' || p.category === f.category) &&
     (f.style === 'all' || productStyles(p).some(style => style === f.style)) &&
     (f.subcategory === 'all' || p.subcategory === f.subcategory) &&

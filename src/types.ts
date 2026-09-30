@@ -6,7 +6,54 @@ export interface Product {
   id: string; name: string; category: Category; style: Style; color: string; colorName: string;
   buyPrice: number; sellPrice: number; quality: number; level: number; art: string;
   subcategory: string; occasions: Occasion[]; secondaryStyles?: Style[];
+  designColor?: string;
+  designStrokes?: ProductDesignStroke[];
+  designMotif?: ProductDesignMotif;
+  designAccentColor?: string;
+  designMotifScale?: number;
+  designMotifX?: number;
+  designMotifY?: number;
+  designFormWidth?: number;
+  designFormLength?: number;
+  designMotifRotation?: number;
+  designMotifOpacity?: number;
+  designMotifRepeat?: ProductDesignMotifRepeat;
+  designShapePoints?: ProductDesignPoint[];
+  designShapeSmooth?: boolean;
+  designStrokeColor?: string;
+  designStrokeWidth?: number;
+  designStickers?: ProductDesignSticker[];
 }
+export interface ProductDesignPoint { x: number; y: number; }
+export interface ProductDesignStroke { color: string; width: number; points: ProductDesignPoint[]; }
+export type ProductDesignMotif = 'none' | 'heart' | 'star' | 'bow' | 'flower' | 'stripes';
+export type ProductDesignMotifRepeat = 1 | 3 | 5;
+export type ProductDesignStickerKind = 'heart' | 'star' | 'bow' | 'flower'
+  | 'round-collar' | 'vest-collar' | 'polo-collar'
+  | 'pleats' | 'buttons' | 'pocket' | 'zipper' | 'belt' | 'seam' | 'cuffs';
+export interface ProductDesignSticker {
+  id: string;
+  kind: ProductDesignStickerKind;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  color: string;
+}
+export interface CustomProduct extends Product {
+  custom: true;
+  recipeId: string;
+  createdDay: number;
+}
+export interface AtelierMaterial {
+  id: string; name: string; description: string; level: number; price: number; color: string;
+}
+export interface AtelierRecipe {
+  id: string; name: string; style: Style; category: Category; materials: Record<string, number>;
+  art: string; color: string; colorName: string; quality: number; sellPrice: number;
+}
+export interface TailoringJob { id: string; productId: string; quantity: number; readyDay: number; }
+export interface AtelierCraftHistoryEntry { id: string; style: Style; materials: Record<string, number>; recipeId?: string; success: boolean; day: number; }
 export interface Customer {
   id: string; name: string; handle: string; personality: string; styles: Style[]; colors: string[];
   budget: number; patience: number; goal: string; skin: string; hair: string; outfit: string; hairStyle: number;
@@ -52,7 +99,8 @@ export interface StaffFinancialNotice {
   departures: { uid: string; name: string; amount: number }[];
 }
 export interface PendingOrder { id: string; productId: string; quantity: number; cost: number; arrivalDay: number; supplierId?: string; }
-export interface ArrivedOrderSummary { productId: string; productName: string; quantity: number; supplierId?: string; }
+export interface PendingMaterialOrder { id: string; materialId: string; quantity: number; cost: number; arrivalDay: number; supplierId?: string; }
+export interface ArrivedOrderSummary { productId: string; productName: string; quantity: number; supplierId?: string; kind?: 'product' | 'material'; }
 export type SupplierId = 'local' | 'wholesale' | 'global';
 export interface ReturnCase {
   id: string; productId: string; customerName: string; amount: number; reason: string;
@@ -134,6 +182,7 @@ export interface GameState {
   inventory: Record<string, number>; prices: Record<string, number>; layout: PlacedFurniture[];
   storedFurniture?: string[];
   pendingOrders: PendingOrder[];
+  pendingMaterialOrders: PendingMaterialOrder[];
   onlineListings: string[]; onlineOrders: OnlineOrder[]; onlineNextOrderIn: number; onlineChannelEnabled: boolean;
   onlineRating: number; onlineReviews: number; onlineSales: number;
   stats: DayStats; posts: SocialPost[]; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; tutorialDone: boolean;
@@ -143,6 +192,8 @@ export interface GameState {
   activeSupplierId: SupplierId; supplierRelations: Record<SupplierId, number>;
   returnCases: ReturnCase[]; vipAppointments: VipAppointment[]; coutureOrder: CoutureOrder | null; coutureAvailableDay: number;
   operationSequence: number; reputationCrisis: ReputationCrisis | null;
+  atelierOwned: boolean; materialInventory: Record<string, number>; craftedRecipeIds: string[]; atelierCraftHistory: AtelierCraftHistoryEntry[]; customProducts: CustomProduct[];
+  tailoringJobs: TailoringJob[]; atelierDraft: CustomProduct | null;
   shopName: string; hasNamedShop?: boolean;
 }
 export interface SaleResult { success: boolean; score: number; reason: string; total: number; followers: number; viral: boolean; customer: Customer; products: Product[]; isSelfPick?: boolean; isStaffAssisted?: boolean; visitUid?: string; xpEarned?: number; tip?: number; staffName?: string; loyaltyPoints?: number; loyaltyTier?: LoyaltyTier; loyaltyReward?: string; reviewStars?: number; }

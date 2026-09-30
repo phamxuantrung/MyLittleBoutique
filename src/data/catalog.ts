@@ -138,6 +138,9 @@ export const levels = [
   { name: 'Fashion house', label: 'Nhà mốt của bạn', xp: 2100, cost: 3100000 },
   { name: 'The atelier', label: 'Atelier cao cấp', xp: 3200, cost: 4800000 },
   { name: 'Around the world', label: 'Thương hiệu toàn cầu', xp: 4700, cost: 7000000 },
+  { name: 'Made by you', label: 'Xưởng may cá nhân', xp: 6500, cost: 9800000 },
+  { name: 'Signature house', label: 'Nhà mốt chữ ký', xp: 8700, cost: 13000000 },
+  { name: 'Fashion legacy', label: 'Di sản thời trang', xp: 11500, cost: 17500000 },
 ];
 export const dailyEvents = [
   { name: 'Ngày khai trương', description: 'Những khách đầu tiên đang chờ khám phá shop của bạn.', discount: 1, extra: 0 },

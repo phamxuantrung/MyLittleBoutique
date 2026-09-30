@@ -2994,3 +2994,88 @@ dialog.dialog-result {
     padding: 5px 6px 6px;
   }
 }
+
+/* Keep consultation cards vertical on touch landscape; older mobile rules use !important. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape),
+       (max-width: 760px),
+       (max-height: 500px) {
+  .dialog-serve .consultation-modal .outfit-grid {
+    grid-template-columns: none !important;
+    grid-template-rows: auto !important;
+    grid-auto-flow: column !important;
+    grid-auto-columns: clamp(112px, 19vw, 136px) !important;
+    align-items: start !important;
+    align-content: start !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-option,
+  .dialog-serve .consultation-modal .outfit-option:hover {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: 82px auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 148px !important;
+    max-height: 190px !important;
+    align-self: start !important;
+    transform: none !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-thumb-container {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    height: 82px !important;
+    min-height: 82px !important;
+    padding: 5px 5px 17px !important;
+    border-right: 0 !important;
+    border-bottom: 1px dashed #efd4e3 !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-option .product-art {
+    width: 58px !important;
+    height: 58px !important;
+    max-width: 72% !important;
+    object-fit: contain !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-option > .outfit-meta-wrap {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    gap: 3px !important;
+    padding: 6px 7px 7px !important;
+    justify-content: flex-start !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-item-name {
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+    text-align: center !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-sub-info {
+    display: flex !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-sub-info > span,
+  .dialog-serve .consultation-modal .outfit-price-row > span,
+  .dialog-serve .consultation-modal .outfit-price {
+    font-size: 7px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dialog-serve .consultation-modal .outfit-price-row {
+    width: 100% !important;
+    margin-top: 2px !important;
+    padding-top: 4px !important;
+  }
+}

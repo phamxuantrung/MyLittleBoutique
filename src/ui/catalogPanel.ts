@@ -7,6 +7,8 @@ import { compact, escapeHtml, money, productImage } from './format';
 import { icon } from './icons';
 import { supplierFor, suppliers } from '../systems/operations';
 import { gameDate } from '../systems/calendar';
+import { atelierMaterials, ATELIER_UNLOCK_LEVEL } from '../data/atelier';
+import { atelierMaterialIllustration } from '../art/atelierArt';
 
 const options = (values: Record<string, string>, selected: string, allLabel: string) =>
   `<option value="all">${allLabel}</option>${Object.entries(values).map(([id, label]) => `<option value="${id}" ${selected === id ? 'selected' : ''}>${label}</option>`).join('')}`;
@@ -104,7 +106,7 @@ export function lookbook(s: GameState, f: CatalogFilters, lookQtys: Record<strin
         return `<article class="import-card look-card ${locked ? 'locked' : ''}" data-look-id="${look.id}">
           <div class="import-visual look-visual" style="--item-color:${fashionStyles[look.style].color}22">
             <div class="look-outfit-collage">
-              ${items.map(p => `<div class="look-mini-item" title="${escapeHtml(p.name)}">${productImage(p)}</div>`).join('')}
+              ${items.map(p => `<div class="look-mini-item" title="${escapeHtml(p.name)}">${productImage(p, `look-product-art look-art-${p.art}`)}</div>`).join('')}
             </div>
             <span class="stock-badge ${allOwned ? 'has-stock' : ''}">
               ${locked ? `${icon('lock')} Cấp ${level}` : allOwned ? `${icon('check')} Đã có hàng` : `${icon('hanger')} ${items.length} món/bộ`}
@@ -312,11 +314,13 @@ export function stockPanel(s: GameState, filterArg: CatalogFilters | string = 'a
 /* ==============================================================================
    KHO HÀNG - InventoryPanel: chỉ xem hàng tồn kho + điều chỉnh giá bán
    ============================================================================== */
-export function inventoryPanel(s: GameState, category = 'all', mode: 'stock' | 'pending' = 'stock') {
-  const allOwnedProducts = products.filter(p => (s.inventory[p.id] ?? 0) > 0);
+export function inventoryPanel(s: GameState, category = 'all', mode: 'stock' | 'pending' | 'custom' = 'stock') {
+  const customIds = new Set(s.customProducts.map(product => product.id));
+  const allOwnedProducts = products.filter(p => (s.inventory[p.id] ?? 0) > 0 && (mode === 'custom' ? customIds.has(p.id) : !customIds.has(p.id)));
   const ownedProducts = allOwnedProducts.filter(p => category === 'all' || p.category === category);
   const pendingOrders = s.pendingOrders ?? [];
   const pendingCount = pendingOrders.length;
+  const customCount = s.customProducts.reduce((sum, product) => sum + (s.inventory[product.id] ?? 0), 0);
   const totalStock = Object.values(s.inventory).reduce((a, b) => a + b, 0);
 
   return `
@@ -334,6 +338,9 @@ export function inventoryPanel(s: GameState, category = 'all', mode: 'stock' | '
         <button data-action="inventory-mode" data-id="pending" class="${mode === 'pending' ? 'active' : ''}" aria-pressed="${mode === 'pending'}">
           ${icon('truck')} <span>Đang về</span> <span class="mode-count">${pendingCount}</span>
         </button>
+        ${s.level >= 8 ? `<button data-action="inventory-mode" data-id="custom" class="${mode === 'custom' ? 'active' : ''}" aria-pressed="${mode === 'custom'}">
+          ${icon('hanger')} <span>Cá nhân</span> <span class="mode-count">${customCount}</span>
+        </button>` : ''}
       </div>
 
       ${mode === 'pending' ? `
@@ -372,19 +379,19 @@ export function inventoryPanel(s: GameState, category = 'all', mode: 'stock' | '
           </div>
         `}
       ` : `
-        <div class="category-scroll-strip inventory-category-tabs" role="tablist" aria-label="Phân loại hàng trong kho">
+        ${mode === 'custom' ? `<div class="inventory-panel-note"><strong>Bộ sưu tập chữ ký</strong><span>${s.customProducts.length ? `${s.customProducts.length} bản thiết kế đã duyệt` : 'Chưa có mẫu cá nhân nào'}</span></div>` : `<div class="category-scroll-strip inventory-category-tabs" role="tablist" aria-label="Phân loại hàng trong kho">
           ${Object.entries({ all: 'Tất cả', ...categories }).map(([id, label]) =>
             `<button class="filter cat-chip ${id === category ? 'active' : ''}" data-action="inventory-filter" data-id="${id}" aria-pressed="${id === category}">${label}</button>`
           ).join('')}
-        </div>
+        </div>`}
 
     ${allOwnedProducts.length === 0 ? `
       <div class="empty-state inv-empty-state">
         <div class="empty-state-icon">${icon('box')}</div>
-        <h3>Kho hàng hiện đang trống</h3>
-        <p>Boutique chưa có món đồ nào trong kho. Hãy sang quầy <strong>Nhập hàng</strong> để chọn các mẫu thiết kế trendy mới nhất!</p>
-        <button class="btn btn-primary" data-action="nav" data-id="import">
-          ${icon('bag')} <span>Đi nhập hàng ngay</span> ${icon('arrow')}
+        <h3>${mode === 'custom' ? 'Chưa có sản phẩm cá nhân' : 'Kho hàng hiện đang trống'}</h3>
+        <p>${mode === 'custom' ? 'Tạo mẫu thành công tại xưởng may rồi duyệt mẫu để đưa thiết kế vào kho.' : 'Boutique chưa có món đồ nào trong kho. Hãy sang quầy <strong>Nhập hàng</strong> để chọn các mẫu thiết kế trendy mới nhất!'}</p>
+        <button class="btn btn-primary" data-action="nav" data-id="${mode === 'custom' ? 'atelier' : 'import'}">
+          ${icon(mode === 'custom' ? 'hanger' : 'bag')} <span>${mode === 'custom' ? 'Đến xưởng may' : 'Đi nhập hàng ngay'}</span> ${icon('arrow')}
         </button>
       </div>
     ` : ownedProducts.length === 0 ? `
@@ -474,7 +481,7 @@ function importProductCard(s: GameState, p: Product, qty: number) {
 
   return `<article class="import-card ${locked ? 'locked' : ''} ${isInternational ? 'international' : 'local'}" data-product-id="${p.id}">
     <div class="import-visual" style="--item-color:${p.color}22">
-      ${productImage(p)}
+      ${productImage(p, `import-product-art import-art-${p.art}`)}
       <span class="stock-badge ${currentStock > 0 ? 'has-stock' : ''}">
         ${locked ? `${icon('lock')} Cấp ${p.level}` : currentStock > 0 ? `${icon('box')} Kho: ${currentStock}` : 'Chưa có'}
       </span>
@@ -534,6 +541,42 @@ function importProductCard(s: GameState, p: Product, qty: number) {
   </article>`;
 }
 
+function importMaterialCard(s: GameState, material: typeof atelierMaterials[number], qty: number) {
+  const supplier = supplierFor(s);
+  const locked = s.level < material.level;
+  const unitPrice = Math.round(material.price * currentEvent(s).discount * supplier.priceFactor);
+  const totalCost = unitPrice * qty;
+  const currentStock = s.materialInventory[material.id] ?? 0;
+  const pendingQty = (s.pendingMaterialOrders ?? []).filter(order => order.materialId === material.id).reduce((sum, order) => sum + order.quantity, 0);
+  const deliveryMax = supplier.deliveryDays + (supplier.deliveryDays && supplier.reliability < 1 ? 1 : 0);
+  return `<article class="import-card material-import-card ${locked ? 'locked' : ''}" data-material-id="${material.id}" style="--material:${material.color}">
+    <div class="import-visual material-import-visual" style="--item-color:${material.color}33">
+      <div class="material-import-art">${atelierMaterialIllustration(material.id)}</div>
+      <span class="stock-badge ${currentStock > 0 ? 'has-stock' : ''}">${locked ? `${icon('lock')} Cấp ${material.level}` : `${icon('box')} Kho: ${currentStock}`}</span>
+      ${pendingQty ? `<span class="on-the-way-chip material-way-chip">${icon('truck')} ${pendingQty} đang về</span>` : ''}
+    </div>
+    <div class="import-detail">
+      <h3 class="product-name" title="${escapeHtml(material.name)}">${escapeHtml(material.name)}</h3>
+      <p class="material-import-description">${escapeHtml(material.description)}</p>
+      <div class="import-price-block">
+        <div class="import-unit-line"><span class="unit-price-label">Đơn giá:</span><strong class="import-unit-price">${money(unitPrice)}</strong><small class="per-unit">/đơn vị</small></div>
+        <div class="import-cost-summary"><span class="total-label">${icon('coin')} Tổng (${qty} đơn vị):</span><strong class="total-amount">${money(totalCost)}</strong></div>
+        ${supplier.deliveryDays ? `<div class="ship-lead-time">${icon('truck')} Vận chuyển: <strong>${supplier.deliveryDays}–${deliveryMax} ngày</strong> về kho</div>` : '<div class="ship-lead-time is-instant">✓ Nhận ngay vào kho nguyên liệu</div>'}
+      </div>
+      <div class="import-purchase-row">
+        <div class="import-qty-section"><div class="qty-header-row"><span class="qty-label">Số lượng:</span></div><div class="traditional-qty-control">
+          <button type="button" data-action="material-qty-step" data-material="${material.id}" data-id="-1" aria-label="Giảm số lượng" ${qty <= supplier.minOrder ? 'disabled' : ''}>${icon('minus')}</button>
+          <input class="material-import-qty-input" data-material="${material.id}" type="number" inputmode="numeric" min="${supplier.minOrder}" max="30" value="${qty}" aria-label="Số lượng ${escapeHtml(material.name)}" />
+          <button type="button" data-action="material-qty-step" data-material="${material.id}" data-id="1" aria-label="Tăng số lượng" ${qty >= 30 ? 'disabled' : ''}>${icon('plus')}</button>
+        </div></div>
+        <button class="btn ${locked ? 'btn-muted' : 'btn-primary'} import-btn" data-action="order-material" data-id="${material.id}" ${locked || totalCost > s.money || currentStock + pendingQty + qty > 9999 ? 'disabled' : ''}>
+          ${icon(locked ? 'lock' : supplier.deliveryDays ? 'truck' : 'box')}<span class="import-btn-copy"><b>${locked ? `Mở ở cấp ${material.level}` : supplier.deliveryDays ? 'Đặt nguyên liệu' : 'Nhập vào kho'}</b>${!locked ? `<small>${money(totalCost)}</small>` : ''}</span>
+        </button>
+      </div>
+    </div>
+  </article>`;
+}
+
 const supplierCards = (s: GameState) => `<div class="supplier-bar-options">${suppliers.map(supplier => {
   const active = s.activeSupplierId === supplier.id;
   const locked = s.level < supplier.unlockLevel;
@@ -561,14 +604,16 @@ export function importPanel(
   s: GameState,
   filterArg: CatalogFilters | string = 'all',
   quantityOrMap: number | Record<string, number> = {},
-  mode: 'products' | 'looks' = 'products',
-  lookQtys: Record<string, number> = {}
+  mode: 'products' | 'looks' | 'materials' = 'products',
+  lookQtys: Record<string, number> = {},
+  materialQtys: Record<string, number> = {}
 ) {
   const f: CatalogFilters = typeof filterArg === 'string' ? { ...defaultFilters(), category: filterArg } : filterArg;
   const activeSupplier = supplierFor(s);
   const supplierSaving = Math.round((1 - activeSupplier.priceFactor) * 100);
   const list = filterProducts(s, { ...f, availability: 'all' });
   const getQty = (pId: string) => Math.max(activeSupplier.minOrder, typeof quantityOrMap === 'number' ? quantityOrMap : (quantityOrMap[pId] ?? activeSupplier.minOrder));
+  const getMaterialQty = (materialId: string) => Math.max(activeSupplier.minOrder, materialQtys[materialId] ?? activeSupplier.minOrder);
   return `
     <section class="import-panel-shell import-catalog-screen">
     <div class="import-panel-corner-actions">
@@ -583,6 +628,9 @@ export function importPanel(
       <button data-action="import-mode" data-id="looks" class="${mode === 'looks' ? 'active' : ''}" aria-pressed="${mode === 'looks'}">
         ${icon('heart')} <span>Lookbook</span> <span class="mode-count">${looks.length}</span>
       </button>
+      <button data-action="import-mode" data-id="materials" class="${mode === 'materials' ? 'active' : ''}" aria-pressed="${mode === 'materials'}" ${s.level < ATELIER_UNLOCK_LEVEL ? 'disabled' : ''}>
+        ${icon(s.level < ATELIER_UNLOCK_LEVEL ? 'lock' : 'box')} <span>Vật liệu</span> <span class="mode-count">${s.level < ATELIER_UNLOCK_LEVEL ? `Cấp ${ATELIER_UNLOCK_LEVEL}` : atelierMaterials.length}</span>
+      </button>
     </div>
 
     ${currentEvent(s).discount < 1 ? `<p class="discount-banner">Hôm nay giảm ${Math.round((1 - currentEvent(s).discount) * 100)}% giá nhập toàn bộ sản phẩm và outfit!</p>` : ''}
@@ -594,6 +642,10 @@ export function importPanel(
         ).join('')}
       </div>
       ${lookbook(s, f, lookQtys)}
+    ` : mode === 'materials' ? `
+      <div class="import-grid import-horizontal-rail material-import-grid" aria-label="Danh sách vật liệu">
+        ${atelierMaterials.map(material => importMaterialCard(s, material, getMaterialQty(material.id))).join('')}
+      </div>
     ` : `
       <div class="inventory-toolbar import-filter-toolbar">
         <div class="category-scroll-strip" role="tablist" aria-label="Danh mục hàng hóa">
@@ -610,7 +662,7 @@ export function importPanel(
         </div>
       </div>
 
-      <div class="import-grid import-horizontal-rail" aria-label="Danh sách sản phẩm, vuốt ngang để xem thêm">
+      <div class="import-grid import-horizontal-rail product-import-grid" aria-label="Danh sách sản phẩm, vuốt ngang để xem thêm">
         ${list.map(p => importProductCard(s, p, getQty(p.id))).join('')}
       </div>
 

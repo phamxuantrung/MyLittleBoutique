@@ -81,8 +81,10 @@ export const landExpansion = [
   { size: 12, cost: 3700000, rent: 230000, traffic: 7 },
   { size: 13, cost: 5200000, rent: 305000, traffic: 8 },
   { size: 14, cost: 7000000, rent: 390000, traffic: 9 },
+  { size: 15, cost: 9200000, rent: 490000, traffic: 10 },
+  { size: 16, cost: 12000000, rent: 610000, traffic: 11 },
 ] as const;
-export const shopLevelRent = [30000, 55000, 85000, 120000, 160000, 205000, 255000] as const;
+export const shopLevelRent = [30000, 55000, 85000, 120000, 160000, 205000, 255000, 320000, 400000, 500000] as const;
 export function landTier(state: GameState) { return Math.max(0, Math.min(landExpansion.length - 1, Math.floor(state.landLevel ?? 0))); }
 export function landSize(state: GameState) { return landExpansion[landTier(state)].size; }
 export function nextLandExpansion(state: GameState) { return landExpansion[landTier(state) + 1]; }
@@ -90,7 +92,7 @@ export function landRent(state: GameState) { return landExpansion[landTier(state
 export function dailyRent(state: GameState) { return shopLevelRent[Math.max(0, Math.min(shopLevelRent.length - 1, state.level - 1))] + landRent(state); }
 export function staffCapacity(state: GameState) {
   // Nhân viên chỉ được mở khóa khi boutique đã đạt mặt bằng cấp 3.
-  const byLand = [0, 0, 1, 2, 3, 4, 5, 6][landTier(state)] ?? 0;
+  const byLand = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8][landTier(state)] ?? 0;
   const byLevel = state.level < 3 ? 0 : 1 + Math.floor((state.level - 3) / 2);
   return Math.min(byLand, byLevel);
 }

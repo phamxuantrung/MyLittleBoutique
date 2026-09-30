@@ -1,7 +1,8 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { ActiveBrandCampaign, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, DayStats, GameState, OnlineOrder, PendingOrder, PlacedFurniture, ReputationCrisis, ReturnCase, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, VipAppointment } from '../types';
+import type { ActiveBrandCampaign, AtelierCraftHistoryEntry, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, CustomProduct, DayStats, GameState, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, ReputationCrisis, ReturnCase, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, TailoringJob, VipAppointment } from '../types';
 import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, displayLevel, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, STAFF_SALARY_MIN } from './rules';
 import { generateDayCustomers, lookupCustomer, registerCustomer } from './customerGen';
+import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProducts } from '../data/atelier';
 
 export const SAVE_KEY = 'little-boutique.save.v1';
 const MOVABLE_DECOR_MIGRATION = 'system:wall-decor-v5';
@@ -22,12 +23,13 @@ export function initialState(): GameState {
     currentCustomerId: null, customerMode: null, activeVisits: [], currentVisitId: null, nextArrivalIn: 0, lastCustomerId: null, landLevel: 0, customerLoyalty: {}, loan: null, rentDue: 0, loanOverdueDays: 0, rentOverdueDays: 0, gameOverReason: null,
     dayTimer: DAY_DURATION, dailyLuck: 'Nắng ấm nhẹ nhàng',
     inventory: {}, prices: {},
-    pendingOrders: [],
+    pendingOrders: [], pendingMaterialOrders: [],
     onlineListings: [], onlineOrders: [], onlineNextOrderIn: 8, onlineChannelEnabled: false,
     onlineRating: 5, onlineReviews: 0, onlineSales: 0,
     campaignSeason: 1, industryReputation: 0, activeCampaign: null, campaignAvailableDay: 1, completedCampaigns: [],
     activeSupplierId: 'local', supplierRelations: { local: 10, wholesale: 0, global: 0 },
     returnCases: [], vipAppointments: [], coutureOrder: null, coutureAvailableDay: 1, operationSequence: 0, reputationCrisis: null,
+    atelierOwned: false, materialInventory: {}, craftedRecipeIds: [], atelierCraftHistory: [], customProducts: [], tailoringJobs: [], atelierDraft: null,
     storedFurniture: [],
     layout: [
       { uid: 'starter-rack', id: 'rack', x: 0, y: 2, rotation: 0, displayItems: [] },
@@ -54,6 +56,7 @@ const parseStaffCandidate = (raw: unknown): StaffCandidate | undefined => {
   };
 };
 export function parseSave(raw: string | null): GameState {
+  clearRegisteredCustomProducts();
   const fresh = initialState();
   if (!raw) return fresh;
   try {
@@ -96,6 +99,126 @@ export function parseSave(raw: string | null): GameState {
     }
     const generatedCount = 15 + (state.day % 6) + landExpansion[state.landLevel].traffic * 2;
     for (const generated of generateDayCustomers(state.day, state.level, generatedCount)) registerCustomer(generated);
+    state.atelierOwned = s.atelierOwned === true || (s.atelierOwned == null && finite(s.atelierLeaseUntilDay, 0, 99999) >= state.day);
+    state.materialInventory = {};
+    for (const material of atelierMaterials) state.materialInventory[material.id] = Math.floor(finite(s.materialInventory?.[material.id], 0, 9999));
+    const parseCustomProduct = (raw: unknown): CustomProduct | undefined => {
+      if (!raw || typeof raw !== 'object') return;
+      const value = raw as Partial<CustomProduct>;
+      const recipe = atelierRecipes.find(item => item.id === value.recipeId);
+      if (!recipe || typeof value.id !== 'string' || !/^custom-[a-z0-9-]{1,90}$/i.test(value.id)) return;
+      const designColor = typeof value.designColor === 'string' && /^#[0-9a-f]{6}$/i.test(value.designColor) ? value.designColor : undefined;
+      const designMotif = typeof value.designMotif === 'string' && ['none', 'heart', 'star', 'bow', 'flower', 'stripes'].includes(value.designMotif) ? value.designMotif as CustomProduct['designMotif'] : undefined;
+      const designAccentColor = typeof value.designAccentColor === 'string' && /^#[0-9a-f]{6}$/i.test(value.designAccentColor) ? value.designAccentColor : undefined;
+      const designMotifScale = typeof value.designMotifScale === 'number' && Number.isFinite(value.designMotifScale) ? Math.max(.7, Math.min(1.35, value.designMotifScale)) : undefined;
+      const designMotifX = typeof value.designMotifX === 'number' && Number.isFinite(value.designMotifX) ? Math.max(38, Math.min(82, value.designMotifX)) : undefined;
+      const designMotifY = typeof value.designMotifY === 'number' && Number.isFinite(value.designMotifY) ? Math.max(42, Math.min(100, value.designMotifY)) : undefined;
+      const designFormWidth = typeof value.designFormWidth === 'number' && Number.isFinite(value.designFormWidth) ? Math.max(.84, Math.min(1.16, value.designFormWidth)) : undefined;
+      const designFormLength = typeof value.designFormLength === 'number' && Number.isFinite(value.designFormLength) ? Math.max(.84, Math.min(1.18, value.designFormLength)) : undefined;
+      const designMotifRotation = typeof value.designMotifRotation === 'number' && Number.isFinite(value.designMotifRotation) ? Math.max(-40, Math.min(40, value.designMotifRotation)) : undefined;
+      const designMotifOpacity = typeof value.designMotifOpacity === 'number' && Number.isFinite(value.designMotifOpacity) ? Math.max(.4, Math.min(1, value.designMotifOpacity)) : undefined;
+      const designMotifRepeat = typeof value.designMotifRepeat === 'number' && [1, 3, 5].includes(value.designMotifRepeat) ? value.designMotifRepeat as 1 | 3 | 5 : undefined;
+      const designShapePoints = Array.isArray(value.designShapePoints) ? value.designShapePoints.slice(0, 48).flatMap(rawPoint => {
+        if (!rawPoint || typeof rawPoint !== 'object') return [];
+        const point = rawPoint as { x?: unknown; y?: unknown };
+        if (typeof point.x !== 'number' || typeof point.y !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return [];
+        return [{ x: Math.max(4, Math.min(116, point.x)), y: Math.max(5, Math.min(138, point.y)) }];
+      }) : undefined;
+      const designShapeSmooth = typeof value.designShapeSmooth === 'boolean' ? value.designShapeSmooth : undefined;
+      const designStrokeColor = typeof value.designStrokeColor === 'string' && /^#[0-9a-f]{6}$/i.test(value.designStrokeColor) ? value.designStrokeColor : undefined;
+      const designStrokeWidth = typeof value.designStrokeWidth === 'number' && Number.isFinite(value.designStrokeWidth) ? Math.max(.6, Math.min(4, value.designStrokeWidth)) : undefined;
+      const designStickers = Array.isArray(value.designStickers) ? value.designStickers.slice(0, 24).flatMap((rawSticker, index) => {
+        if (!rawSticker || typeof rawSticker !== 'object') return [];
+        const sticker = rawSticker as { id?: unknown; kind?: unknown; x?: unknown; y?: unknown; scale?: unknown; rotation?: unknown; color?: unknown };
+        if (typeof sticker.kind !== 'string' || !['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs'].includes(sticker.kind)) return [];
+        if (typeof sticker.x !== 'number' || typeof sticker.y !== 'number' || !Number.isFinite(sticker.x) || !Number.isFinite(sticker.y)) return [];
+        return [{
+          id: typeof sticker.id === 'string' && /^[a-z0-9-]{1,50}$/i.test(sticker.id) ? sticker.id : `sticker-${index}`,
+          kind: sticker.kind as 'heart' | 'star' | 'bow' | 'flower' | 'round-collar' | 'vest-collar' | 'polo-collar' | 'pleats' | 'buttons' | 'pocket' | 'zipper' | 'belt' | 'seam' | 'cuffs',
+          x: Math.max(6, Math.min(114, sticker.x)),
+          y: Math.max(7, Math.min(133, sticker.y)),
+          scale: typeof sticker.scale === 'number' && Number.isFinite(sticker.scale) ? Math.max(.35, Math.min(2.5, sticker.scale)) : 1,
+          rotation: typeof sticker.rotation === 'number' && Number.isFinite(sticker.rotation) ? Math.max(-180, Math.min(180, sticker.rotation)) : 0,
+          color: typeof sticker.color === 'string' && /^#[0-9a-f]{6}$/i.test(sticker.color) ? sticker.color : '#d4429a',
+        }];
+      }) : undefined;
+      const designStrokes = Array.isArray(value.designStrokes) ? value.designStrokes.slice(0, 80).flatMap(rawStroke => {
+        if (!rawStroke || typeof rawStroke !== 'object') return [];
+        const stroke = rawStroke as { color?: unknown; width?: unknown; points?: unknown };
+        if (typeof stroke.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(stroke.color) || !Array.isArray(stroke.points)) return [];
+        const points = stroke.points.slice(0, 240).flatMap(rawPoint => {
+          if (!rawPoint || typeof rawPoint !== 'object') return [];
+          const point = rawPoint as { x?: unknown; y?: unknown };
+          if (typeof point.x !== 'number' || typeof point.y !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return [];
+          return [{ x: Math.max(0, Math.min(120, point.x)), y: Math.max(0, Math.min(140, point.y)) }];
+        });
+        return points.length ? [{ color: stroke.color, width: Math.max(.6, finite(stroke.width, .6, 8)), points }] : [];
+      }) : undefined;
+      return {
+        id: value.id.slice(0, 100),
+        name: typeof value.name === 'string' ? value.name.slice(0, 50) : recipe.name,
+        category: recipe.category, style: recipe.style, color: recipe.color, colorName: recipe.colorName,
+        buyPrice: atelierRecipeCost(recipe), sellPrice: Math.round(finite(value.sellPrice, recipe.sellPrice, 999999999)),
+        quality: recipe.quality, level: Math.max(8, Math.floor(finite(value.level, recipe.materials.crystal || recipe.materials.cashmere ? 10 : recipe.materials.silk || recipe.materials.wool || recipe.materials.leather ? 9 : 8, 10))),
+        art: recipe.art, subcategory: 'Thiết kế cá nhân', occasions: ['city', 'party'], secondaryStyles: [],
+        custom: true, recipeId: recipe.id, createdDay: Math.max(1, Math.floor(finite(value.createdDay, state.day, 99999))),
+        ...(designColor ? { designColor } : {}),
+        ...(designStrokes?.length ? { designStrokes } : {}),
+        ...(designMotif ? { designMotif } : {}),
+        ...(designAccentColor ? { designAccentColor } : {}),
+        ...(designMotifScale !== undefined ? { designMotifScale } : {}),
+        ...(designMotifX !== undefined ? { designMotifX } : {}),
+        ...(designMotifY !== undefined ? { designMotifY } : {}),
+        ...(designFormWidth !== undefined ? { designFormWidth } : {}),
+        ...(designFormLength !== undefined ? { designFormLength } : {}),
+        ...(designMotifRotation !== undefined ? { designMotifRotation } : {}),
+        ...(designMotifOpacity !== undefined ? { designMotifOpacity } : {}),
+        ...(designMotifRepeat !== undefined ? { designMotifRepeat } : {}),
+        ...(designShapePoints && designShapePoints.length >= 6 ? { designShapePoints } : {}),
+        ...(designShapeSmooth !== undefined ? { designShapeSmooth } : {}),
+        ...(designStrokeColor ? { designStrokeColor } : {}),
+        ...(designStrokeWidth !== undefined ? { designStrokeWidth } : {}),
+        ...(designStickers?.length ? { designStickers } : {}),
+      };
+    };
+    state.customProducts = Array.isArray(s.customProducts)
+      ? s.customProducts.map(parseCustomProduct).filter((product: CustomProduct | undefined): product is CustomProduct => !!product).filter((product: CustomProduct, index: number, all: CustomProduct[]) => all.findIndex(item => item.id === product.id) === index).slice(0, 100)
+      : [];
+    registerCustomProducts(state.customProducts);
+    state.atelierDraft = parseCustomProduct(s.atelierDraft) ?? null;
+    const savedCraftedRecipeIds = Array.isArray(s.craftedRecipeIds)
+      ? s.craftedRecipeIds.filter((id: unknown): id is string => typeof id === 'string' && atelierRecipes.some(recipe => recipe.id === id))
+      : [];
+    state.craftedRecipeIds = Array.from(new Set([
+      ...savedCraftedRecipeIds,
+      ...state.customProducts.map(product => product.recipeId),
+      ...(state.atelierDraft ? [state.atelierDraft.recipeId] : []),
+    ])).slice(0, atelierRecipes.length);
+    const knownMaterialIds = new Set(atelierMaterials.map(material => material.id));
+    state.atelierCraftHistory = Array.isArray(s.atelierCraftHistory) ? s.atelierCraftHistory.flatMap((raw: unknown) => {
+      if (!raw || typeof raw !== 'object') return [];
+      const value = raw as Partial<AtelierCraftHistoryEntry>;
+      if (typeof value.id !== 'string' || typeof value.success !== 'boolean' || !atelierRecipes.some(recipe => recipe.style === value.style) || !value.materials || typeof value.materials !== 'object') return [];
+      const materials: Record<string, number> = {};
+      for (const [id, amount] of Object.entries(value.materials)) {
+        if (knownMaterialIds.has(id) && typeof amount === 'number' && Number.isFinite(amount) && amount > 0) materials[id] = Math.min(99, Math.floor(amount));
+      }
+      if (Object.keys(materials).length < 2 || Object.keys(materials).length > 3) return [];
+      const recipeId = typeof value.recipeId === 'string' && atelierRecipes.some(recipe => recipe.id === value.recipeId) ? value.recipeId : undefined;
+      return [{ id: value.id.slice(0, 100), style: value.style as Style, materials, ...(recipeId ? { recipeId } : {}), success: value.success, day: Math.max(1, Math.floor(finite(value.day, state.day, 99999))) }];
+    }).slice(-50) : [];
+    if (!state.atelierCraftHistory.length) {
+      state.atelierCraftHistory = state.craftedRecipeIds.map((recipeId, index) => {
+        const recipe = atelierRecipes.find(item => item.id === recipeId)!;
+        return { id: `migrated-craft-${index}-${recipeId}`, style: recipe.style, materials: { ...recipe.materials }, recipeId, success: true, day: state.day };
+      });
+    }
+    state.tailoringJobs = Array.isArray(s.tailoringJobs) ? s.tailoringJobs.filter((raw: unknown): raw is TailoringJob => {
+      if (!raw || typeof raw !== 'object') return false;
+      const job = raw as TailoringJob;
+      return typeof job.id === 'string' && state.customProducts.some(product => product.id === job.productId)
+        && Number.isSafeInteger(job.quantity) && job.quantity > 0 && Number.isSafeInteger(job.readyDay) && job.readyDay > 0;
+    }).map((job: TailoringJob) => ({ id: job.id.slice(0, 100), productId: job.productId, quantity: Math.min(999, job.quantity), readyDay: job.readyDay })).slice(0, 30) : [];
     for (const p of products) {
       state.inventory[p.id] = Math.floor(finite(s.inventory[p.id], 0, 999));
       if (s.prices?.[p.id] !== undefined) state.prices[p.id] = Math.round(finite(s.prices[p.id], p.sellPrice, 999999999));
@@ -406,6 +529,15 @@ export function parseSave(raw: string | null): GameState {
         Number.isFinite(o.cost) && o.cost >= 0 &&
         Number.isSafeInteger(o.arrivalDay) && o.arrivalDay > 0
       ).map((o: PendingOrder) => ({ id: o.id, productId: o.productId, quantity: o.quantity, cost: o.cost, arrivalDay: o.arrivalDay, ...(['local', 'wholesale', 'global'].includes(o.supplierId ?? '') ? { supplierId: o.supplierId } : {}) }));
+    }
+    state.pendingMaterialOrders = [];
+    if (Array.isArray(s.pendingMaterialOrders)) {
+      state.pendingMaterialOrders = s.pendingMaterialOrders.filter((o: PendingMaterialOrder) =>
+        o && typeof o.id === 'string' && atelierMaterials.some(material => material.id === o.materialId) &&
+        Number.isSafeInteger(o.quantity) && o.quantity > 0 &&
+        Number.isFinite(o.cost) && o.cost >= 0 &&
+        Number.isSafeInteger(o.arrivalDay) && o.arrivalDay > 0
+      ).map((o: PendingMaterialOrder) => ({ id: o.id, materialId: o.materialId, quantity: o.quantity, cost: o.cost, arrivalDay: o.arrivalDay, ...(['local', 'wholesale', 'global'].includes(o.supplierId ?? '') ? { supplierId: o.supplierId } : {}) }));
     }
     return state;
   } catch { return fresh; }

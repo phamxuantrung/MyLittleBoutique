@@ -3,6 +3,7 @@ import maliVietnameseFont from '@fontsource/mali/files/mali-vietnamese-700-norma
 import { fashionShapes } from './fashionShapes';
 import { artSvg, bowShape, cel, fabricColor, heartShape, paint, tint } from './direction';
 import { characterIllustration, employeePortraitSvg, getCustomerArchetype, ownerIllustration, ownerPortraitSvg } from './characters';
+import { atelierProductBody } from './atelierArt';
 
 const wrap = (body: string, w: number, h: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
 // Phaser's XHR loader expects data URIs to contain base64 rather than URI escapes.
@@ -10,14 +11,72 @@ export const svgUrl = (svg: string) => `data:image/svg+xml;base64,${btoa(Array.f
 const shadow = '<ellipse cx="90" cy="201" rx="67" ry="14" fill="#8850a8" opacity=".10"/>';
 const bow = (color: string) => `<path d="M58 42Q36 22 35 43Q35 58 57 48Q81 23 83 42Q87 62 62 49L71 67L59 62L49 67L56 48" fill="${color}" stroke="#4a2d5a" stroke-width="1.5"/><circle cx="60" cy="46" r="5" fill="${color}"/>`;
 
-export function productSvg(product: Pick<Product, 'art' | 'color'>, hanger = false) {
-  const c = fabricColor(product.color);
+export function productSvg(product: Pick<Product, 'art' | 'color' | 'designColor' | 'designStrokes' | 'designMotif' | 'designAccentColor' | 'designMotifScale' | 'designMotifX' | 'designMotifY' | 'designFormWidth' | 'designFormLength' | 'designMotifRotation' | 'designMotifOpacity' | 'designMotifRepeat' | 'designShapePoints' | 'designShapeSmooth' | 'designStrokeColor' | 'designStrokeWidth' | 'designStickers'>, hanger = false) {
+  const c = fabricColor(product.designColor ?? product.color);
   const shapes = fashionShapes(c);
-  const body = shapes[product.art] ?? shapes.tee;
+  const atelierBody = atelierProductBody(product.art, c, product.designShapePoints, product.designShapeSmooth !== false, product.designStrokeColor, product.designStrokeWidth);
+  const body = atelierBody ?? shapes[product.art] ?? shapes.tee;
+  const customDrawing = (product.designStrokes ?? []).slice(0, 80).map(stroke => {
+    const color = /^#[0-9a-f]{6}$/i.test(stroke.color) ? stroke.color : '#d4429a';
+    const width = Math.max(.6, Math.min(8, Number(stroke.width) || 2));
+    const points = stroke.points.slice(0, 240).map(point => ({ x: Math.max(0, Math.min(120, Number(point.x) || 0)), y: Math.max(0, Math.min(140, Number(point.y) || 0)) }));
+    if (!points.length) return '';
+    const path = points.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+    return `<path d="${path}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }).join('');
+  const customLayer = customDrawing ? `<g class="custom-product-drawing">${customDrawing}</g>` : '';
+  const motif = product.designMotif ?? 'none';
+  const accent = /^#[0-9a-f]{6}$/i.test(product.designAccentColor ?? '') ? product.designAccentColor! : '#d4429a';
+  const motifScale = Math.max(.7, Math.min(1.35, Number(product.designMotifScale) || 1));
+  const motifX = Math.max(38, Math.min(82, Number(product.designMotifX) || 60));
+  const motifY = Math.max(42, Math.min(100, Number(product.designMotifY) || 69));
+  const formWidth = Math.max(.84, Math.min(1.16, Number(product.designFormWidth) || 1));
+  const formLength = Math.max(.84, Math.min(1.18, Number(product.designFormLength) || 1));
+  const motifRotation = Math.max(-40, Math.min(40, Number(product.designMotifRotation) || 0));
+  const motifOpacity = Math.max(.4, Math.min(1, Number(product.designMotifOpacity) || 1));
+  const motifRepeat = ([1, 3, 5] as number[]).includes(Number(product.designMotifRepeat)) ? Number(product.designMotifRepeat) : 1;
+  const motifShapes: Record<string, string> = {
+    heart: `<path d="M0 9C-15 1-12-12-3-10Q0-9 3-5Q6-9 10-9C18-5 13 4 0 13C-13 4-18-5-10-9Q-4-11 0-5Q3-9 6-9" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/>`,
+    star: `<path d="M0-14 4-5 14-4 7 3 9 13 0 8-9 13-7 3-14-4-4-5Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/>`,
+    bow: `<path d="M-3-3Q-18-14-18-1Q-17 10-3 3Q0 0 3 3Q17 10 18-1Q18-14 3-3L8 13 0 8-8 13Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/><circle cx="0" cy="0" r="4" fill="#fff4fa" stroke="#5b304d" stroke-width="1"/>`,
+    flower: `<g fill="${accent}" stroke="#5b304d" stroke-width="1"><ellipse cy="-8" rx="5" ry="8"/><ellipse cy="8" rx="5" ry="8"/><ellipse cx="-8" rx="8" ry="5"/><ellipse cx="8" rx="8" ry="5"/><circle r="5" fill="#ffdc73"/></g>`,
+    stripes: `<g fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round"><path d="M-16-10 7 13"/><path d="M-7-14 16 9"/><path d="M-16 2-5 13"/></g>`,
+  };
+  const detailShapes: Record<string, string> = {
+    ...motifShapes,
+    'round-collar': `<path d="M-18-7Q0 12 18-7L12-12Q0 1-12-12Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/>`,
+    'vest-collar': `<path d="M-18-14-3 0-10 16 1 4 0-2Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/><path d="M18-14 3 0 10 16-1 4 0-2Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/>`,
+    'polo-collar': `<path d="M-18-10-4-15 0-4-10 3Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/><path d="M18-10 4-15 0-4 10 3Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/><path d="M0-4V18" stroke="#5b304d" stroke-width="2"/><circle cy="5" r="1.6" fill="#fff" stroke="#5b304d" stroke-width=".8"/>`,
+    pleats: `<g fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round"><path d="M-18-17-12 17"/><path d="M-9-18-6 18"/><path d="M0-18V18"/><path d="M9-18 6 18"/><path d="M18-17 12 17"/></g><path d="M-20-18H20" stroke="#5b304d" stroke-width="1.2"/>`,
+    buttons: `<g fill="${accent}" stroke="#5b304d" stroke-width=".8"><circle cy="-15" r="3"/><circle cy="-5" r="3"/><circle cy="5" r="3"/><circle cy="15" r="3"/></g>`,
+    pocket: `<path d="M-16-13H16V9Q0 21-16 9Z" fill="${accent}" fill-opacity=".78" stroke="#5b304d" stroke-width="1.3"/><path d="M-13-8H13" stroke="#fff" stroke-width="1.3" opacity=".8"/>`,
+    zipper: `<path d="M0-20V20" stroke="#5b304d" stroke-width="2"/><path d="M-5-17H0M0-13H5M-5-9H0M0-5H5M-5-1H0M0 3H5M-5 7H0M0 11H5M-5 15H0" stroke="${accent}" stroke-width="2"/><path d="M0 17l5 5-5 4-5-4Z" fill="${accent}" stroke="#5b304d" stroke-width="1"/>`,
+    belt: `<path d="M-23-5H23V6H-23Z" fill="${accent}" stroke="#5b304d" stroke-width="1.2"/><rect x="-7" y="-8" width="14" height="17" rx="2" fill="#fff7dc" stroke="#5b304d" stroke-width="1.4"/><path d="M0-7V8" stroke="#5b304d" stroke-width="1"/>`,
+    seam: `<path d="M-23 0Q-12-12 0 0T23 0" fill="none" stroke="${accent}" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round"/>`,
+    cuffs: `<g fill="${accent}" stroke="#5b304d" stroke-width="1.2"><path d="M-24-8H-7V8H-22Z"/><path d="M24-8H7V8H22Z"/></g><path d="M-20-3H-10M20-3H10" stroke="#fff" stroke-width="1.3" opacity=".8"/>`,
+  };
+  const motifBody = motifShapes[motif] ?? '';
+  const motifOffsets = motifRepeat === 5
+    ? [[0, 0], [-17, -16], [17, -16], [-17, 16], [17, 16]]
+    : motifRepeat === 3 ? [[-18, 0], [0, 0], [18, 0]] : [[0, 0]];
+  const motifLayer = motifBody ? `<g class="custom-product-motif" opacity="${motifOpacity}">${motifOffsets.map(([offsetX, offsetY]) => `<g transform="translate(${motifX + offsetX} ${motifY + offsetY}) rotate(${motifRotation}) scale(${motifScale})">${motifBody}</g>`).join('')}</g>` : '';
+  const stickerLayer = (product.designStickers ?? []).slice(0, 24).map((sticker, index) => {
+    const kind = Object.hasOwn(detailShapes, sticker.kind) ? sticker.kind : 'heart';
+    const color = /^#[0-9a-f]{6}$/i.test(sticker.color) ? sticker.color : '#d4429a';
+    const x = Math.max(6, Math.min(114, Number(sticker.x) || 60));
+    const y = Math.max(7, Math.min(133, Number(sticker.y) || 69));
+    const scale = Math.max(.35, Math.min(2.5, Number(sticker.scale) || 1));
+    const rotation = Math.max(-180, Math.min(180, Number(sticker.rotation) || 0));
+    const id = /^[a-z0-9-]{1,50}$/i.test(sticker.id) ? sticker.id : `sticker-${index}`;
+    const stickerBody = (detailShapes[kind] ?? detailShapes.heart).split(accent).join(color);
+    return `<g class="custom-product-sticker" data-design-sticker="${id}" transform="translate(${x} ${y}) rotate(${rotation}) scale(${scale})"><rect class="custom-product-sticker-hit" x="-21" y="-21" width="42" height="42" rx="3"/>${stickerBody}</g>`;
+  }).join('');
+  const formTransform = `translate(60 26) scale(${formWidth} ${formLength}) translate(-60 -26)`;
   const hangerPath = hanger
     ? '<path d="M56 16Q55 8 61 8Q69 8 65 16L60 20L26 36H94L60 20" stroke="#a88d6a" stroke-width="2.2" fill="none"/>'
     : '';
-  return wrap(cel(`${hangerPath}<g stroke-linejoin="round">${body}</g>`), 120, 140);
+  if (atelierBody) return wrap(`<g transform="${formTransform}"><g fill="none" stroke-linecap="round" stroke-linejoin="round">${atelierBody}</g>${customLayer}</g>${motifLayer}${stickerLayer}`, 120, 140);
+  return wrap(`${cel(`${hangerPath}<g transform="${formTransform}"><g stroke-linejoin="round">${body}</g>${customLayer}</g>`)}${motifLayer}${stickerLayer}`, 120, 140);
 }
 
 export const characterSvg = characterIllustration;

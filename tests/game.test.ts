@@ -682,13 +682,13 @@ describe('decoration, upgrades and resilient saves', () => {
     expect(landSize(store.state)).toBe(8);
     expect(canPlace([], { uid: 'edge', id: 'plant', x: 7, y: 0, rotation: 0 }, store.state.landLevel)).toBe(true);
     store.state.money = 50000000;
-    for (let level = 2; level <= 7; level++) expect(store.expandLand()).toBe(true);
-    expect(store.state.landLevel).toBe(7);
-    expect(landSize(store.state)).toBe(14);
+    for (let level = 2; level <= 9; level++) expect(store.expandLand()).toBe(true);
+    expect(store.state.landLevel).toBe(9);
+    expect(landSize(store.state)).toBe(16);
     expect(store.expandLand()).toBe(false);
     expect(store.renameDisplayFixture('starter-rack', 'Kệ Best Seller')).toBe(true);
     const parsed = parseSave(JSON.stringify(store.state));
-    expect(parsed.landLevel).toBe(7);
+    expect(parsed.landLevel).toBe(9);
     expect(parsed.layout.find(item => item.uid === 'starter-rack')?.customName).toBe('Kệ Best Seller');
   });
   it('adds 30 seconds only when shop and land levels advance together', () => {

@@ -1,5 +1,5 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { Customer, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingOrder, PlacedFurniture, Product, SaleResult, StaffAssignment, StaffCandidate, StaffMember, SupplierId } from '../types';
+import type { CustomProduct, Customer, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
 import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
@@ -7,6 +7,7 @@ import { recordPublicShopReview, shopReviewStats } from './reviews';
 import { CAMPAIGN_GUIDE_SEEN, campaignIsComplete, campaignOffers } from './campaigns';
 import { createVipAppointment, crisisComplete, RETURN_EXCHANGE_SHIPPING_FEE, supplierFor, suppliers } from './operations';
 import { gameDate } from './calendar';
+import { ATELIER_PURCHASE_COST, ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProduct, unregisterCustomProduct } from '../data/atelier';
 
 const STAFF_NAMES = [
   'Mai An', 'Thảo Nhi', 'Gia Hân', 'Bảo Trân', 'Minh Châu', 'Khánh Linh', 'Yến Vy', 'Hà My', 'Ngọc Lam', 'Tú Anh',
@@ -486,6 +487,212 @@ export class GameStore {
     for (const p of items) this.state.inventory[p.id] = (this.state.inventory[p.id] ?? 0) + quantity;
     this.commit();
     this.toast(`Đã nhập ×${quantity} bộ (${items.length * quantity} món) vào kho!`);
+    return true;
+  }
+  atelierAvailable() {
+    return this.state.level >= ATELIER_UNLOCK_LEVEL && this.state.atelierOwned;
+  }
+  buyAtelier() {
+    const s = this.state;
+    if (s.level < ATELIER_UNLOCK_LEVEL || s.phase === 'open') return false;
+    if (s.atelierOwned) return false;
+    if (s.money < ATELIER_PURCHASE_COST) { this.toast('Bạn cần 30.000.000₫ để mua xưởng may.', 'error'); return false; }
+    s.money -= ATELIER_PURCHASE_COST;
+    s.stats.spent += ATELIER_PURCHASE_COST;
+    s.atelierOwned = true;
+    this.commit();
+    this.toast('Đã mua xưởng may. Không gian này giờ thuộc về boutique của bạn!');
+    return true;
+  }
+  buyAtelierMaterial(materialId: string, quantity: number) {
+    const s = this.state;
+    const material = atelierMaterials.find(item => item.id === materialId);
+    quantity = Math.max(1, Math.min(30, Math.floor(quantity)));
+    const supplier = supplierFor(s);
+    if (!material || s.level < ATELIER_UNLOCK_LEVEL || s.level < material.level || s.phase === 'open') return false;
+    if (quantity < supplier.minOrder) { this.toast(`${supplier.name} yêu cầu tối thiểu ${supplier.minOrder} đơn vị mỗi loại.`, 'error'); return false; }
+    const pendingMaterialOrders = s.pendingMaterialOrders ?? (s.pendingMaterialOrders = []);
+    const reserved = pendingMaterialOrders.filter(order => order.materialId === materialId).reduce((sum, order) => sum + order.quantity, 0);
+    if ((s.materialInventory[material.id] ?? 0) + reserved + quantity > 9999) { this.toast('Kho nguyên liệu và hàng đang về đã đầy.', 'error'); return false; }
+    const unitPrice = Math.round(material.price * currentEvent(s).discount * supplier.priceFactor);
+    const cost = unitPrice * quantity;
+    if (s.money < cost) { this.toast('Chưa đủ tiền mua nguyên vật liệu.', 'error'); return false; }
+    s.money -= cost; s.stats.spent += cost;
+    const delay = supplier.deliveryDays && this.random() > supplier.reliability ? 1 : 0;
+    const deliveryDays = supplier.deliveryDays + delay;
+    if (deliveryDays > 0) {
+      const order: PendingMaterialOrder = { id: `material-${crypto.randomUUID()}`, materialId, quantity, cost, arrivalDay: s.day + deliveryDays, supplierId: supplier.id };
+      pendingMaterialOrders.push(order);
+      s.supplierRelations[supplier.id] = Math.min(100, s.supplierRelations[supplier.id] + 1);
+      this.commit();
+      this.toast(`Đã đặt ${material.name} ×${quantity} từ ${supplier.name}. Dự kiến về sau ${deliveryDays} ngày.`);
+      return true;
+    }
+    s.materialInventory[material.id] = (s.materialInventory[material.id] ?? 0) + quantity;
+    this.commit();
+    this.toast(`Đã nhập ${material.name} ×${quantity} vào kho nguyên liệu.`);
+    return true;
+  }
+  createAtelierSample(style: Style, selection: Record<string, number>) {
+    const s = this.state;
+    if (!this.atelierAvailable() || s.phase === 'open' || s.atelierDraft) return { success: false as const, reason: 'unavailable' as const };
+    const ingredients = Object.entries(selection)
+      .map(([id, quantity]) => ({ material: atelierMaterials.find(item => item.id === id), quantity: Math.max(0, Math.floor(quantity)) }))
+      .filter((item): item is { material: typeof atelierMaterials[number]; quantity: number } => !!item.material && item.quantity > 0);
+    if (ingredients.length < 2) { this.toast('Một mẫu cần kết hợp ít nhất 2 loại nguyên vật liệu.', 'error'); return { success: false as const, reason: 'ingredients' as const }; }
+    if (ingredients.length > 3) { this.toast('Một mẫu chỉ được kết hợp tối đa 3 loại nguyên vật liệu.', 'error'); return { success: false as const, reason: 'ingredients' as const }; }
+    if (ingredients.some(item => item.material.level > s.level || (s.materialInventory[item.material.id] ?? 0) < item.quantity)) {
+      this.toast('Kho nguyên liệu không đủ cho mẫu thiết kế này.', 'error');
+      return { success: false as const, reason: 'stock' as const };
+    }
+    const usedMaterials = Object.fromEntries(ingredients.map(item => [item.material.id, item.quantity]));
+    const recordCraft = (success: boolean, recipeId?: string) => {
+      const history = s.atelierCraftHistory ?? (s.atelierCraftHistory = []);
+      history.push({ id: `craft-${crypto.randomUUID()}`, style, materials: usedMaterials, ...(recipeId ? { recipeId } : {}), success, day: s.day });
+      if (history.length > 50) history.splice(0, history.length - 50);
+    };
+    for (const item of ingredients) s.materialInventory[item.material.id] -= item.quantity;
+    const recipe = atelierRecipes.find(candidate => candidate.style === style
+      && Object.keys(candidate.materials).length === ingredients.length
+      && ingredients.every(item => candidate.materials[item.material.id] === item.quantity));
+    if (!recipe) {
+      recordCraft(false);
+      this.commit();
+      this.toast('Công thức không thành công. Toàn bộ nguyên liệu tạo mẫu đã bị tiêu hao.', 'error');
+      return { success: false as const, reason: 'wrong-recipe' as const };
+    }
+    const requiredLevel = Math.max(ATELIER_UNLOCK_LEVEL, ...Object.keys(recipe.materials).map(id => atelierMaterials.find(material => material.id === id)?.level ?? ATELIER_UNLOCK_LEVEL));
+    const product: CustomProduct = {
+      id: `custom-${recipe.id}-${s.day}-${++s.operationSequence}`,
+      name: recipe.name, category: recipe.category, style: recipe.style, color: recipe.color, colorName: recipe.colorName,
+      buyPrice: atelierRecipeCost(recipe), sellPrice: recipe.sellPrice, quality: recipe.quality, level: requiredLevel,
+      art: recipe.art, subcategory: 'Thiết kế cá nhân', occasions: ['city', 'party'], secondaryStyles: [],
+      custom: true, recipeId: recipe.id, createdDay: s.day,
+    };
+    const craftedRecipeIds = s.craftedRecipeIds ?? (s.craftedRecipeIds = []);
+    if (!craftedRecipeIds.includes(recipe.id)) craftedRecipeIds.push(recipe.id);
+    recordCraft(true, recipe.id);
+    s.atelierDraft = product;
+    this.commit();
+    return { success: true as const, product };
+  }
+  acceptAtelierSample() {
+    const s = this.state, product = s.atelierDraft;
+    if (!product || !this.atelierAvailable()) return false;
+    s.customProducts.push(product);
+    registerCustomProduct(product);
+    s.inventory[product.id] = Math.min(999, (s.inventory[product.id] ?? 0) + 1);
+    s.prices[product.id] = product.sellPrice;
+    s.atelierDraft = null;
+    this.commit();
+    this.toast(`${product.name} đã trở thành bản thiết kế và được thêm 1 mẫu vào kho.`);
+    return true;
+  }
+  discardAtelierSample() {
+    if (!this.state.atelierDraft) return false;
+    this.state.atelierDraft = null;
+    this.commit();
+    this.toast('Đã xoá mẫu thử. Nguyên liệu đã sử dụng không được hoàn lại.');
+    return true;
+  }
+  renameCustomProduct(productId: string, name: string) {
+    const product = this.state.customProducts.find(item => item.id === productId);
+    if (!product) return false;
+    const cleanName = name.trim().replace(/\s+/g, ' ').slice(0, 32);
+    if (!cleanName) {
+      this.toast('Tên sản phẩm không được để trống.', 'error');
+      return false;
+    }
+    if (product.name === cleanName) return true;
+    product.name = cleanName;
+    this.commit();
+    this.toast(`Đã đổi tên thiết kế thành ${cleanName}.`);
+    return true;
+  }
+  customizeCustomProduct(productId: string, name: string, designColor: string, designStrokes: ProductDesignStroke[], designMotif?: ProductDesignMotif, designAccentColor?: string, designMotifScale?: number, designMotifX?: number, designMotifY?: number, designFormWidth?: number, designFormLength?: number, designMotifRotation?: number, designMotifOpacity?: number, designMotifRepeat?: 1 | 3 | 5, designShapePoints?: ProductDesignPoint[], designShapeSmooth?: boolean, designStrokeColor?: string, designStrokeWidth?: number, designStickers?: ProductDesignSticker[]) {
+    const product = this.state.customProducts.find(item => item.id === productId);
+    const cleanName = name.trim().replace(/\s+/g, ' ').slice(0, 32);
+    if (!product || !cleanName || !/^#[0-9a-f]{6}$/i.test(designColor)) return false;
+    product.name = cleanName;
+    product.designColor = designColor;
+    product.designStrokes = designStrokes.slice(0, 80).map(stroke => ({
+      color: /^#[0-9a-f]{6}$/i.test(stroke.color) ? stroke.color : '#d4429a',
+      width: Math.max(.6, Math.min(8, stroke.width)),
+      points: stroke.points.slice(0, 240).map(point => ({ x: Math.max(0, Math.min(120, point.x)), y: Math.max(0, Math.min(140, point.y)) })),
+    })).filter(stroke => stroke.points.length > 0);
+    if (designMotif !== undefined) product.designMotif = (['none', 'heart', 'star', 'bow', 'flower', 'stripes'] as ProductDesignMotif[]).includes(designMotif) ? designMotif : 'none';
+    if (designAccentColor !== undefined) product.designAccentColor = /^#[0-9a-f]{6}$/i.test(designAccentColor) ? designAccentColor : '#d4429a';
+    if (designMotifScale !== undefined) product.designMotifScale = Math.max(.7, Math.min(1.35, Number(designMotifScale) || 1));
+    if (designMotifX !== undefined) product.designMotifX = Math.max(38, Math.min(82, Number(designMotifX) || 60));
+    if (designMotifY !== undefined) product.designMotifY = Math.max(42, Math.min(100, Number(designMotifY) || 69));
+    if (designFormWidth !== undefined) product.designFormWidth = Math.max(.84, Math.min(1.16, Number(designFormWidth) || 1));
+    if (designFormLength !== undefined) product.designFormLength = Math.max(.84, Math.min(1.18, Number(designFormLength) || 1));
+    if (designMotifRotation !== undefined) product.designMotifRotation = Math.max(-40, Math.min(40, Number(designMotifRotation) || 0));
+    if (designMotifOpacity !== undefined) product.designMotifOpacity = Math.max(.4, Math.min(1, Number(designMotifOpacity) || 1));
+    if (designMotifRepeat !== undefined) product.designMotifRepeat = ([1, 3, 5] as number[]).includes(designMotifRepeat) ? designMotifRepeat : 1;
+    if (designShapePoints !== undefined) {
+      const shapePoints = designShapePoints.slice(0, 48).map(point => ({
+        x: Math.max(4, Math.min(116, Number(point.x) || 60)),
+        y: Math.max(5, Math.min(138, Number(point.y) || 70)),
+      }));
+      if (shapePoints.length >= 6) product.designShapePoints = shapePoints;
+    }
+    if (designShapeSmooth !== undefined) product.designShapeSmooth = designShapeSmooth;
+    if (designStrokeColor !== undefined) product.designStrokeColor = /^#[0-9a-f]{6}$/i.test(designStrokeColor) ? designStrokeColor : '#795267';
+    if (designStrokeWidth !== undefined) product.designStrokeWidth = Math.max(.6, Math.min(4, Number(designStrokeWidth) || 2));
+    if (designStickers !== undefined) product.designStickers = designStickers.slice(0, 24).map((sticker, index) => ({
+      id: /^[a-z0-9-]{1,50}$/i.test(sticker.id) ? sticker.id : `sticker-${index}`,
+      kind: (['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs'] as ProductDesignSticker['kind'][]).includes(sticker.kind) ? sticker.kind : 'heart',
+      x: Math.max(6, Math.min(114, Number(sticker.x) || 60)),
+      y: Math.max(7, Math.min(133, Number(sticker.y) || 69)),
+      scale: Math.max(.35, Math.min(2.5, Number(sticker.scale) || 1)),
+      rotation: Math.max(-180, Math.min(180, Number(sticker.rotation) || 0)),
+      color: /^#[0-9a-f]{6}$/i.test(sticker.color) ? sticker.color : '#d4429a',
+    }));
+    this.commit();
+    this.toast(`Đã lưu phiên bản mới của ${cleanName}.`);
+    return true;
+  }
+  deleteCustomProduct(productId: string) {
+    const s = this.state;
+    const product = s.customProducts.find(item => item.id === productId);
+    if (!product) return false;
+    if (s.tailoringJobs.some(job => job.productId === productId)) {
+      this.toast('Không thể xóa bản thiết kế đang nằm trên chuyền may.', 'error');
+      return false;
+    }
+    if (s.onlineOrders.some(order => order.productId === productId || order.productIds?.includes(productId))) {
+      this.toast('Hãy giao xong đơn online chứa sản phẩm này trước khi xóa.', 'error');
+      return false;
+    }
+    s.customProducts = s.customProducts.filter(item => item.id !== productId);
+    s.onlineListings = s.onlineListings.filter(id => id !== productId);
+    for (const fixture of s.layout) {
+      if (fixture.displayItems) fixture.displayItems = fixture.displayItems.filter(id => id !== productId);
+    }
+    delete s.inventory[productId];
+    delete s.prices[productId];
+    unregisterCustomProduct(productId);
+    this.commit();
+    this.toast(`Đã xóa bản thiết kế ${product.name}.`);
+    return true;
+  }
+  startTailoringBatch(productId: string, quantity: number) {
+    const s = this.state;
+    const product = s.customProducts.find(item => item.id === productId);
+    const recipe = product && atelierRecipes.find(item => item.id === product.recipeId);
+    quantity = Math.max(5, Math.min(50, Math.ceil(quantity / 5) * 5));
+    if (!product || !recipe || !this.atelierAvailable() || s.phase === 'open') return false;
+    const requirements = Object.entries(recipe.materials).map(([id, amount]) => ({ id, amount: amount * quantity }));
+    if (requirements.some(item => (s.materialInventory[item.id] ?? 0) < item.amount)) {
+      this.toast('Không đủ nguyên liệu để sản xuất số lượng đã chọn.', 'error'); return false;
+    }
+    if ((s.inventory[product.id] ?? 0) + s.tailoringJobs.filter(job => job.productId === product.id).reduce((sum, job) => sum + job.quantity, 0) + quantity > 999) return false;
+    for (const item of requirements) s.materialInventory[item.id] -= item.amount;
+    const days = Math.max(1, Math.ceil(quantity / 5));
+    s.tailoringJobs.push({ id: `tailoring-${crypto.randomUUID()}`, productId, quantity, readyDay: s.day + days });
+    this.commit();
+    this.toast(`Đã chuyển ${product.name} ×${quantity} vào sản xuất. Hoàn thành sau ${days} ngày.`);
     return true;
   }
   postRecruitment(salary: number) {
@@ -1372,6 +1579,7 @@ export class GameStore {
     this.state.nextArrivalIn = 0;
     this.state.patience = 0;
     this.receiveOrders();
+    this.receiveTailoringJobs();
     this.processStaffNewDay();
     this.processAdvancedOperationsNewDay();
     this.commit();
@@ -1379,7 +1587,7 @@ export class GameStore {
   }
   /** Partial delivery keeps paid overflow in transit, including saves from older builds. */
   private receiveOrders() {
-    const arrived: { productId: string; productName: string; quantity: number; supplierId?: string }[] = [];
+    const arrived: { productId: string; productName: string; quantity: number; supplierId?: string; kind?: 'product' | 'material' }[] = [];
     this.state.pendingOrders = this.state.pendingOrders.flatMap(o => {
       const p = products.find(p => p.id === o.productId);
       if (!p || o.arrivalDay > this.state.day) return [o];
@@ -1392,7 +1600,35 @@ export class GameStore {
       if (received === o.quantity) return [];
       return [{ ...o, quantity: o.quantity - received, cost: Math.round(o.cost * (o.quantity - received) / o.quantity) }];
     });
+    this.state.pendingMaterialOrders = (this.state.pendingMaterialOrders ?? []).flatMap(order => {
+      const material = atelierMaterials.find(item => item.id === order.materialId);
+      if (!material || order.arrivalDay > this.state.day) return [order];
+      const stock = this.state.materialInventory[material.id] ?? 0;
+      const received = Math.min(order.quantity, Math.max(0, 9999 - stock));
+      if (!received) return [order];
+      this.state.materialInventory[material.id] = stock + received;
+      arrived.push({ productId: material.id, productName: material.name, quantity: received, kind: 'material', ...(order.supplierId ? { supplierId: order.supplierId } : {}) });
+      this.toast(`Nguyên liệu về kho: ${material.name} ×${received}.`);
+      if (received === order.quantity) return [];
+      return [{ ...order, quantity: order.quantity - received, cost: Math.round(order.cost * (order.quantity - received) / order.quantity) }];
+    });
     if (arrived.length) this.emit({ type: 'orders-arrived', items: arrived });
+  }
+  private receiveTailoringJobs() {
+    const s = this.state;
+    s.tailoringJobs = s.tailoringJobs.filter(job => {
+      if (job.readyDay > s.day) return true;
+      const product = s.customProducts.find(item => item.id === job.productId);
+      if (!product) return false;
+      const stock = s.inventory[product.id] ?? 0;
+      const received = Math.min(job.quantity, Math.max(0, 999 - stock));
+      if (!received) return true;
+      s.inventory[product.id] = stock + received;
+      this.toast(`Xưởng may hoàn thành: ${product.name} ×${received}.`);
+      if (received === job.quantity) return false;
+      job.quantity -= received;
+      return true;
+    });
   }
   private consumeDisplayedItem(productId: string) {
     for (const placed of this.state.layout) {
@@ -1553,7 +1789,12 @@ export class GameStore {
   upgrade() {
     const next = levels[this.state.level]; if (!next) return;
     if (this.state.xp < next.xp || this.state.money < next.cost) { this.toast(`Cần ${next.xp} XP và ${next.cost.toLocaleString('vi-VN')}₫ để nâng cấp.`, 'error'); return; }
-    this.state.money -= next.cost; this.state.level++; this.commit(); this.toast(this.state.level === 3 ? 'Lên cấp 3! Studio hợp tác đã mở: nhận hợp đồng thương hiệu kéo dài nhiều ngày.' : `Lên cấp ${this.state.level}! Thêm sản phẩm và nội thất mới đã mở khóa.`);
+    this.state.money -= next.cost; this.state.level++; this.commit();
+    this.toast(this.state.level === 3
+      ? 'Lên cấp 3! Studio hợp tác đã mở: nhận hợp đồng thương hiệu kéo dài nhiều ngày.'
+      : this.state.level === ATELIER_UNLOCK_LEVEL
+        ? 'Lên cấp 8! Xưởng may cá nhân và kho nguyên vật liệu đã mở khóa.'
+        : `Lên cấp ${this.state.level}! Thêm sản phẩm và nội thất mới đã mở khóa.`);
   }
   startCampaign(id: string) {
     const s = this.state;
@@ -1667,6 +1908,40 @@ export class GameStore {
       s.recruitmentPost = { salary: 120000, postedDay: s.day, applicantsDay: s.day };
       this.generateStaffApplicants();
     };
+    const prepareAtelier = (level = ATELIER_UNLOCK_LEVEL, materialQuantity = 20) => {
+      if (s.phase !== 'preparation') {
+        s.phase = 'preparation';
+        s.activeVisits = [];
+        s.currentVisitId = null;
+        s.currentCustomerId = null;
+        s.customerMode = null;
+        s.patience = 0;
+      }
+      s.level = Math.max(s.level, level);
+      s.xp = Math.max(s.xp, levels[Math.min(level - 1, levels.length - 1)]?.xp ?? 0);
+      s.money = Math.max(s.money, 10000000);
+      s.atelierOwned = true;
+      for (const material of atelierMaterials.filter(item => item.level <= s.level)) {
+        s.materialInventory[material.id] = Math.max(materialQuantity, s.materialInventory[material.id] ?? 0);
+      }
+    };
+    const ensureDebugBlueprint = () => {
+      const recipe = atelierRecipes.find(item => item.id === 'cloud-tee') ?? atelierRecipes[0];
+      let product = s.customProducts.find(item => item.recipeId === recipe.id);
+      if (!product) {
+        product = {
+          id: 'custom-debug-cloud-tee', name: recipe.name, category: recipe.category, style: recipe.style,
+          color: recipe.color, colorName: recipe.colorName, buyPrice: atelierRecipeCost(recipe), sellPrice: recipe.sellPrice,
+          quality: recipe.quality, level: ATELIER_UNLOCK_LEVEL, art: recipe.art, subcategory: 'Thiết kế cá nhân',
+          occasions: ['city', 'party'], secondaryStyles: [], custom: true, recipeId: recipe.id, createdDay: s.day,
+        };
+        s.customProducts.push(product);
+      }
+      registerCustomProduct(product);
+      s.inventory[product.id] = Math.max(1, s.inventory[product.id] ?? 0);
+      s.prices[product.id] = product.sellPrice;
+      return { product, recipe };
+    };
     switch (action) {
       case 'funds':
         s.money += 1000000;
@@ -1706,6 +1981,55 @@ export class GameStore {
         );
         this.commit(); this.toast('Debug: Đã tạo dữ liệu thử cho nguồn hàng, ca làm, đổi trả, VIP, couture và hàng chờ giao.'); return true;
       }
+      case 'atelier-ready':
+        prepareAtelier();
+        this.commit(); this.toast('Debug: Đã mở shop cấp 8, sở hữu xưởng và thêm vật liệu cơ bản.'); return true;
+      case 'atelier-max':
+        prepareAtelier(10, 50);
+        s.landLevel = Math.max(s.landLevel ?? 0, landExpansion.length - 1);
+        this.commit(); this.toast('Debug: Đã mở cấp 10, mặt bằng tối đa và toàn bộ vật liệu cao cấp.'); return true;
+      case 'atelier-sample': {
+        prepareAtelier();
+        const recipe = atelierRecipes.find(item => item.id === 'cloud-tee') ?? atelierRecipes[0];
+        s.atelierDraft = {
+          id: `custom-debug-draft-${s.day}`, name: recipe.name, category: recipe.category, style: recipe.style,
+          color: recipe.color, colorName: recipe.colorName, buyPrice: atelierRecipeCost(recipe), sellPrice: recipe.sellPrice,
+          quality: recipe.quality, level: ATELIER_UNLOCK_LEVEL, art: recipe.art, subcategory: 'Thiết kế cá nhân',
+          occasions: ['city', 'party'], secondaryStyles: [], custom: true, recipeId: recipe.id, createdDay: s.day,
+        };
+        this.commit(); this.toast('Debug: Đã tạo mẫu thử chờ duyệt trong Xưởng may.'); return true;
+      }
+      case 'atelier-wrong-recipe':
+        prepareAtelier();
+        s.atelierDraft = null;
+        s.materialInventory.cotton = Math.max(1, s.materialInventory.cotton ?? 0);
+        s.materialInventory.ribbon = Math.max(1, s.materialInventory.ribbon ?? 0);
+        this.createAtelierSample('Casual', { cotton: 1, ribbon: 1 });
+        return true;
+      case 'atelier-blueprint': {
+        prepareAtelier();
+        s.atelierDraft = null;
+        const { product } = ensureDebugBlueprint();
+        this.commit(); this.toast(`Debug: Đã duyệt ${product.name} và thêm 1 mẫu vào kho.`); return true;
+      }
+      case 'atelier-batch': {
+        prepareAtelier();
+        const { product, recipe } = ensureDebugBlueprint();
+        for (const [materialId, amount] of Object.entries(recipe.materials)) {
+          s.materialInventory[materialId] = Math.max(amount * 10, s.materialInventory[materialId] ?? 0) - amount * 10;
+        }
+        s.tailoringJobs.push({ id: `tailoring-debug-${Date.now()}`, productId: product.id, quantity: 10, readyDay: s.day + 2 });
+        this.commit(); this.toast('Debug: Đã tạo đơn may 10 sản phẩm, hoàn thành sau 2 ngày.'); return true;
+      }
+      case 'atelier-deliver':
+        prepareAtelier();
+        if (!s.tailoringJobs.length) {
+          const { product } = ensureDebugBlueprint();
+          s.tailoringJobs.push({ id: `tailoring-debug-${Date.now()}`, productId: product.id, quantity: 10, readyDay: s.day });
+        }
+        for (const job of s.tailoringJobs) job.readyDay = s.day;
+        this.receiveTailoringJobs();
+        this.commit(); this.toast('Debug: Đã hoàn tất và nhập các đơn may vào kho.'); return true;
       case 'recruitment-ready':
         prepareRecruitment();
         this.commit(); this.toast('Debug: Shop cấp 3, mặt bằng cấp 3 và ngân sách đã sẵn sàng.'); return true;
@@ -1772,5 +2096,5 @@ export class GameStore {
       default: return false;
     }
   }
-  reset() { this.state = initialState(); this.commit(); }
+  reset() { clearRegisteredCustomProducts(); this.state = initialState(); this.commit(); }
 }

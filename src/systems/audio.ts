@@ -4,8 +4,6 @@ const MUSIC_TRACK_URL = `${import.meta.env.BASE_URL}assets/audio/boutique-theme.
 export class AudioSystem {
   private context?: AudioContext;
   private musicTrack?: HTMLAudioElement;
-  private musicSource?: MediaElementAudioSourceNode;
-  private musicGain?: GainNode;
   private musicVolume = 0.55;
   enabled = true;
 
@@ -13,33 +11,12 @@ export class AudioSystem {
     try {
       this.context ??= new AudioContext();
       if (this.context.state === 'suspended') await this.context.resume();
-      this.connectMusicOutput();
     } catch { /* A browser without audio can still play the complete game. */ }
   }
 
   setMusicVolume(value: number) {
     this.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
-    if (this.musicGain && this.context) {
-      this.musicGain.gain.setValueAtTime(this.musicVolume, this.context.currentTime);
-    } else if (this.musicTrack) {
-      this.musicTrack.volume = this.musicVolume;
-    }
-  }
-
-  private connectMusicOutput() {
-    if (!this.context || !this.musicTrack || this.musicSource) return;
-    try {
-      this.musicSource = this.context.createMediaElementSource(this.musicTrack);
-      this.musicGain = this.context.createGain();
-      this.musicGain.gain.setValueAtTime(this.musicVolume, this.context.currentTime);
-      this.musicSource.connect(this.musicGain);
-      this.musicGain.connect(this.context.destination);
-      this.musicTrack.volume = 1;
-    } catch {
-      this.musicSource = undefined;
-      this.musicGain = undefined;
-      this.musicTrack.volume = this.musicVolume;
-    }
+    if (this.musicTrack) this.musicTrack.volume = this.musicVolume;
   }
 
   private tone(frequency: number, start: number, duration: number, volume = .045, type: OscillatorType = 'sine') {
@@ -59,12 +36,12 @@ export class AudioSystem {
     oscillator.stop(t + duration + .03);
   }
 
-  play(kind: 'click' | 'sale' | 'error' | 'bell' | 'reward' | 'spend') {
+  play(kind: 'click' | 'sale' | 'error' | 'bell' | 'reward' | 'coin') {
     if (!this.enabled) return;
-    if (kind === 'spend') {
-      this.tone(1047, 0, .12, .038, 'triangle');
-      this.tone(784, .055, .15, .042, 'triangle');
-      this.tone(523, .12, .2, .045, 'sine');
+    if (kind === 'coin') {
+      this.tone(1568, 0, .075, .055, 'sine');
+      this.tone(2093, .035, .11, .05, 'triangle');
+      this.tone(2637, .09, .13, .035, 'sine');
       return;
     }
     const notes = { click: [600], sale: [523, 659, 784, 1047], error: [260, 220], bell: [880, 1175], reward: [523, 659, 784, 1047, 1318] }[kind];
@@ -77,12 +54,17 @@ export class AudioSystem {
       this.musicTrack.loop = true;
       this.musicTrack.preload = 'auto';
       this.musicTrack.volume = this.musicVolume;
+      // The sale-speed control only affects gameplay. Keep music at its original
+      // pitch and rate, including on Safari where media pitch handling varies.
+      this.musicTrack.defaultPlaybackRate = 1;
+      this.musicTrack.playbackRate = 1;
+      this.musicTrack.preservesPitch = true;
     }
-    this.connectMusicOutput();
     if (!enabled) {
       this.musicTrack.pause();
       return;
     }
+    this.musicTrack.playbackRate = 1;
     void this.musicTrack.play().catch(() => { /* Playback resumes after the next user gesture. */ });
   }
 }

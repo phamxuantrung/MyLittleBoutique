@@ -3,25 +3,13 @@ import type { Customer, CustomerLoyalty, CustomerVisit, Furniture, GameState, Lo
 import { lookupCustomer } from './customerGen';
 
 export const currentTrend = (state: GameState) => trends[(state.day - 1) % trends.length];
-export const currentEvent = (state: GameState) => dailyEvents[(state.day - 1) % dailyEvents.length];
-export const buyPrice = (state: GameState, product: Product) => Math.round(product.buyPrice * currentEvent(state).discount);
+export const currentEvent = (state: GameState) => {
+  if (state.day <= 1 || dailyEvents.length <= 1) return dailyEvents[0];
+  return dailyEvents[1 + (state.day - 2) % (dailyEvents.length - 1)];
+};
+const supplierFactor = (state: GameState) => state.activeSupplierId === 'global' ? .88 : state.activeSupplierId === 'wholesale' ? .95 : 1;
+export const buyPrice = (state: GameState, product: Product) => Math.round(product.buyPrice * currentEvent(state).discount * supplierFactor(state));
 export const sellPrice = (state: GameState, product: Product) => state.prices[product.id] ?? product.sellPrice;
-
-/**
- * Tỷ lệ giảm giá khi nhập số lượng lớn (sỉ)
- * x3: 5%, x5: 10%, x10: 15%, x20: 20%
- */
-export function bulkDiscountRate(quantity: number): number {
-  if (quantity >= 20) return 0.20;
-  if (quantity >= 10) return 0.15;
-  if (quantity >= 5) return 0.10;
-  if (quantity >= 3) return 0.05;
-  return 0;
-}
-
-export function bulkDiscountFactor(quantity: number): number {
-  return 1 - bulkDiscountRate(quantity);
-}
 
 export const productStyles = (product: Product) => [product.style, ...(product.secondaryStyles ?? [])];
 const matchesTrendStyle = (product: Product, trend: (typeof trends)[number]) =>
@@ -79,6 +67,11 @@ export function displayUpgradeCost(fixture: Furniture, placed: PlacedFurniture):
 const customerTraffic = (state: GameState) => Math.max(2, Math.min(14,
   3 + Math.floor(state.level * .7) + Math.min(6, Math.floor(decorAppealScore(state) / 4)) + landExpansion[landTier(state)].traffic + currentEvent(state).extra));
 export const DAY_DURATION = 180;
+export const MAX_DAY_DURATION = 300;
+export function dayDuration(state: Pick<GameState, 'level' | 'landLevel'>) {
+  const matchedLevel = Math.min(Math.max(1, state.level), Math.max(1, Math.floor(state.landLevel ?? 0) + 1));
+  return Math.min(MAX_DAY_DURATION, DAY_DURATION + (matchedLevel - 1) * 30);
+}
 export const landExpansion = [
   { size: 7, cost: 0, rent: 0, traffic: 0 },
   { size: 8, cost: 350000, rent: 30000, traffic: 2 },
@@ -101,12 +94,17 @@ export function staffCapacity(state: GameState) {
   const byLevel = state.level < 3 ? 0 : 1 + Math.floor((state.level - 3) / 2);
   return Math.min(byLand, byLevel);
 }
+export const STAFF_SALARY_MIN = 60000;
+export const STAFF_SALARY_MAX = 400000;
+export const STAFF_SALARY_DEFAULT = 100000;
+export const STAFF_RECRUITMENT_FEE = 30000;
 export function nextStaffRequirement(state: GameState) {
-  const nextIndex = state.employees.length;
-  return { level: 3 + nextIndex * 2, landLevel: 2 + nextIndex };
+  return { level: 3, landLevel: 2 };
 }
 export function activeEmployees(state: GameState) {
-  return state.employees.filter(employee => !employee.leaveUntilDay || employee.leaveUntilDay <= state.day);
+  return state.employees.filter(employee => (!employee.leaveUntilDay || employee.leaveUntilDay <= state.day)
+    && (employee.assignment ?? 'service') !== 'off' && (employee.energy ?? 100) >= 15)
+    .slice(0, staffCapacity(state));
 }
 export function staffAdviceBonus(state: GameState) {
   const staff = activeEmployees(state);
@@ -138,7 +136,8 @@ export function customerNeedsAdvice(state: GameState, customer: Customer): boole
 export function arrivalDelay(state: GameState, random: () => number): number {
   // Đầu game khoảng 19–35 giây giữa hai lượt; shop phát triển sẽ đông dần
   // nhưng vẫn luôn có nhịp nghỉ để người chơi kịp xử lý khách đang chờ.
-  return Math.max(10, Math.round(26 + random() * 16 - customerTraffic(state)));
+  const crisisPenalty = state.reputationCrisis ? 7 : 0;
+  return Math.max(10, Math.round(26 + random() * 16 - customerTraffic(state) + crisisPenalty));
 }
 
 /** EXP tăng theo quy mô đơn, nhưng có trần để đơn lớn không đẩy cấp quá nhanh. */

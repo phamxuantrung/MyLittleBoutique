@@ -5,6 +5,7 @@ import type { GameStore } from '../systems/store';
 import { activeCustomer, activeEmployees, activeVisit, canPlace, customerNeedsAdvice, isWallFurnitureId, landExpansion, landSize, nextLandExpansion, randomBrowseThought } from '../systems/rules';
 import type { PlacedFurniture, SaleResult, Customer } from '../types';
 import { lookupCustomer } from '../systems/customerGen';
+import { gameDate } from '../systems/calendar';
 
 export const toWorld = (x: number, y: number) => ({ x: 500 + (x - y) * 56, y: 225 + (x + y) * 28 });
 const furnitureFootprint = (item: PlacedFurniture) => {
@@ -39,6 +40,11 @@ const shopSignTextureKey = (side: 'left' | 'right', name: string) => {
   const hash = Array.from(name).reduce((value, char) => Math.imul(value ^ (char.codePointAt(0) ?? 0), 16777619) >>> 0, 2166136261);
   return `f-shop-sign-${side}-${hash.toString(36)}`;
 };
+
+// Ignore faint antialiasing and decorative shadows when hit-testing furniture.
+// This keeps clicks on the visible painted object instead of its transparent SVG box.
+const FURNITURE_HIT_ALPHA_TOLERANCE = 40;
+const FURNITURE_HIT_RADIUS = 2;
 
 const shopSignTextLayout = (name: string) => {
   const normalized = (name.trim() || 'My Little Boutique').normalize('NFC');
@@ -148,6 +154,9 @@ export class ShopScene extends Phaser.Scene {
   private resizeObserver?: ResizeObserver;
   private dragGhost?: Phaser.GameObjects.Graphics;
   private selectionArrows?: Phaser.GameObjects.Graphics;
+  private selectionPulseTween?: Phaser.Tweens.Tween;
+  private selectionPulseImage?: Phaser.GameObjects.Image;
+  private selectionPulseUid?: string;
   private zoomed = false;
   private departureTimer?: Phaser.Time.TimerEvent;
   private isPanning = false;
@@ -161,6 +170,19 @@ export class ShopScene extends Phaser.Scene {
   private isDraggingPiece = false;
   private selectionClearBlockedUntil = 0;
   private currentTab = 'shop';
+  private furniturePixelHitTest = (_hitArea: unknown, x: number, y: number, gameObject: Phaser.GameObjects.GameObject) => {
+    const image = gameObject as Phaser.GameObjects.Image;
+    const centerX = Math.round(x);
+    const centerY = Math.round(y);
+    for (let offsetY = -FURNITURE_HIT_RADIUS; offsetY <= FURNITURE_HIT_RADIUS; offsetY++) {
+      for (let offsetX = -FURNITURE_HIT_RADIUS; offsetX <= FURNITURE_HIT_RADIUS; offsetX++) {
+        if (Math.abs(offsetX) + Math.abs(offsetY) > FURNITURE_HIT_RADIUS) continue;
+        const alpha = this.textures.getPixelAlpha(centerX + offsetX, centerY + offsetY, image.texture.key, image.frame.name);
+        if (alpha !== null && alpha >= FURNITURE_HIT_ALPHA_TOLERANCE) return true;
+      }
+    }
+    return false;
+  };
   setSaleSpeed(speed: 1 | 2 | 4) {
     if (this.time) this.time.timeScale = speed;
     if (this.tweens) this.tweens.timeScale = speed;
@@ -175,9 +197,10 @@ export class ShopScene extends Phaser.Scene {
   private ownerThoughtTimer?: Phaser.Time.TimerEvent;
   private ownerHideTimer?: Phaser.Time.TimerEvent;
   private staffAvatars = new Map<string, Phaser.GameObjects.Container>();
+  private staffWorkLabels = new Map<string, Phaser.GameObjects.Text>();
   private onlineShippers = new Map<string, Phaser.GameObjects.Container>();
 
-  constructor(store: GameStore, focus: () => void, select: (uid?: string) => void, private onlineOrderCallback: (orderId: string) => void = () => {}) {
+  constructor(store: GameStore, focus: () => void, select: (uid?: string) => void, private onlineOrderCallback: (orderId: string) => void = () => { }) {
     super('ShopScene'); this.store = store; this.focusCallback = focus; this.selectCallback = select;
   }
   setTab(tab: string) {
@@ -188,6 +211,11 @@ export class ShopScene extends Phaser.Scene {
   }
   preserveSelectionForUiAction() {
     this.selectionClearBlockedUntil = Date.now() + 180;
+  }
+  releasePointerGesture() {
+    this.isPanning = false;
+    this.hasPanned = false;
+    this.pinchDist = 0;
   }
   focusTutorialFurniture(uid: string) {
     const image = this.pieces.get(uid);
@@ -225,6 +253,7 @@ export class ShopScene extends Phaser.Scene {
     this.load.svg('heart', svgUrl(heartSvg()));
   }
   create() {
+    this.input.setTopOnly(true);
     const landLevel = Math.max(0, Math.min(landExpansion.length - 1, this.store.state.landLevel ?? 0));
     const roomBounds = roomSvgBounds(landExpansion[landLevel].size);
     const showDefaultLamp = !this.store.state.layout.some(item => item.id === 'crystal-chandelier');
@@ -252,10 +281,12 @@ export class ShopScene extends Phaser.Scene {
     this.selectionArrows = this.add.graphics().setDepth(1250);
     this.drawGrid();
     this.refresh();
-    this.time.addEvent({ delay: 180, loop: true, callback: () => {
-      this.updateAdviceWaitingState();
-      this.reflowCustomerChats();
-    } });
+    this.time.addEvent({
+      delay: 180, loop: true, callback: () => {
+        this.updateAdviceWaitingState();
+        this.reflowCustomerChats();
+      }
+    });
     this.updateOwnerPosition(false);
     this.setupOwnerSpeechBubble();
     this.startOwnerChatter();
@@ -282,6 +313,7 @@ export class ShopScene extends Phaser.Scene {
     this.input.on('dragstart', (_pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image) => {
       if (!this.edit) return;
       this.isDraggingPiece = true;
+      this.stopSelectionPulse();
       obj.setData('dragCell', undefined);
       this.selected = obj.getData('uid');
       this.selectCallback(this.selected);
@@ -618,54 +650,6 @@ export class ShopScene extends Phaser.Scene {
   }
   refresh() { this.refreshFurniture(); this.refreshCustomer(); this.refreshOnlineShippers(); }
 
-  /** Continue camera panning when a drag starts on a DOM control above the canvas. */
-  setHudPointerBlocked(blocked: boolean) {
-    if (!this.input) return;
-    this.input.enabled = !blocked;
-    this.selectionClearBlockedUntil = Date.now() + (blocked ? 10000 : 350);
-    if (blocked) {
-      this.isPanning = false;
-      this.pinchDist = 0;
-    }
-  }
-
-  beginHudPan(clientX: number, clientY: number) {
-    if (!this.scene.isActive() || this.currentTab !== 'shop') return;
-    const point = this.hudPointerToGame(clientX, clientY);
-    this.isPanning = true;
-    this.hasPanned = true;
-    this.panStartX = point.x;
-    this.panStartY = point.y;
-    this.camStartX = this.cameras.main.scrollX;
-    this.camStartY = this.cameras.main.scrollY;
-  }
-
-  moveHudPan(clientX: number, clientY: number) {
-    if (!this.isPanning || !this.scene.isActive()) return;
-    const point = this.hudPointerToGame(clientX, clientY);
-    const dx = (point.x - this.panStartX) / this.cameras.main.zoom;
-    const dy = (point.y - this.panStartY) / this.cameras.main.zoom;
-    const { x: limitX, y: limitY } = this.cameraPanLimits();
-    this.cameras.main.setScroll(
-      Phaser.Math.Clamp(this.camStartX - dx, -limitX, limitX),
-      Phaser.Math.Clamp(this.camStartY - dy, -limitY, limitY),
-    );
-  }
-
-  endHudPan() {
-    this.isPanning = false;
-    this.selectionClearBlockedUntil = Date.now() + 80;
-    setTimeout(() => { this.hasPanned = false; }, 50);
-  }
-
-  private hudPointerToGame(clientX: number, clientY: number) {
-    const bounds = this.game.canvas.getBoundingClientRect();
-    return {
-      x: (clientX - bounds.left) * (this.scale.width / Math.max(1, bounds.width)),
-      y: (clientY - bounds.top) * (this.scale.height / Math.max(1, bounds.height)),
-    };
-  }
-
   private cameraPanLimits() {
     const expandedCells = Math.max(0, landSize(this.store.state) - landExpansion[0].size);
     const extraZoom = Math.max(0, this.cameras.main.zoom - 1);
@@ -709,9 +693,39 @@ export class ShopScene extends Phaser.Scene {
     this.setMoveMode(value);
   }
 
+  private stopSelectionPulse() {
+    this.selectionPulseTween?.stop();
+    this.selectionPulseImage?.setAlpha(1);
+    this.selectionPulseTween = undefined;
+    this.selectionPulseImage = undefined;
+    this.selectionPulseUid = undefined;
+  }
+
+  private syncSelectionPulse() {
+    const uid = this.edit && !this.isDraggingPiece ? this.selected : undefined;
+    const image = uid ? this.pieces.get(uid) : undefined;
+    if (!uid || !image) {
+      this.stopSelectionPulse();
+      return;
+    }
+    if (this.selectionPulseUid === uid && this.selectionPulseImage === image && this.selectionPulseTween) return;
+    this.stopSelectionPulse();
+    this.selectionPulseUid = uid;
+    this.selectionPulseImage = image;
+    this.selectionPulseTween = this.tweens.add({
+      targets: image,
+      alpha: { from: 1, to: .62 },
+      duration: 480,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
   private refreshFurniture() {
     this.selectionArrows?.clear();
     for (const [uid, img] of this.pieces) if (!this.store.state.layout.some(p => p.uid === uid)) {
+      if (this.selectionPulseUid === uid) this.stopSelectionPulse();
       img.destroy(); this.pieces.delete(uid);
     }
     for (const p of this.store.state.layout) {
@@ -737,14 +751,11 @@ export class ShopScene extends Phaser.Scene {
             : f.art === 'fashion-print' ? .76
               : f.art === 'gallery-print' ? 1.02
                 : ['botanical-print', 'runway-print', 'parfum-print', 'shoe-sketch-print'].includes(f.art) ? .72 : .85;
-        // Furniture textures have generous transparent viewboxes. Rectangular hit
-        // testing made that empty area steal clicks from visible wall decorations.
-        // Pixel-perfect input keeps floor items clickable only on their painted
-        // pixels while retaining fine strokes on windows, blinds and wall art.
+        // Furniture textures have generous transparent viewboxes. Use the actual
+        // rendered alpha mask and ignore faint shadows/antialiasing around the art.
         img = this.add.image(pos.x, pos.y, textureKey).setOrigin(.5, .87).setScale(scale).setInteractive({
-          useHandCursor: true,
-          pixelPerfect: true,
-          alphaTolerance: wallMounted ? 1 : 4,
+          hitArea: {},
+          hitAreaCallback: this.furniturePixelHitTest,
         });
         img.setData('uid', p.uid); this.input.setDraggable(img); this.pieces.set(p.uid, img);
         let downX = 0, downY = 0, downTime = 0;
@@ -801,12 +812,10 @@ export class ShopScene extends Phaser.Scene {
           }
         });
 
-        img.on('pointerover', () => { if (!this.edit && this.currentTab === 'shop') img?.setTint(0xffe8f8); });
         img.on('pointerout', () => {
           longPressTimer?.remove(false);
           longPressTimer = undefined;
           longPressPointer = undefined;
-          if (!this.edit && this.selected !== p.uid) img?.clearTint();
         });
       }
       const isRug = ['atelier-rug', 'heart-rug', 'checkered-rug'].includes(f.art);
@@ -831,6 +840,7 @@ export class ShopScene extends Phaser.Scene {
       img.input!.draggable = this.edit;
       if (this.selected === p.uid) this.drawSelectionArrows(p);
     }
+    this.syncSelectionPulse();
     this.updateOwnerPosition(true);
     this.refreshStaff();
   }
@@ -865,8 +875,12 @@ export class ShopScene extends Phaser.Scene {
 
   private refreshStaff() {
     if (!this.scene.isActive()) return;
-    const working = activeEmployees(this.store.state)
+    const activeStaff = activeEmployees(this.store.state)
       .sort((a, b) => (b.service + b.persuasion) - (a.service + a.persuasion));
+    const stockStaff = this.store.state.phase === 'open'
+      ? activeStaff.filter(employee => (employee.assignment ?? 'service') === 'stock')
+      : [];
+    const working = activeStaff.filter(employee => !stockStaff.includes(employee));
     const workingIds = new Set(working.map(employee => employee.uid));
     for (const [uid, avatar] of this.staffAvatars) {
       if (workingIds.has(uid)) continue;
@@ -874,6 +888,32 @@ export class ShopScene extends Phaser.Scene {
       avatar.destroy();
       this.staffAvatars.delete(uid);
     }
+    const stockIds = new Set(stockStaff.map(employee => employee.uid));
+    for (const [uid, label] of this.staffWorkLabels) {
+      if (stockIds.has(uid)) continue;
+      this.tweens.killTweensOf(label);
+      label.destroy();
+      this.staffWorkLabels.delete(uid);
+    }
+    const stockAnchor = toWorld(landSize(this.store.state) - .75, .75);
+    stockStaff.forEach((employee, index) => {
+      let label = this.staffWorkLabels.get(employee.uid);
+      if (!label) {
+        label = this.add.text(stockAnchor.x, stockAnchor.y + index * 18, `${employee.name} · Đang làm tại kho`, {
+          fontFamily: 'Nunito Variable, Arial, sans-serif',
+          fontSize: '9px',
+          fontStyle: 'bold',
+          color: '#286ea9',
+          align: 'center',
+        }).setOrigin(.5).setResolution(2).setStroke('#fffdfb', 3).setShadow(0, 2, 'rgba(42,58,91,.4)', 3, true, true);
+        this.tweens.add({ targets: label, alpha: { from: .76, to: 1 }, duration: 950, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.staffWorkLabels.set(employee.uid, label);
+      }
+      label.setText(`${employee.name} · Đang làm tại kho`)
+        .setPosition(stockAnchor.x, stockAnchor.y + index * 18)
+        .setDepth(stockAnchor.y + 80 + index)
+        .setVisible(this.currentTab === 'shop');
+    });
     const homeSpots = this.staffFloorSpots(working.length);
     const patrolSpots = this.staffFloorSpots(Math.max(6, working.length * 3));
     const adviceVisits = this.store.state.phase === 'open'
@@ -891,17 +931,22 @@ export class ShopScene extends Phaser.Scene {
       const targetKey = customerTarget
         ? `assist:${assignedVisit?.uid ?? employee.uid}`
         : this.store.state.phase === 'open' ? `patrol:${patrolStep}:${index}` : `home:${index}`;
-      const activity = customerTarget ? 'đang tư vấn' : this.store.state.phase === 'open' ? 'đang hỗ trợ shop' : employee.name;
+      const assignment = employee.assignment ?? 'service';
+      const activity = customerTarget
+        ? `${employee.name} · Đang tư vấn khách`
+        : assignment === 'cashier'
+          ? `${employee.name} · Thu ngân`
+          : `${employee.name} · Tư vấn`;
       let avatar = this.staffAvatars.get(employee.uid);
       if (!avatar) {
         const sprite = this.add.image(0, 0, `staff-${Math.abs(employee.appearance) % 6}`).setOrigin(.5, 1).setScale(.7);
-        const badge = this.add.graphics().fillStyle(0xfffbfd, .96).fillRoundedRect(-37, -136, 74, 15, 7)
-          .lineStyle(1.2, 0xe98fbd, 1).strokeRoundedRect(-37, -136, 74, 15, 7);
         const label = this.add.text(0, -128.5, employee.name, {
-          fontFamily: 'Nunito Variable, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: '#7b315f',
-        }).setOrigin(.5).setResolution(2);
-        avatar = this.add.container(home.x, home.y, [sprite, badge, label]).setDepth(home.y - 1);
+          fontFamily: 'Nunito Variable, Arial, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#7b315f',
+          align: 'center',
+        }).setOrigin(.5).setResolution(2).setStroke('#fffdfb', 3).setShadow(0, 2, 'rgba(78,39,70,.42)', 3, true, true);
+        avatar = this.add.container(home.x, home.y, [sprite, label]).setDepth(home.y - 1);
         avatar.setData('staffSprite', sprite).setData('staffLabel', label);
+        this.tweens.add({ targets: label, alpha: { from: .78, to: 1 }, duration: 1050, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.staffAvatars.set(employee.uid, avatar);
       }
       const label = avatar.getData('staffLabel') as Phaser.GameObjects.Text | undefined;
@@ -1143,6 +1188,44 @@ export class ShopScene extends Phaser.Scene {
       placed.push(new Phaser.Geom.Rectangle(bounds.x - 4, bounds.y - 3, bounds.width + 8, bounds.height + 6));
     }
   }
+
+  private drawDashedLine(graphics: Phaser.GameObjects.Graphics, x1: number, y1: number, x2: number, y2: number, dash = 4, gap = 3) {
+    const length = Phaser.Math.Distance.Between(x1, y1, x2, y2);
+    if (!length) return;
+    const dx = (x2 - x1) / length;
+    const dy = (y2 - y1) / length;
+    for (let position = 0; position < length; position += dash + gap) {
+      const end = Math.min(length, position + dash);
+      graphics.lineBetween(x1 + dx * position, y1 + dy * position, x1 + dx * end, y1 + dy * end);
+    }
+  }
+
+  private strokeDashedBubble(graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number, radius = 7, color = 0x493746, pointerGap = 0) {
+    const right = x + width;
+    const bottom = y + height;
+    graphics.lineStyle(1.6, color, .9);
+    this.drawDashedLine(graphics, x + radius, y, right - radius, y);
+    this.drawDashedLine(graphics, right, y + radius, right, bottom - radius);
+    if (pointerGap) {
+      const center = x + width / 2;
+      this.drawDashedLine(graphics, right - radius, bottom, center + pointerGap, bottom);
+      this.drawDashedLine(graphics, center - pointerGap, bottom, x + radius, bottom);
+    } else {
+      this.drawDashedLine(graphics, right - radius, bottom, x + radius, bottom);
+    }
+    this.drawDashedLine(graphics, x, bottom - radius, x, y + radius);
+    const corners = [
+      [x + radius, y + radius, Math.PI, Math.PI * 1.5],
+      [right - radius, y + radius, Math.PI * 1.5, Math.PI * 2],
+      [right - radius, bottom - radius, 0, Math.PI * .5],
+      [x + radius, bottom - radius, Math.PI * .5, Math.PI],
+    ] as const;
+    for (const [cx, cy, start, end] of corners) {
+      graphics.beginPath();
+      graphics.arc(cx, cy, radius, start, end);
+      graphics.strokePath();
+    }
+  }
   private updateAdviceWaitingState() {
     if (this.store.state.phase !== 'open') return;
     const dots = '.'.repeat(1 + Math.floor(this.time.now / 420) % 3);
@@ -1166,6 +1249,7 @@ export class ShopScene extends Phaser.Scene {
         : undefined;
       const nextText = employee ? `Được hỗ trợ${dots}` : `Chờ tư vấn${dots} ${visit.patience}s`;
       if (label.text !== nextText) label.setText(nextText);
+      label.setColor('#7952a6');
     }
   }
 
@@ -1199,16 +1283,15 @@ export class ShopScene extends Phaser.Scene {
         const sprite = this.add.image(0, 0, this.getCustomerTextureKey(customer, false, visit.uid)).setScale(.62).setOrigin(.5, 1);
         const bubble = this.add.graphics();
         const bubbleWidth = visit.mode === 'advice' ? 82 : 76;
-        bubble.fillStyle(visit.mode === 'advice' ? 0xfffcf5 : 0xfffbfd, .96).fillRoundedRect(-bubbleWidth / 2, -154, bubbleWidth, 27, 7);
-        bubble.lineStyle(1.1, visit.mode === 'advice' ? 0xe8bd69 : 0xd8c6df, .95).strokeRoundedRect(-bubbleWidth / 2, -154, bubbleWidth, 27, 7);
-        const bubbleStroke = visit.mode === 'advice' ? 0xe8bd69 : 0xd8c6df;
-        bubble.fillStyle(visit.mode === 'advice' ? 0xfffcf5 : 0xfffbfd, .96).fillTriangle(-5, -128, 5, -128, 0, -120);
-        bubble.lineStyle(1.4, bubbleStroke, 1);
-        bubble.lineBetween(-5, -128, 0, -120);
-        bubble.lineBetween(0, -120, 5, -128);
-        if (visit.mode === 'advice') bubble.fillStyle(0xe9a83a, 1).fillCircle(-bubbleWidth / 2 + 8, -140.5, 2.2);
+        const bubbleFill = visit.mode === 'advice' ? 0xfff8dd : 0xffffff;
+        bubble.fillStyle(bubbleFill, .56).fillRoundedRect(-bubbleWidth / 2, -154, bubbleWidth, 27, 7);
+        this.strokeDashedBubble(bubble, -bubbleWidth / 2, -154, bubbleWidth, 27, 7, 0x493746, 6);
+        bubble.fillStyle(bubbleFill, .56).fillTriangle(-6, -128, 6, -128, 0, -119);
+        bubble.lineStyle(1.6, 0x493746, .9);
+        this.drawDashedLine(bubble, -6, -128, 0, -119, 3, 2);
+        this.drawDashedLine(bubble, 0, -119, 6, -128, 3, 2);
         const label = this.add.text(visit.mode === 'advice' ? 3 : 0, -140.5, visit.mode === 'advice' ? `Chờ tư vấn... ${visit.patience}s` : `${customer.name} · xem đồ`, {
-          fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7.5px', fontStyle: 'bold', color: visit.mode === 'advice' ? '#775523' : '#55445e', align: 'center', wordWrap: { width: bubbleWidth - 12 },
+          fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: visit.mode === 'advice' ? '#7952a6' : '#4675a1', stroke: '#fffdfb', strokeThickness: 2, align: 'center', wordWrap: { width: bubbleWidth - 12 },
         }).setOrigin(.5).setResolution(2);
         const chat = this.add.container(0, 0, [bubble, label]);
         const remembered = this.customerPositions.get(visit.uid);
@@ -1260,13 +1343,14 @@ export class ShopScene extends Phaser.Scene {
       const spot = spots[index % spots.length];
       const sprite = this.add.image(0, 0, `courier-${order.courierVariant}`).setScale(.62).setOrigin(.5, 1);
       const bubble = this.add.graphics();
-      bubble.fillStyle(0xffffff, .98).fillRoundedRect(-47, -159, 94, 31, 9);
-      bubble.lineStyle(1.5, 0x65b5a7, 1).strokeRoundedRect(-47, -159, 94, 31, 9);
-      bubble.fillStyle(0xffffff, .98).fillTriangle(-6, -128, 6, -128, 0, -120);
-      bubble.lineStyle(2.5, 0xffffff, 1).lineBetween(-5.5, -128, 5.5, -128);
-      bubble.lineStyle(1.2, 0x65b5a7, 1).lineBetween(-6, -128, 0, -120).lineBetween(0, -120, 6, -128);
+      bubble.fillStyle(0xeafff9, .56).fillRoundedRect(-47, -159, 94, 31, 9);
+      this.strokeDashedBubble(bubble, -47, -159, 94, 31, 9, 0x493746, 6);
+      bubble.fillStyle(0xeafff9, .56).fillTriangle(-6, -128, 6, -128, 0, -119);
+      bubble.lineStyle(1.6, 0x493746, .9);
+      this.drawDashedLine(bubble, -6, -128, 0, -119, 3, 2);
+      this.drawDashedLine(bubble, 0, -119, 6, -128, 3, 2);
       const label = this.add.text(0, -143.5, `ĐƠN ONLINE #${index + 1}\nChạm để giao hàng`, {
-        fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7.5px', fontStyle: 'bold', color: '#315f59', align: 'center', lineSpacing: 1,
+        fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: '#293a3a', stroke: '#ffffff', strokeThickness: 2, align: 'center', lineSpacing: 1,
       }).setOrigin(.5).setResolution(2);
       const container = this.add.container(spot.x, spot.y, [sprite, bubble, label]).setDepth(spot.y + 4).setSize(100, 170).setInteractive(new Phaser.Geom.Rectangle(0, -85, 100, 170), Phaser.Geom.Rectangle.Contains);
       container.input!.cursor = 'pointer';
@@ -1325,50 +1409,16 @@ export class ShopScene extends Phaser.Scene {
 
     this.speechBubbleGfx.clear();
 
-    if (type === 'thought') {
-      // Bong bóng suy nghĩ: nền trắng viền tím pastel nhẹ, chấm tròn suy nghĩ
-      this.speechBubbleGfx.fillStyle(0xffffff, 0.96);
-      this.speechBubbleGfx.fillRoundedRect(boxX, boxY, boxW, boxH, 9);
-      this.speechBubbleGfx.lineStyle(1.5, 0xd0b4e0, 1);
-      this.speechBubbleGfx.strokeRoundedRect(boxX, boxY, boxW, boxH, 9);
-
-      this.speechBubbleGfx.fillStyle(0xffffff, 0.96);
-      this.speechBubbleGfx.fillCircle(0, -5, 2.5);
-      this.speechBubbleGfx.strokeCircle(0, -5, 2.5);
-      this.speechBubbleGfx.fillCircle(0, 0, 1.3);
-      this.speechBubbleGfx.strokeCircle(0, 0, 1.3);
-
-      this.speechBubbleText.setColor('#4e4359');
-    } else {
-      let bg = 0xffffff;
-      let stroke = 0xf0c0d8;
-      let textColor = '#4a3848';
-
-      if (type === 'advice') {
-        bg = 0xfffcf2;
-        stroke = 0xf2b040;
-        textColor = '#6d4308';
-      } else if (type === 'buy') {
-        bg = 0xf2fff5;
-        stroke = 0x38b870;
-        textColor = '#1c5e30';
-      } else if (type === 'leave') {
-        bg = 0xfff3f3;
-        stroke = 0xde5b6d;
-        textColor = '#782631';
-      }
-
-      this.speechBubbleGfx.fillStyle(bg, 0.97);
-      this.speechBubbleGfx.fillRoundedRect(boxX, boxY, boxW, boxH, 9);
-
-      this.speechBubbleGfx.lineStyle(1.5, stroke, 1);
-      this.speechBubbleGfx.strokeRoundedRect(boxX, boxY, boxW, boxH, 9);
-      this.speechBubbleGfx.fillTriangle(-5, -11, 5, -11, 0, 0);
-      this.speechBubbleGfx.lineBetween(-5, -10, 0, 0);
-      this.speechBubbleGfx.lineBetween(0, 0, 5, -10);
-
-      this.speechBubbleText.setColor(textColor);
-    }
+    const bg = type === 'advice' ? 0xfff8d9 : type === 'buy' ? 0xeaffef : type === 'leave' ? 0xffe9ed : 0xffffff;
+    const textColor = type === 'advice' ? '#7952a6' : type === 'buy' ? '#214f34' : type === 'leave' ? '#662b38' : '#35263b';
+    this.speechBubbleGfx.fillStyle(bg, .56);
+    this.speechBubbleGfx.fillRoundedRect(boxX, boxY, boxW, boxH, 8);
+    this.strokeDashedBubble(this.speechBubbleGfx, boxX, boxY, boxW, boxH, 8, 0x493746, 6);
+    this.speechBubbleGfx.fillStyle(bg, .56).fillTriangle(-6, -11, 6, -11, 0, 0);
+    this.speechBubbleGfx.lineStyle(1.6, 0x493746, .9);
+    this.drawDashedLine(this.speechBubbleGfx, -6, -11, 0, 0, 3, 2);
+    this.drawDashedLine(this.speechBubbleGfx, 0, 0, 6, -11, 3, 2);
+    this.speechBubbleText.setColor(textColor).setStroke('#fffdfb', 2);
 
     this.speechBubbleText.setPosition(0, boxY + boxH / 2);
     this.speechBubbleContainer.setVisible(true);
@@ -1413,6 +1463,13 @@ export class ShopScene extends Phaser.Scene {
     return `c-lily${suffix}`;
   }
 
+  /** Return the same visual identity used by the in-shop Phaser sprite. */
+  customerVisualForVisit(c: Customer, visitUid: string): Customer {
+    const textureKey = this.getCustomerTextureKey(c, false, visitUid);
+    const customerId = textureKey.startsWith('c-') ? textureKey.slice(2).replace(/-happy$/, '') : '';
+    return customers.find(customer => customer.id === customerId) ?? c;
+  }
+
   refreshCustomer() {
     if (this.departing) { this.refreshSecondaryCustomers(); this.refreshStaff(); return; }
     const c = activeCustomer(this.store.state);
@@ -1449,13 +1506,16 @@ export class ShopScene extends Phaser.Scene {
     });
     this.speechBubbleGfx.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (Phaser.Math.Distance.Between(badgeDownX, badgeDownY, pointer.x, pointer.y) < 8 &&
-          Date.now() - badgeDownTime < 350 && !this.hasPanned && !this.edit && !this.departing &&
-          customerNeedsAdvice(this.store.state, c)) this.focusCallback();
+        Date.now() - badgeDownTime < 350 && !this.hasPanned && !this.edit && !this.departing &&
+        customerNeedsAdvice(this.store.state, c)) this.focusCallback();
     });
     this.speechBubbleText = this.add.text(0, 0, '', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '8px',
+      fontFamily: 'Nunito, Arial, sans-serif',
+      fontSize: '7.5px',
       fontStyle: 'bold',
+      color: '#35263b',
+      stroke: '#fffdfb',
+      strokeThickness: 2,
       align: 'center',
       wordWrap: { width: 94 }
     }).setOrigin(.5, .5).setResolution(2);
@@ -1585,30 +1645,6 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
-  private showSaleNotice(x: number, y: number, text: string, success: boolean, compact = false) {
-    const label = this.add.text(0, 0, text, {
-      fontSize: compact ? '10px' : '11px',
-      fontFamily: 'Nunito, Arial, sans-serif',
-      fontStyle: 'bold',
-      color: success ? '#287554' : '#8a5965',
-    }).setOrigin(.5).setResolution(2);
-    const width = label.width + (compact ? 13 : 16);
-    const height = label.height + (compact ? 7 : 8);
-    const background = this.add.graphics();
-    background.fillStyle(success ? 0xf4fff9 : 0xfff7f9, .97).fillRoundedRect(-width / 2, -height / 2, width, height, height / 2);
-    background.lineStyle(1, success ? 0x9edbc1 : 0xe7bdc8, .9).strokeRoundedRect(-width / 2, -height / 2, width, height, height / 2);
-    const notice = this.add.container(x, y, [background, label]).setDepth(2000).setScale(.92).setAlpha(0);
-    this.tweens.add({
-      targets: notice,
-      y: y - (compact ? 25 : 32),
-      scale: 1,
-      alpha: { from: 0, to: 1 },
-      duration: 220,
-      ease: 'Back.easeOut',
-      onComplete: () => this.tweens.add({ targets: notice, y: notice.y - 14, alpha: 0, delay: 800, duration: 430, ease: 'Sine.easeIn', onComplete: () => notice.destroy() }),
-    });
-  }
-
   private animateSale(result: SaleResult) {
     if (result.visitUid && result.visitUid !== this.primaryVisitUid) {
       const entry = this.secondaryCustomers.get(result.visitUid);
@@ -1619,13 +1655,14 @@ export class ShopScene extends Phaser.Scene {
         const sprite = container.list[0] as Phaser.GameObjects.Image;
         sprite.setTexture(this.getCustomerTextureKey(result.customer, result.success, result.visitUid));
         if (result.success) this.burst(container.x, container.y - 70, result.viral);
-        this.showSaleNotice(container.x, container.y - 135, result.success ? `+${result.total.toLocaleString('vi-VN')}₫` : 'Hẹn lần sau', result.success, true);
         const exit = this.customerEntrance().outside;
-        this.tweens.add({ targets: container, x: exit.x, y: exit.y, alpha: 0, duration: 850, ease: 'Sine.inOut', onComplete: () => {
-          if (result.visitUid) this.customerTextureAssignments.delete(result.visitUid);
-          container.destroy();
-          this.refreshCustomer();
-        } });
+        this.tweens.add({
+          targets: container, x: exit.x, y: exit.y, alpha: 0, duration: 850, ease: 'Sine.inOut', onComplete: () => {
+            if (result.visitUid) this.customerTextureAssignments.delete(result.visitUid);
+            container.destroy();
+            this.refreshCustomer();
+          }
+        });
       } else this.refreshCustomer();
       return;
     }
@@ -1657,7 +1694,6 @@ export class ShopScene extends Phaser.Scene {
     }
 
     if (result.success) this.burst(avatar.x, avatar.y - 60, result.viral);
-    this.showSaleNotice(avatar.x, avatar.y - 142, result.success ? `+${result.total.toLocaleString('vi-VN')}₫` : 'Hẹn lần sau', result.success);
     this.departureTimer = this.time.delayedCall(1900, () => {
       this.customerLeaveShop(avatar);
     });
@@ -1689,7 +1725,7 @@ export class ShopScene extends Phaser.Scene {
       ctx.fillStyle = '#f4f3e9'; ctx.fillRect(0, 0, 1000, 780); ctx.drawImage(image, 0, 10, 1000, 700);
       const name = this.store.state.shopName || 'My Little Boutique';
       ctx.fillStyle = '#456454'; ctx.font = '30px Georgia'; ctx.textAlign = 'center'; ctx.fillText(name.toLowerCase(), 500, 722);
-      ctx.font = '16px Arial'; ctx.fillText(`Ngày ${this.store.state.day} · Cấp ${this.store.state.level} · ${this.store.state.reputation.toFixed(1)} / 5 · Made of little dreams`, 500, 752);
+      ctx.font = '16px Arial'; ctx.fillText(`${gameDate(this.store.state.day)} · Cấp ${this.store.state.level} · ${this.store.state.reputation.toFixed(1)} / 5 · Made of little dreams`, 500, 752);
       const a = document.createElement('a'); a.download = `${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-day-${this.store.state.day}.png`; a.href = canvas.toDataURL('image/png'); a.click(); this.store.toast('Đã chụp lại góc shop của bạn!');
     });
   }
@@ -1815,10 +1851,13 @@ export class ShopScene extends Phaser.Scene {
     this.ownerSpeechGfx = this.add.graphics();
     this.ownerSpeechText = this.add.text(0, 0, '', {
       fontFamily: 'Nunito Variable, Arial, sans-serif',
-      fontSize: '10.5px',
+      fontSize: '8px',
       fontStyle: 'bold',
+      color: '#3e2740',
+      stroke: '#fffdfb',
+      strokeThickness: 2,
       align: 'center',
-      wordWrap: { width: 140 }
+      wordWrap: { width: 126 }
     }).setOrigin(.5, .5).setResolution(2);
 
     this.ownerSpeechBubble = this.add.container(0, 0, [this.ownerSpeechGfx, this.ownerSpeechText]);
@@ -1839,34 +1878,27 @@ export class ShopScene extends Phaser.Scene {
     this.ownerSpeechBubble.setPosition(ownerX, headY);
     this.ownerSpeechBubble.setDepth(1500);
 
-    const padX = 10;
-    const padY = 6;
+    const padX = 8;
+    const padY = 4;
     const textW = this.ownerSpeechText.width;
     const textH = this.ownerSpeechText.height;
-    const boxW = Math.max(76, textW + padX * 2);
-    const boxH = Math.max(26, textH + padY * 2);
+    const boxW = Math.max(68, textW + padX * 2);
+    const boxH = Math.max(22, textH + padY * 2);
     const boxX = -boxW / 2;
     const boxY = -boxH - 8;
 
     this.ownerSpeechGfx.clear();
-    // Đuôi bong bóng vẽ trước để liền mạch với đáy khung, không tạo đường ngang dư thừa.
-    // Nền trắng kem pastel, viền hồng ngọt ngào.
-    this.ownerSpeechGfx.fillStyle(0xfffbfc, 0.97);
-    this.ownerSpeechGfx.fillRoundedRect(boxX, boxY, boxW, boxH, 10);
-    this.ownerSpeechGfx.lineStyle(1.8, 0xf29bc7, 1);
-    this.ownerSpeechGfx.strokeRoundedRect(boxX, boxY, boxW, boxH, 10);
-    // Mở một khoảng ở đáy hộp để đuôi nối liền, không còn đường viền cắt ngang mũi tên.
-    this.ownerSpeechGfx.fillStyle(0xfffbfc, 1);
-    this.ownerSpeechGfx.fillTriangle(-6, boxY + boxH - 2, 6, boxY + boxH - 2, 0, boxY + boxH + 9);
-    this.ownerSpeechGfx.lineStyle(1.8, 0xf29bc7, 1);
-    this.ownerSpeechGfx.beginPath();
-    this.ownerSpeechGfx.moveTo(-6, boxY + boxH - 1);
-    this.ownerSpeechGfx.lineTo(0, boxY + boxH + 9);
-    this.ownerSpeechGfx.lineTo(6, boxY + boxH - 1);
-    this.ownerSpeechGfx.strokePath();
+    this.ownerSpeechGfx.fillStyle(0xfffbfc, .56);
+    this.ownerSpeechGfx.fillRoundedRect(boxX, boxY, boxW, boxH, 8);
+    this.strokeDashedBubble(this.ownerSpeechGfx, boxX, boxY, boxW, boxH, 8, 0x493746, 6);
+    this.ownerSpeechGfx.fillStyle(0xfffbfc, .56);
+    this.ownerSpeechGfx.fillTriangle(-6, boxY + boxH - 1, 6, boxY + boxH - 1, 0, boxY + boxH + 9);
+    this.ownerSpeechGfx.lineStyle(1.6, 0x493746, .9);
+    this.drawDashedLine(this.ownerSpeechGfx, -6, boxY + boxH - 1, 0, boxY + boxH + 9, 3, 2);
+    this.drawDashedLine(this.ownerSpeechGfx, 0, boxY + boxH + 9, 6, boxY + boxH - 1, 3, 2);
 
     this.ownerSpeechText.setPosition(0, boxY + boxH / 2);
-    this.ownerSpeechText.setColor('#681c4e');
+    this.ownerSpeechText.setColor('#3e2740').setStroke('#fffdfb', 2);
 
     this.ownerSpeechBubble.setVisible(true);
     this.tweens.killTweensOf(this.ownerSpeechBubble);

@@ -42,8 +42,15 @@ test.describe('manual landscape on phones', () => {
     await page.goto('/');
     const game = page;
     await expect(game.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    await game.locator('[data-action="sale-speed"]').tap();
+    await game.locator('[data-action="sale-speed"]').tap();
+    await expect(game.locator('[data-action="sale-speed"]')).toContainText('4x');
     await page.waitForTimeout(1600);
     const point = await canvasPoint(page, 426, 390);
+    await page.touchscreen.tap(point.x, point.y);
+    await expect(game.getByRole('dialog')).toHaveClass('dialog-serve');
+    await game.locator('[data-action="close-modal"]').tap();
+    await expect(game.getByRole('dialog')).not.toBeVisible();
     await page.touchscreen.tap(point.x, point.y);
     await expect(game.getByRole('dialog')).toHaveClass('dialog-serve');
     await game.locator('[data-action="outfit-category"][data-id="tops"]').tap();
@@ -61,7 +68,10 @@ test.describe('manual landscape on phones', () => {
     const game = page;
     await expect(game.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
     const start = await canvasPoint(page, 416, 252);
+    await page.locator('#toasts').evaluate(element => element.append(document.createElement('div')));
     await page.touchscreen.tap(start.x, start.y);
+    await expect(page.locator('#toasts')).toHaveClass(/is-selection-active/);
+    await expect(page.locator('#toasts')).toBeEmpty();
     await game.locator('[data-action="move-start"]').tap();
     await page.waitForTimeout(300);
     const end = await canvasPoint(page, 472, 280);

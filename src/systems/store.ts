@@ -1,9 +1,21 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { Customer, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingOrder, PlacedFurniture, Product, SaleResult, StaffCandidate } from '../types';
-import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, bulkDiscountFactor, bulkDiscountRate, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, threshold, validOutfit } from './rules';
+import type { Customer, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingOrder, PlacedFurniture, Product, SaleResult, StaffAssignment, StaffCandidate, StaffMember, SupplierId } from '../types';
+import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
-import { recordPublicShopReview } from './reviews';
+import { recordPublicShopReview, shopReviewStats } from './reviews';
+import { CAMPAIGN_GUIDE_SEEN, campaignIsComplete, campaignOffers } from './campaigns';
+import { createVipAppointment, crisisComplete, RETURN_EXCHANGE_SHIPPING_FEE, supplierFor, suppliers } from './operations';
+import { gameDate } from './calendar';
+
+const STAFF_NAMES = [
+  'Mai An', 'Thảo Nhi', 'Gia Hân', 'Bảo Trân', 'Minh Châu', 'Khánh Linh', 'Yến Vy', 'Hà My', 'Ngọc Lam', 'Tú Anh',
+  'An Nhiên', 'Ánh Dương', 'Bích Ngọc', 'Diệu Anh', 'Hạ Vy', 'Hoài An', 'Lan Chi', 'Linh Đan', 'Mai Chi', 'Mỹ Duyên',
+  'Nhã Uyên', 'Phương Anh', 'Quỳnh Anh', 'Thanh Trúc', 'Thu Hà', 'Trâm Anh', 'Tuệ Nhi', 'Vân Anh', 'Yến Nhi', 'Kim Ngân',
+  'Ngọc Anh', 'Hải Yến', 'Nhật Hạ', 'Thiên Kim', 'Kiều My', 'Lam Anh', 'Mộc Miên', 'Thùy Linh', 'Cẩm Tú', 'Tú Uyên',
+  'Diễm Quỳnh', 'Gia Linh', 'Hương Giang', 'Khả Hân', 'Minh Anh', 'Ngọc Hân', 'Phương Linh', 'Quỳnh Chi', 'Thanh Mai', 'Thùy Dương',
+  'Uyên Nhi', 'Xuân Nghi', 'Bảo Ngọc', 'Mai Phương', 'Khánh Vy', 'Như Ý', 'Tường Vi', 'Hoàng Yến', 'Đan Thy', 'Ái Linh',
+] as const;
 
 export class GameStore {
   state: GameState;
@@ -38,17 +50,37 @@ export class GameStore {
   }
 
   private roundedStars(value: number) {
-    return Math.max(1, Math.min(5, Math.round(value * 2) / 2));
+    return Math.max(1, Math.min(5, Math.round(value)));
   }
 
   private applyShopReview(stars: number, weight = 1) {
     const s = this.state;
-    const normalized = this.roundedStars(stars);
+    const cashierBonus = activeEmployees(s).some(employee => (employee.assignment ?? 'service') === 'cashier') ? .25 : 0;
+    const normalized = this.roundedStars(stars + cashierBonus);
     const effectiveHistory = Math.max(10, s.reviews);
     const impact = weight * (normalized < 3 ? 1.2 : 1);
     s.reputation = Math.max(1, Math.min(5, (s.reputation * effectiveHistory + normalized * impact) / (effectiveHistory + impact)));
     s.reviews++;
+    if (s.reputationCrisis && normalized >= 4) s.reputationCrisis.positiveReviews++;
+    if (!s.reputationCrisis && s.level >= 3 && s.reviews >= 5 && s.reputation < 3.5) {
+      s.reputationCrisis = { startDay: s.day, deadlineDay: s.day + 3, positiveReviews: 0, sales: 0, targetReviews: 3, targetSales: 8 };
+      this.toast('Uy tín boutique đang gặp khủng hoảng. Hãy phục vụ 8 món và nhận 3 đánh giá tốt trong 4 ngày!', 'error');
+    }
     return normalized;
+  }
+
+  private recordAdvancedSale(items: Product[], total: number, customerName: string) {
+    const s = this.state;
+    if (s.reputationCrisis) s.reputationCrisis.sales += items.length;
+    if (s.level >= 3 && items.length && this.random() < .07 && s.returnCases.length < 4) {
+      const item = items[Math.floor(this.random() * items.length)];
+      s.returnCases.push({
+        id: `return-${s.day}-${s.operationSequence++}`, productId: item.id, customerName,
+        amount: sellPrice(s, item), reason: item.quality < 70 ? 'Sản phẩm có lỗi đường may' : 'Khách đổi ý sau khi thử tại nhà',
+        availableDay: s.day + 1, deadlineDay: s.day + 3,
+      });
+    }
+    void total;
   }
 
   private applyOnlineReview(stars: number, shopWeight = .55) {
@@ -64,16 +96,74 @@ export class GameStore {
 
   private inStoreReviewStars(score: number, total: number, customer: Customer, success: boolean, patienceRatio: number, assisted = false, selfPick = false) {
     if (!success) {
-      const overBudget = total > customer.budget;
-      return this.roundedStars((overBudget ? 1.9 : 2.15) + Math.min(.6, score / 180) + Math.min(.3, patienceRatio * .3));
+      return score < 35 && patienceRatio < .18 ? 2 : 3;
     }
     const priceRatio = customer.budget > 0 ? total / customer.budget : 1;
-    const valueBonus = priceRatio <= .68 ? .2 : 0;
-    const pricePenalty = Math.max(0, priceRatio - .85) * 1.35;
-    const waitPenalty = Math.max(0, 1 - patienceRatio) * .65;
-    const pickyPenalty = ['VIP', 'Khách kỹ tính'].includes(customer.personality) ? .1 : 0;
-    const serviceBonus = assisted ? .18 : selfPick ? .1 : 0;
-    return this.roundedStars(1.2 + score / 24.5 + valueBonus + serviceBonus - pricePenalty - waitPenalty - pickyPenalty);
+    let quality = score;
+    if (priceRatio <= .72) quality += 4;
+    if (priceRatio > .94) quality -= 4;
+    if (patienceRatio >= .65) quality += 3;
+    if (patienceRatio < .25) quality -= 10;
+    if (assisted) quality += 4;
+    else if (selfPick) quality += 2;
+    if (quality >= 86) return 5;
+    if (quality >= 58) return 4;
+    if (quality >= 40) return 3;
+    return 2;
+  }
+
+  private shouldPublishCustomerReview(stars: number, viral = false) {
+    if (viral) return true;
+    if (!shopReviewStats(this.state).count && stars >= 4) return true;
+    const chance = stars === 5 ? .42 : stars === 4 ? .34 : stars === 3 ? .15 : stars === 2 ? .07 : .8;
+    return this.random() < chance;
+  }
+
+  private publishCustomerReview(customer: Customer, stars: number, text: string, likes: number, viral = false, suffix = '') {
+    const s = this.state;
+    recordPublicShopReview(s, stars);
+    s.posts.unshift({
+      id: `${s.day}-${s.customerIndex}${suffix ? `-${suffix}` : ''}`,
+      name: customer.name,
+      handle: customer.handle,
+      text,
+      likes,
+      day: s.day,
+      viral,
+      color: customer.outfit,
+      reviewStars: stars,
+      channel: 'shop',
+      avatar: { id: customer.id, skin: customer.skin, hair: customer.hair, outfit: customer.outfit, hairStyle: customer.hairStyle },
+    });
+    s.posts = s.posts.slice(0, 40);
+  }
+
+  private publishOnlineReview(order: OnlineOrder, stars: number, text: string, likes = 0) {
+    const seed = Array.from(order.customerHandle).reduce((total, character) => total + character.charCodeAt(0), 0);
+    const customer = customers.find(candidate => candidate.handle === order.customerHandle) ?? customers[seed % customers.length];
+    this.state.posts.unshift({
+      id: `${order.id}-review`,
+      name: order.customerName,
+      handle: order.customerHandle,
+      text,
+      likes,
+      day: this.state.day,
+      viral: false,
+      color: customer.outfit,
+      reviewStars: stars,
+      channel: 'online',
+      avatar: { id: customer.id, skin: customer.skin, hair: customer.hair, outfit: customer.outfit, hairStyle: customer.hairStyle },
+    });
+    this.state.posts = this.state.posts.slice(0, 40);
+  }
+
+  toggleShopReviewLike(postId: string) {
+    const post = this.state.posts.find(item => item.id === postId);
+    if (!post) return false;
+    post.likedByShop = !post.likedByShop;
+    post.likes = Math.max(0, post.likes + (post.likedByShop ? 1 : -1));
+    this.commit();
+    return true;
   }
 
   private recordCustomerRelationship(customer: Customer, success: boolean, score = 0, itemCount = 0): { points?: number; tier?: LoyaltyTier; reward?: string } {
@@ -123,6 +213,172 @@ export class GameStore {
     ];
     this.dayCustomersKey = day;
   }
+  selectSupplier(id: SupplierId) {
+    if (this.state.phase === 'open') { this.toast('Hãy chốt nhà cung cấp trước giờ mở cửa.', 'error'); return false; }
+    const supplier = suppliers.find(item => item.id === id);
+    if (!supplier || this.state.level < supplier.unlockLevel) return false;
+    this.state.activeSupplierId = id;
+    this.commit();
+    return true;
+  }
+
+  setStaffAssignment(uid: string, assignment: StaffAssignment) {
+    if (this.state.phase === 'open') { this.toast('Không thể đổi ca khi shop đang mở cửa.', 'error'); return false; }
+    const employee = this.state.employees.find(item => item.uid === uid);
+    if (!employee || !['off', 'service', 'cashier', 'stock'].includes(assignment)) return false;
+    if (assignment !== 'off' && (employee.assignment ?? 'service') === 'off') {
+      const assignedCount = this.state.employees.filter(item => (item.assignment ?? 'service') !== 'off').length;
+      const capacity = staffCapacity(this.state);
+      if (assignedCount >= capacity) {
+        this.toast(`Ca làm hiện chỉ có ${capacity} vị trí. Hãy cho một nhân viên nghỉ trước khi xếp người khác vào ca.`, 'error');
+        return false;
+      }
+    }
+    employee.assignment = assignment;
+    this.commit();
+    return true;
+  }
+
+  resolveReturn(id: string, decision: 'refund' | 'exchange' | 'deny') {
+    const claim = this.state.returnCases.find(item => item.id === id && item.availableDay <= this.state.day);
+    if (!claim) return false;
+    const product = products.find(item => item.id === claim.productId);
+    if (!product) return false;
+    if (decision === 'refund') {
+      if (this.state.money < claim.amount) { this.toast('Không đủ tiền để hoàn lại cho khách.', 'error'); return false; }
+      this.state.money -= claim.amount;
+      this.state.inventory[product.id] = Math.min(999, (this.state.inventory[product.id] ?? 0) + 1);
+      this.applyShopReview(5, .45);
+    } else if (decision === 'exchange') {
+      if (this.state.money < RETURN_EXCHANGE_SHIPPING_FEE) { this.toast(`Cần ${RETURN_EXCHANGE_SHIPPING_FEE.toLocaleString('vi-VN')}₫ để gửi lại hàng đổi cho khách.`, 'error'); return false; }
+      this.state.money -= RETURN_EXCHANGE_SHIPPING_FEE;
+      this.state.stats.spent += RETURN_EXCHANGE_SHIPPING_FEE;
+      this.applyShopReview(5, .5);
+    } else {
+      this.applyShopReview(1, .8);
+      this.state.followers = Math.max(0, this.state.followers - 8);
+    }
+    this.state.returnCases = this.state.returnCases.filter(item => item.id !== id);
+    this.commit();
+    this.toast(decision === 'deny'
+      ? 'Bạn đã từ chối khiếu nại. Uy tín shop bị ảnh hưởng.'
+      : decision === 'exchange'
+        ? `Đã đổi hàng cho khách, phí vận chuyển ${RETURN_EXCHANGE_SHIPPING_FEE.toLocaleString('vi-VN')}₫.`
+        : 'Đã hoàn tiền và nhận lại sản phẩm vào kho.', decision === 'deny' ? 'error' : 'success');
+    return true;
+  }
+
+  acceptVip(id: string) {
+    const appointment = this.state.vipAppointments.find(item => item.id === id && item.status === 'offered');
+    if (!appointment) return false;
+    appointment.status = 'accepted';
+    this.commit(); this.toast(`Đã nhận đơn VIP của ${appointment.customerName}, khách sẽ tới lấy vào ${gameDate(appointment.scheduledDay)}.`); return true;
+  }
+
+  declineVip(id: string) {
+    const appointment = this.state.vipAppointments.find(item => item.id === id);
+    if (!appointment) return false;
+    this.state.vipAppointments = this.state.vipAppointments.filter(item => item.id !== id);
+    this.commit(); return true;
+  }
+
+  private processVipPickupsOnOpen() {
+    const s = this.state;
+    const dueAppointments = s.vipAppointments.filter(item => item.status === 'accepted' && item.scheduledDay === s.day);
+    for (const appointment of dueAppointments) {
+      const candidates = products.filter(product => product.category === appointment.category
+        && (product.style === appointment.style || product.secondaryStyles?.includes(appointment.style))
+        && displayedQuantity(s, product.id) > 0 && (s.inventory[product.id] ?? 0) > 0);
+      let selected: Product[] | undefined;
+      let bestQuality = -1;
+      const choose = (start: number, picked: Product[]) => {
+        if (picked.length === appointment.minItems) {
+          const total = picked.reduce((sum, item) => sum + sellPrice(s, item), 0);
+          const quality = picked.reduce((sum, item) => sum + item.quality, 0);
+          if (total <= appointment.budget && quality > bestQuality) {
+            selected = [...picked];
+            bestQuality = quality;
+          }
+          return;
+        }
+        for (let index = start; index < candidates.length; index++) choose(index + 1, [...picked, candidates[index]]);
+      };
+      choose(0, []);
+
+      s.vipAppointments = s.vipAppointments.filter(item => item.id !== appointment.id);
+      if (!selected) {
+        s.stats.served++;
+        s.stats.walkouts = (s.stats.walkouts ?? 0) + 1;
+        s.followers = Math.max(0, s.followers - 15);
+        this.applyShopReview(1, .8);
+        const reason = candidates.length < appointment.minItems
+          ? `không có đủ ${appointment.minItems} món ${appointment.style} · ${appointment.category}`
+          : 'các món đã trưng vượt ngân sách đặt trước';
+        this.toast(`${appointment.customerName} đã tới nhưng ${reason}. Shop bị giảm uy tín.`, 'error');
+        continue;
+      }
+
+      const pickedItems: Product[] = selected;
+      const total = pickedItems.reduce((sum, item) => sum + sellPrice(s, item), 0);
+      for (const item of pickedItems) {
+        s.inventory[item.id]--;
+        this.consumeDisplayedItem(item.id);
+        s.stats.soldProducts ??= {};
+        s.stats.soldProducts[item.id] = (s.stats.soldProducts[item.id] ?? 0) + 1;
+      }
+      s.money += total + appointment.reward;
+      s.xp += 35;
+      s.followers += 25;
+      s.industryReputation += 3;
+      s.stats.revenue += total + appointment.reward;
+      s.stats.costOfGoods += pickedItems.reduce((sum, item) => sum + item.buyPrice, 0);
+      s.stats.sold += pickedItems.length;
+      s.stats.served++;
+      s.stats.happy++;
+      s.stats.trendSales += pickedItems.filter(item => isTrending(s, item)).length;
+      s.stats.followers += 25;
+      this.applyShopReview(5);
+      this.progressCampaign(pickedItems, total, false);
+      this.recordAdvancedSale(pickedItems, total, appointment.customerName);
+      this.toast(`${appointment.customerName} đã tới lấy ${pickedItems.length} món đặt trước: +${(total + appointment.reward).toLocaleString('vi-VN')}₫.`);
+    }
+  }
+
+  startCoutureOrder() {
+    if (this.state.level < 5 || this.state.coutureOrder || this.state.day < this.state.coutureAvailableDay) return false;
+    const seq = this.state.operationSequence++;
+    this.state.coutureOrder = { id: `couture-${this.state.day}-${seq}`, clientName: ['Maison Lumière', 'Nữ ca sĩ Aria', 'Biên tập viên Elle'][seq % 3], brief: 'Thiết kế độc bản cho một sự kiện lớn, cần cân bằng chất liệu và độ hoàn thiện.', stage: 'concept', quality: 0, acceptedDay: this.state.day, deadlineDay: this.state.day + 5, reward: 850000 + this.state.level * 120000, status: 'active' };
+    this.commit(); return true;
+  }
+
+  advanceCouture(choice: 'safe' | 'premium') {
+    const order = this.state.coutureOrder;
+    if (!order || order.status === 'ready' || this.state.phase === 'open') return false;
+    const premiumCost = order.stage === 'materials' ? 240000 : order.stage === 'fitting' ? 90000 : 0;
+    if (choice === 'premium' && premiumCost > this.state.money) { this.toast('Chưa đủ tiền cho phương án cao cấp.', 'error'); return false; }
+    this.state.money -= choice === 'premium' ? premiumCost : 0;
+    order.quality = Math.min(100, order.quality + (choice === 'premium' ? 30 : 18));
+    order.stage = order.stage === 'concept' ? 'materials' : order.stage === 'materials' ? 'fitting' : order.stage === 'fitting' ? 'delivery' : 'delivery';
+    if (order.stage === 'delivery') order.status = 'ready';
+    this.commit(); return true;
+  }
+
+  deliverCouture() {
+    const order = this.state.coutureOrder;
+    if (!order || order.status !== 'ready') return false;
+    const onTime = this.state.day <= order.deadlineDay;
+    const success = onTime && order.quality >= 54;
+    if (success) {
+      this.state.money += order.reward; this.state.xp += 80; this.state.followers += 60; this.state.industryReputation += 8;
+      this.applyShopReview(5);
+    } else {
+      this.state.reputation = Math.max(1, this.state.reputation - .3); this.state.followers = Math.max(0, this.state.followers - 25);
+    }
+    this.state.coutureOrder = null;
+    this.state.coutureAvailableDay = this.state.day + 3;
+    this.commit(); this.toast(success ? `Đã bàn giao thiết kế độc bản: +${order.reward.toLocaleString('vi-VN')}₫.` : 'Đơn couture không đạt yêu cầu hoặc đã trễ hạn.', success ? 'success' : 'error'); return success;
+  }
+
   buy(id: string, quantity: number) {
     if (this.state.phase === 'open') {
       this.toast('Cửa hàng đang mở cửa đón khách! Không thể nhập hàng trong giờ bán.', 'error');
@@ -130,10 +386,19 @@ export class GameStore {
     }
     const p = products.find(p => p.id === id);
     if (!p || ![1, 5, 10].includes(quantity) || p.level > this.state.level) return false;
+    const supplier = supplierFor(this.state);
+    if (quantity < supplier.minOrder) { this.toast(`${supplier.name} yêu cầu tối thiểu ${supplier.minOrder} món mỗi mẫu.`, 'error'); return false; }
+    const reserved = this.state.pendingOrders.filter(order => order.productId === id).reduce((sum, order) => sum + order.quantity, 0);
+    if ((this.state.inventory[id] ?? 0) + reserved + quantity > 999) { this.toast('Kho và hàng đang về đã đủ 999 món của mẫu này.', 'error'); return false; }
     const cost = buyPrice(this.state, p) * quantity;
     if (cost > this.state.money) { this.toast('Ví hơi vơi rồi. Hãy bán thêm vài món nhé!', 'error'); return false; }
-    if ((this.state.inventory[id] ?? 0) + quantity > 999) return false;
     this.state.money -= cost; this.state.stats.spent += cost;
+    if (supplier.deliveryDays > 0) {
+      const delay = this.random() > supplier.reliability ? 1 : 0;
+      this.state.pendingOrders.push({ id: `supplier-${crypto.randomUUID()}`, productId: id, quantity, cost, arrivalDay: this.state.day + supplier.deliveryDays + delay, supplierId: supplier.id });
+      this.state.supplierRelations[supplier.id] = Math.min(100, this.state.supplierRelations[supplier.id] + 1);
+      this.commit(); this.toast(`Đã đặt ${quantity} món từ ${supplier.name}, dự kiến về sau ${supplier.deliveryDays + delay} ngày.`); return true;
+    }
     this.state.inventory[id] = (this.state.inventory[id] ?? 0) + quantity;
     this.commit(); this.toast(`Đã nhập ${quantity} ${p.name.toLowerCase()}.`); return true;
   }
@@ -146,32 +411,36 @@ export class GameStore {
     const p = products.find(p => p.id === id);
     if (!p || p.level > this.state.level) return false;
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 30) return false;
+    const supplier = supplierFor(this.state);
+    if (quantity < supplier.minOrder) { this.toast(`${supplier.name} yêu cầu tối thiểu ${supplier.minOrder} món mỗi mẫu.`, 'error'); return false; }
     const reserved = this.state.pendingOrders.filter(o => o.productId === id).reduce((sum, o) => sum + o.quantity, 0);
     if ((this.state.inventory[id] ?? 0) + reserved + quantity > 999) {
       this.toast('Kho và hàng đang về đã đủ 999 món của mẫu này.', 'error'); return false;
     }
     const basePrice = buyPrice(this.state, p);
-    const discount = bulkDiscountFactor(quantity);
-    const totalCost = Math.round(basePrice * quantity * discount);
+    const totalCost = basePrice * quantity;
     if (totalCost > this.state.money) { this.toast('Không đủ tiền để nhập đơn này.', 'error'); return false; }
     const isInternational = p.level >= 4 || p.buyPrice >= 200000;
     this.state.money -= totalCost; this.state.stats.spent += totalCost;
-    if (isInternational) {
-      const daysToArrive = p.level >= 5 ? 3 : 2;
+    const baseDeliveryDays = isInternational ? 3 : 0;
+    const supplierDelay = supplier.deliveryDays && this.random() > supplier.reliability ? 1 : 0;
+    const daysToArrive = baseDeliveryDays + supplier.deliveryDays + supplierDelay;
+    if (daysToArrive > 0) {
       const order: PendingOrder = {
         id: `order-${crypto.randomUUID()}`,
         productId: id, quantity, cost: totalCost,
         arrivalDay: this.state.day + daysToArrive,
+        supplierId: supplier.id,
       };
       this.state.pendingOrders.push(order);
+      this.state.supplierRelations[supplier.id] = Math.min(100, this.state.supplierRelations[supplier.id] + 1);
       this.commit();
-      this.toast(`Đã đặt hàng ${p.name} × ${quantity}. Dự kiến về sau ${daysToArrive} ngày.`);
+      this.toast(`Đã đặt ${p.name} × ${quantity} từ ${supplier.name}. Dự kiến về sau ${daysToArrive} ngày.`);
     } else {
       if ((this.state.inventory[id] ?? 0) + quantity > 999) { this.state.money += totalCost; this.state.stats.spent -= totalCost; return false; }
       this.state.inventory[id] = (this.state.inventory[id] ?? 0) + quantity;
-      const saved = Math.round(basePrice * quantity * bulkDiscountRate(quantity));
       this.commit();
-      this.toast(saved > 0 ? `Nhập ${quantity} ${p.name.toLowerCase()}. Tiết kiệm ${saved.toLocaleString('vi-VN')}₫!` : `Đã nhập ${quantity} ${p.name.toLowerCase()}.`);
+      this.toast(`Đã nhập ${quantity} ${p.name.toLowerCase()}.`);
     }
     return true;
   }
@@ -192,36 +461,49 @@ export class GameStore {
       return false;
     }
     if (!validOutfit(ids)) return false;
+    const supplier = supplierFor(this.state);
+    if (quantity < supplier.minOrder) { this.toast(`${supplier.name} yêu cầu tối thiểu ${supplier.minOrder} bộ.`, 'error'); return false; }
     const items = ids.map(id => products.find(p => p.id === id)!);
-    if (items.some(p => p.level > this.state.level || (this.state.inventory[p.id] ?? 0) + quantity > 999)) return false;
+    if (items.some(p => {
+      const reserved = this.state.pendingOrders.filter(order => order.productId === p.id).reduce((sum, order) => sum + order.quantity, 0);
+      return p.level > this.state.level || (this.state.inventory[p.id] ?? 0) + reserved + quantity > 999;
+    })) return false;
     const baseCostPerSet = items.reduce((sum, p) => sum + buyPrice(this.state, p), 0);
-    const discount = bulkDiscountFactor(quantity);
-    const totalCost = Math.round(baseCostPerSet * quantity * discount);
+    const totalCost = baseCostPerSet * quantity;
     if (totalCost > this.state.money) { this.toast('Chưa đủ tiền để nhập trọn outfit này.', 'error'); return false; }
-    const saved = Math.round(baseCostPerSet * quantity * bulkDiscountRate(quantity));
     this.state.money -= totalCost; this.state.stats.spent += totalCost;
+    const internationalDays = items.some(item => item.level >= 4 || item.buyPrice >= 200000) ? 3 : 0;
+    const supplierDelay = supplier.deliveryDays && this.random() > supplier.reliability ? 1 : 0;
+    const deliveryDays = internationalDays + supplier.deliveryDays + supplierDelay;
+    if (deliveryDays) {
+      const costPerItem = Math.round(totalCost / items.length);
+      for (const p of items) this.state.pendingOrders.push({ id: `look-${crypto.randomUUID()}`, productId: p.id, quantity, cost: costPerItem, arrivalDay: this.state.day + deliveryDays, supplierId: supplier.id });
+      this.state.supplierRelations[supplier.id] = Math.min(100, this.state.supplierRelations[supplier.id] + 1);
+      this.commit();
+      this.toast(`Đã đặt ×${quantity} bộ từ ${supplier.name}. Dự kiến về sau ${deliveryDays} ngày.`);
+      return true;
+    }
     for (const p of items) this.state.inventory[p.id] = (this.state.inventory[p.id] ?? 0) + quantity;
     this.commit();
-    this.toast(
-      saved > 0
-        ? `Đã nhập ×${quantity} bộ (${items.length * quantity} món). Tiết kiệm ${saved.toLocaleString('vi-VN')}₫!`
-        : `Đã nhập ×${quantity} bộ (${items.length * quantity} món) vào kho!`
-    );
+    this.toast(`Đã nhập ×${quantity} bộ (${items.length * quantity} món) vào kho!`);
     return true;
   }
   postRecruitment(salary: number) {
     const s = this.state;
     const requirement = nextStaffRequirement(s);
     if (s.phase === 'open') { this.toast('Hãy đăng tin tuyển dụng khi shop đã đóng cửa.', 'error'); return false; }
-    if (s.employees.length >= staffCapacity(s) || s.level < requirement.level || (s.landLevel ?? 0) < requirement.landLevel) {
-      this.toast(`Vị trí tiếp theo cần shop cấp ${requirement.level} và mặt bằng cấp ${requirement.landLevel + 1}.`, 'error'); return false;
+    if (s.level < requirement.level || (s.landLevel ?? 0) < requirement.landLevel) {
+      this.toast(`Tuyển dụng cần shop cấp ${requirement.level} và mặt bằng cấp ${requirement.landLevel + 1}.`, 'error'); return false;
     }
     if (s.recruitmentPost || s.staffApplicants.length) { this.toast('Shop đang có một đợt tuyển dụng chưa hoàn tất.', 'error'); return false; }
     const rounded = Math.round(salary / 5000) * 5000;
-    if (!Number.isFinite(rounded) || rounded < 30000 || rounded > 180000) { this.toast('Mức lương theo ngày cần từ 30.000₫ đến 180.000₫.', 'error'); return false; }
+    if (!Number.isFinite(rounded) || rounded < STAFF_SALARY_MIN || rounded > STAFF_SALARY_MAX) { this.toast(`Mức lương mỗi ca cần từ ${STAFF_SALARY_MIN.toLocaleString('vi-VN')}₫ đến ${STAFF_SALARY_MAX.toLocaleString('vi-VN')}₫.`, 'error'); return false; }
+    if (s.money < STAFF_RECRUITMENT_FEE) { this.toast(`Cần ${STAFF_RECRUITMENT_FEE.toLocaleString('vi-VN')}₫ phí đăng tin tuyển dụng.`, 'error'); return false; }
+    s.money -= STAFF_RECRUITMENT_FEE;
+    s.stats.spent += STAFF_RECRUITMENT_FEE;
     s.recruitmentPost = { salary: rounded, postedDay: s.day, applicantsDay: s.day + 2 };
     this.commit();
-    this.toast(`Đã đăng tin tuyển nhân viên với lương ${rounded.toLocaleString('vi-VN')}₫/ngày. Hồ sơ dự kiến về sau 2 ngày.`);
+    this.toast(`Đã trả ${STAFF_RECRUITMENT_FEE.toLocaleString('vi-VN')}₫ phí đăng tin · lương ${rounded.toLocaleString('vi-VN')}₫/ca.`);
     return true;
   }
   cancelRecruitment() {
@@ -233,7 +515,6 @@ export class GameStore {
   private generateStaffApplicants() {
     const post = this.state.recruitmentPost;
     if (!post || this.state.day < post.applicantsDay || this.state.staffApplicants.length) return;
-    const names = ['Mai An', 'Thảo Nhi', 'Gia Hân', 'Bảo Trân', 'Minh Châu', 'Khánh Linh', 'Yến Vy', 'Hà My', 'Ngọc Lam', 'Tú Anh'];
     const roles = [
       ['Stylist tinh tế', 'Mạnh về đọc gu khách và hoàn thiện outfit chỉ trong vài phút.'],
       ['Tư vấn viên năng động', 'Giao tiếp tự nhiên, tạo cảm giác thoải mái cho khách mới.'],
@@ -241,13 +522,13 @@ export class GameStore {
       ['Boutique host', 'Chăm sóc trải nghiệm, ghi nhớ sở thích của khách quen.'],
       ['Fashion assistant', 'Tỉ mỉ, đáng tin cậy và luôn giữ quầy kệ gọn gàng.'],
     ];
-    const salaryPower = Math.max(0, Math.min(1, (post.salary - 30000) / 150000));
+    const salaryPower = Math.max(0, Math.min(1, (post.salary - STAFF_SALARY_MIN) / (STAFF_SALARY_MAX - STAFF_SALARY_MIN)));
     const base = 34 + salaryPower * 46;
     const used = new Set(this.state.employees.map(employee => employee.name));
     const usedAppearances = new Set(this.state.employees.map(employee => Math.abs(employee.appearance) % 6));
     const applicants: StaffCandidate[] = [];
     for (let index = 0; index < 3; index++) {
-      const availableNames = names.filter(name => !used.has(name));
+      const availableNames = STAFF_NAMES.filter(name => !used.has(name));
       const name = availableNames[Math.floor(this.random() * availableNames.length)] ?? `Ứng viên ${index + 1}`;
       used.add(name);
       const role = roles[Math.floor(this.random() * roles.length)];
@@ -268,18 +549,32 @@ export class GameStore {
   hireStaff(candidateId: string) {
     const s = this.state;
     const candidate = s.staffApplicants.find(item => item.id === candidateId);
-    if (!candidate || s.employees.length >= staffCapacity(s)) return false;
-    s.employees.push({ ...candidate, uid: `staff-${Date.now()}-${candidate.id}`, hiredDay: s.day, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, experience: 0, skillLevel: 1, shiftSales: 0 });
-    s.staffApplicants = [];
-    s.recruitmentPost = null;
-    this.commit(); this.toast(`${candidate.name} đã gia nhập ${s.shopName}!`); return true;
+    if (!candidate || staffCapacity(s) < 1) return false;
+    const assignedCount = s.employees.filter(item => (item.assignment ?? 'service') !== 'off').length;
+    const assignment: StaffAssignment = assignedCount < staffCapacity(s) ? 'service' : 'off';
+    s.employees.push({ ...candidate, uid: `staff-${Date.now()}-${candidate.id}`, hiredDay: s.day, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, experience: 0, skillLevel: 1, shiftSales: 0, energy: 100, assignment, unpaidShifts: 0, unpaidWages: 0, totalShiftsWorked: 0 });
+    s.staffApplicants = s.staffApplicants.filter(item => item.id !== candidateId);
+    if (!s.staffApplicants.length) s.recruitmentPost = null;
+    this.commit();
+    this.toast(assignment === 'off' ? `${candidate.name} đã gia nhập đội ngũ và đang nghỉ chờ xếp ca.` : `${candidate.name} đã gia nhập ${s.shopName}!`);
+    return true;
   }
   fireStaff(uid: string) {
     const employee = this.state.employees.find(item => item.uid === uid);
     if (!employee) return false;
+    const settledWages = this.settleDepartingStaffWages(employee);
     this.state.employees = this.state.employees.filter(item => item.uid !== uid);
     this.state.staffLeaveRequests = this.state.staffLeaveRequests.filter(request => request.employeeUid !== uid);
-    this.commit(); this.toast(`${employee.name} đã rời đội ngũ boutique.`, 'error'); return true;
+    this.commit(); this.toast(`${employee.name} đã rời đội ngũ boutique.${settledWages ? ` Đã tự động trả ${settledWages.toLocaleString('vi-VN')}₫ lương còn nợ.` : ''}`, 'error'); return true;
+  }
+  private settleDepartingStaffWages(employee: StaffMember) {
+    const amount = Math.max(0, employee.unpaidWages ?? 0);
+    if (!amount) return 0;
+    this.state.money -= amount;
+    this.state.stats.staffWages += amount;
+    employee.unpaidWages = 0;
+    employee.unpaidShifts = 0;
+    return amount;
   }
   decideStaffLeave(uid: string, approve: boolean) {
     const request = this.state.staffLeaveRequests.find(item => item.employeeUid === uid);
@@ -301,18 +596,31 @@ export class GameStore {
     const s = this.state;
     const reasons = ['có lịch khám sức khỏe', 'cần giải quyết việc gia đình', 'muốn nghỉ ngơi để hồi phục năng lượng', 'có việc cá nhân quan trọng'];
     for (const employee of [...s.employees]) {
+      const assignment = employee.assignment ?? 'service';
+      const onLeave = !!employee.leaveUntilDay && employee.leaveUntilDay > s.day;
+      if (onLeave) {
+        employee.energy = Math.min(100, (employee.energy ?? 100) + 38);
+        continue;
+      }
+      employee.energy = assignment === 'off' ? Math.min(100, (employee.energy ?? 100) + 38) : Math.max(0, (employee.energy ?? 100) - 24);
+      if (assignment === 'stock' && (employee.energy ?? 0) >= 15) {
+        const nextOrder = s.pendingOrders.filter(order => order.arrivalDay > s.day).sort((a, b) => a.arrivalDay - b.arrivalDay)[0];
+        if (nextOrder) nextOrder.arrivalDay = Math.max(s.day + 1, nextOrder.arrivalDay - 1);
+      }
       const quitChance = employee.deniedLeaves >= 2 ? .04 + employee.deniedLeaves * .07 + (100 - employee.morale) * .003 : 0;
       if (quitChance && this.random() < quitChance) {
+        const settledWages = this.settleDepartingStaffWages(employee);
         s.employees = s.employees.filter(item => item.uid !== employee.uid);
         s.staffLeaveRequests = s.staffLeaveRequests.filter(request => request.employeeUid !== employee.uid);
-        this.toast(`${employee.name} đã xin nghỉ việc vì nhiều lần không được duyệt nghỉ.`, 'error');
+        this.toast(`${employee.name} đã xin nghỉ việc vì nhiều lần không được duyệt nghỉ.${settledWages ? ` Shop tự động trả ${settledWages.toLocaleString('vi-VN')}₫ lương còn nợ.` : ''}`, 'error');
         continue;
       }
       const alreadyRequested = s.staffLeaveRequests.some(request => request.employeeUid === employee.uid);
       if (!employee.leaveUntilDay && !alreadyRequested) {
         const leaveChance = .025 + (100 - employee.reliability) * .0012;
         if (this.random() < leaveChance) {
-          s.staffLeaveRequests.push({ employeeUid: employee.uid, requestedDay: s.day, days: this.random() < .75 ? 1 : 2, reason: reasons[Math.floor(this.random() * reasons.length)] });
+          const leaveDays = 1 + Math.floor(this.random() * 5);
+          s.staffLeaveRequests.push({ employeeUid: employee.uid, requestedDay: s.day, days: leaveDays, reason: reasons[Math.floor(this.random() * reasons.length)] });
           this.toast(`${employee.name} vừa gửi một đơn xin nghỉ phép.`);
         }
       }
@@ -324,12 +632,57 @@ export class GameStore {
       if (employee.leaveUntilDay && employee.leaveUntilDay <= this.state.day) delete employee.leaveUntilDay;
     }
   }
+
+  private processAdvancedOperationsNewDay() {
+    const s = this.state;
+    for (const claim of [...s.returnCases]) {
+      if (claim.deadlineDay >= s.day) continue;
+      s.returnCases = s.returnCases.filter(item => item.id !== claim.id);
+      this.applyShopReview(1, .9);
+      s.followers = Math.max(0, s.followers - 12);
+      this.toast(`Khiếu nại của ${claim.customerName} đã quá hạn. Uy tín shop giảm.`, 'error');
+    }
+    for (const appointment of [...s.vipAppointments]) {
+      if (appointment.status === 'accepted' && appointment.scheduledDay < s.day) {
+        s.vipAppointments = s.vipAppointments.filter(item => item.id !== appointment.id);
+        s.reputation = Math.max(1, s.reputation - .2);
+        this.toast(`Shop đã lỡ ngày khách VIP ${appointment.customerName} tới lấy hàng.`, 'error');
+      } else if (appointment.status === 'offered' && appointment.scheduledDay <= s.day) {
+        s.vipAppointments = s.vipAppointments.filter(item => item.id !== appointment.id);
+      }
+    }
+    if (s.level >= 4 && !s.vipAppointments.length && s.day % 3 === 0) {
+      s.vipAppointments.push(createVipAppointment(s));
+      s.operationSequence++;
+      this.toast('Có một khách VIP gửi yêu cầu đặt hàng trước.');
+    }
+    if (s.coutureOrder && s.day > s.coutureOrder.deadlineDay) {
+      s.reputation = Math.max(1, s.reputation - .25);
+      s.coutureOrder = null;
+      s.coutureAvailableDay = s.day + 2;
+      this.toast('Đơn couture đã quá hạn và bị hủy.', 'error');
+    }
+    if (s.reputationCrisis) {
+      if (crisisComplete(s)) {
+        s.reputation = Math.max(3.8, s.reputation);
+        s.followers += 40;
+        s.reputationCrisis = null;
+        this.toast('Boutique đã vượt qua khủng hoảng uy tín và lấy lại niềm tin của khách!');
+      } else if (s.day > s.reputationCrisis.deadlineDay) {
+        s.followers = Math.max(0, Math.floor(s.followers * .8));
+        s.reputation = Math.max(1, s.reputation - .35);
+        s.reputationCrisis = null;
+        this.toast('Kế hoạch xử lý khủng hoảng thất bại. Shop mất thêm người theo dõi.', 'error');
+      }
+    }
+  }
   openShop() {
     if (this.state.phase !== 'preparation') return;
     if (this.state.gameOverReason) return;
+    this.expireCampaignIfNeeded();
     if (!this.hasDisplayedStock()) { this.toast('Hãy trưng ít nhất một món lên sào, kệ, tủ hoặc ma-nơ-canh trước khi mở cửa.', 'error'); return; }
     this.state.phase = 'open';
-    this.state.dayTimer = DAY_DURATION;
+    this.state.dayTimer = dayDuration(this.state);
     const event = currentEvent(this.state);
     this.state.dailyLuck = event.name;
     this.state.customerIndex = 0;
@@ -340,12 +693,13 @@ export class GameStore {
     this.state.patience = 0;
     this.state.nextArrivalIn = 3 + Math.floor(this.random() * 6);
     this.state.onlineNextOrderIn = 6 + Math.floor(this.random() * 7);
+    this.processVipPickupsOnOpen();
     // Refresh danh sách khách cho ngày mới
     this.dayCustomersKey = -1;
     this.ensureDayCustomers();
     this.commit();
     this.emit({ type: 'customer' });
-    this.toast(`Mở cửa ngày ${this.state.day}! ${event.name}: ${event.description}`);
+    this.toast(`Mở cửa ${gameDate(this.state.day)}! ${event.name}: ${event.description}`);
   }
   serve(ids: string[], assistingStaffUid?: string, automatedByStaff = false): SaleResult | undefined {
     const customer = activeCustomer(this.state);
@@ -396,12 +750,28 @@ export class GameStore {
       s.followers += followers; s.stats.followers += followers;
       if (assistingStaff) { assistingStaff.sales++; assistingStaff.shiftSales = (assistingStaff.shiftSales ?? 0) + 1; assistingStaff.tipsEarned += tip; assistingStaff.morale = Math.min(100, assistingStaff.morale + 1); }
       this.applyShopReview(reviewStars);
-      recordPublicShopReview(s, reviewStars);
-      s.posts.unshift({ id: `${s.day}-${s.customerIndex}`, name: customer.name, handle: customer.handle, text: viral ? 'Một chiếc boutique nhỏ xinh vừa xuất hiện trên feed của mình! Outfit đúng gu, chủ shop siêu có tâm. Mọi người phải ghé thử! #LittleBoutique #OOTD' : `${items.map(p => p.name).join(' + ')} xinh hơn mình tưởng! ${score >= 88 ? 'Đúng gu 100%, chắc chắn sẽ quay lại!' : 'Cảm ơn shop đã chọn đồ giúp mình.'}`, likes: viral ? 2431 : Math.round(score / 3), day: s.day, viral, color: customer.outfit, reviewStars });
-      s.posts = s.posts.slice(0, 40);
+      this.progressCampaign(items, total, false);
+      this.recordAdvancedSale(items, total, customer.name);
+      if (this.shouldPublishCustomerReview(reviewStars, viral)) {
+        const itemNames = items.map(item => item.name).join(' + ');
+        const reviewText = viral
+          ? 'Một chiếc boutique nhỏ xinh vừa xuất hiện trên feed của mình! Outfit đúng gu, chủ shop siêu có tâm. Mọi người phải ghé thử! #LittleBoutique #OOTD'
+          : reviewStars === 5
+            ? `${itemNames} đẹp hơn mình tưởng! Phối đúng gu, tư vấn rất có tâm. Chắc chắn mình sẽ quay lại.`
+            : reviewStars === 4
+              ? `${itemNames} khá xinh và hợp gu. Trải nghiệm mua sắm dễ chịu, mình sẽ ghé lại.`
+              : `Món đồ ổn và shop thân thiện, nhưng trải nghiệm vẫn còn vài điểm có thể tốt hơn.`;
+        this.publishCustomerReview(customer, reviewStars, reviewText, viral ? 2431 : Math.round(score / 3), viral);
+      }
     } else {
       s.stats.walkouts = (s.stats.walkouts ?? 0) + 1;
       this.applyShopReview(reviewStars, .72);
+      if (this.shouldPublishCustomerReview(reviewStars)) {
+        const reviewText = reviewStars === 2
+          ? 'Mình đã chờ khá lâu nhưng món được gợi ý vẫn chưa đúng nhu cầu. Mong shop cải thiện hơn.'
+          : 'Lần này mình chưa tìm được món phù hợp. Trải nghiệm ở mức bình thường, hy vọng lần sau tốt hơn.';
+        this.publishCustomerReview(customer, reviewStars, reviewText, reviewStars === 2 ? 3 : 8, false, 'miss');
+      }
     }
     const loyalty = this.recordCustomerRelationship(customer, success, score, items.length);
     result.loyaltyPoints = loyalty.points;
@@ -439,19 +809,16 @@ export class GameStore {
     s.stats.trendSales += items.filter(p => isTrending(s, p)).length;
     s.followers += followers; s.stats.followers += followers;
     this.applyShopReview(reviewStars);
-    recordPublicShopReview(s, reviewStars);
-    s.posts.unshift({
-      id: `${s.day}-${s.customerIndex}-self`,
-      name: customer.name,
-      handle: customer.handle,
-      text: `${items.map(p => p.name).join(' + ')} ở boutique xinh xỉu! Vừa ghé đã chốt đơn liền tay. #BoutiqueLover`,
-      likes: viral ? 1850 : Math.round(score / 4) + 10,
-      day: s.day,
-      viral,
-      color: customer.outfit,
-      reviewStars
-    });
-    s.posts = s.posts.slice(0, 40);
+    this.progressCampaign(items, total, false);
+    this.recordAdvancedSale(items, total, customer.name);
+    if (this.shouldPublishCustomerReview(reviewStars, viral)) {
+      const reviewText = reviewStars === 5
+        ? `${items.map(item => item.name).join(' + ')} ở boutique xinh xỉu! Vừa ghé đã chốt đơn liền tay. #BoutiqueLover`
+        : reviewStars === 4
+          ? 'Mình tự chọn được món khá hợp gu, giá ổn và không gian shop rất dễ thương.'
+          : 'Có món phù hợp nhưng lựa chọn vẫn chưa thật sự đa dạng. Trải nghiệm nhìn chung ổn.';
+      this.publishCustomerReview(customer, reviewStars, reviewText, viral ? 1850 : Math.round(score / 4) + 10, viral, 'self');
+    }
     const loyalty = this.recordCustomerRelationship(customer, true, score, items.length);
     result.loyaltyPoints = loyalty.points;
     result.loyaltyTier = loyalty.tier;
@@ -468,6 +835,9 @@ export class GameStore {
     s.stats.served++;
     s.stats.walkouts = (s.stats.walkouts ?? 0) + 1;
     const reviewStars = this.applyShopReview(2, .55);
+    if (this.shouldPublishCustomerReview(reviewStars)) {
+      this.publishCustomerReview(customer, reviewStars, 'Mình đã chờ nhưng chưa tìm được món phù hợp. Shop cần cải thiện lựa chọn và hỗ trợ khách tốt hơn.', 2, false, 'walkout');
+    }
     const result: SaleResult = {
       success: false,
       score: 30,
@@ -493,7 +863,10 @@ export class GameStore {
     if (!customer) return;
     this.state.stats.served++;
     this.state.stats.walkouts = (this.state.stats.walkouts ?? 0) + 1;
-    this.applyShopReview(1.5, .8);
+    const reviewStars = this.applyShopReview(1, .8);
+    if (this.shouldPublishCustomerReview(reviewStars)) {
+      this.publishCustomerReview(customer, reviewStars, 'Mình đã đến shop nhưng không được phục vụ và phải rời đi. Đây là một trải nghiệm rất thất vọng.', 1, false, 'ignored');
+    }
     this.recordCustomerRelationship(customer, false);
     this.advanceCustomer();
     this.commit();
@@ -699,6 +1072,7 @@ export class GameStore {
     const correct = handedIds.length === requestedIds.length && handedIds.every(id => requestedIds.includes(id));
     if (!correct) {
       const stars = this.applyOnlineReview(1, 1.15);
+      this.publishOnlineReview(order, stars, 'Shop giao nhầm sản phẩm mình đã đặt. Mong shop kiểm tra đơn kỹ hơn trước khi gửi cho khách.', 1);
       this.commit();
       this.toast(`Giao nhầm sản phẩm. Khách đánh giá ${stars} sao và uy tín shop bị giảm mạnh.`, 'error');
       return true;
@@ -717,10 +1091,18 @@ export class GameStore {
     const averageQuality = handedProducts.reduce((total, product) => total + product.quality, 0) / handedProducts.length;
     const priceRatio = order.price / Math.max(1, basePrice);
     const stars = this.applyOnlineReview(3.25 + (averageQuality - 75) / 14 - Math.max(0, priceRatio - 1) * 1.35 + Math.max(0, 1 - priceRatio) * .35);
+    const onlineReviewText = stars >= 5
+      ? 'Đơn được chuẩn bị rất chỉn chu, sản phẩm đẹp đúng như ảnh và giao nhanh. Mình sẽ quay lại mua tiếp!'
+      : stars >= 4
+        ? 'Sản phẩm đúng mô tả, đóng gói xinh và trải nghiệm mua online rất ổn.'
+        : 'Đơn hàng đã nhận đủ. Sản phẩm ổn nhưng shop vẫn có thể cải thiện thêm trải nghiệm giao hàng.';
+    this.publishOnlineReview(order, stars, onlineReviewText, stars >= 5 ? 12 : stars >= 4 ? 5 : 2);
     const newFollowers = 1 + Math.floor(this.random() * 3);
     s.followers += newFollowers;
     s.stats.followers += newFollowers;
     s.xp += 4;
+    this.progressCampaign(handedProducts, order.price, true);
+    this.recordAdvancedSale(handedProducts, order.price, order.customerName);
     this.commit();
     this.toast(`Giao đúng đơn online: +${net.toLocaleString('vi-VN')}₫ sau phí · khách đánh giá ${stars.toFixed(1)} sao.`);
     return true;
@@ -731,7 +1113,9 @@ export class GameStore {
     const order = s.onlineOrders.find(item => item.id === orderId);
     if (!order || s.phase !== 'open' || this.onlineWarehouseQuantity(order.productId) > 0) return false;
     s.onlineOrders = s.onlineOrders.filter(item => item.id !== orderId);
-    this.applyOnlineReview(2, .7);
+    s.onlineOrders = s.onlineOrders.filter(item => item.id !== orderId);
+    const stars = this.applyOnlineReview(2, .7);
+    this.publishOnlineReview(order, stars, 'Mình đặt hàng nhưng shop báo hết sản phẩm sau đó. Mong shop cập nhật tồn kho online chính xác hơn.', 1);
     this.commit();
     this.toast('Đã báo hết hàng và hủy đơn. Khách đánh giá 2 sao nhưng mức phạt nhẹ hơn bỏ quên đơn.', 'error');
     return true;
@@ -747,7 +1131,7 @@ export class GameStore {
   }
 
   private processStaffAssistance() {
-    const staff = activeEmployees(this.state).sort((a, b) => (b.service + b.persuasion + b.reliability * .5) - (a.service + a.persuasion + a.reliability * .5));
+    const staff = activeEmployees(this.state).filter(employee => (employee.assignment ?? 'service') === 'service').sort((a, b) => (b.service + b.persuasion + b.reliability * .5) - (a.service + a.persuasion + a.reliability * .5));
     if (!staff.length) return false;
     const assigned = new Set(this.state.activeVisits.map(visit => visit.assignedStaffUid).filter((uid): uid is string => !!uid));
     let changed = false;
@@ -814,7 +1198,7 @@ export class GameStore {
     }
     this.state.money += rounded;
     this.commit();
-    this.toast(`Đã giải ngân ${rounded.toLocaleString('vi-VN')}₫. Bắt đầu trả từ ngày 3.`);
+    this.toast(`Đã giải ngân ${rounded.toLocaleString('vi-VN')}₫. Bắt đầu trả từ ${gameDate(3)}.`);
     return true;
   }
 
@@ -844,11 +1228,38 @@ export class GameStore {
     return true;
   }
 
+  payStaffWages(uid?: string) {
+    if (this.state.gameOverReason || this.state.phase === 'open') return false;
+    const employees = uid
+      ? this.state.employees.filter(employee => employee.uid === uid)
+      : this.state.employees.filter(employee => (employee.unpaidWages ?? 0) > 0);
+    const amount = employees.reduce((sum, employee) => sum + (employee.unpaidWages ?? 0), 0);
+    if (!employees.length || amount <= 0) return false;
+    if (this.state.money < amount) {
+      this.toast(`Cần ${amount.toLocaleString('vi-VN')}₫ để thanh toán khoản lương này.`, 'error');
+      return false;
+    }
+    this.state.money -= amount;
+    this.state.stats.staffWages += amount;
+    for (const employee of employees) {
+      employee.unpaidWages = 0;
+      employee.unpaidShifts = 0;
+      employee.morale = Math.min(100, employee.morale + 4);
+    }
+    this.commit();
+    this.toast(uid ? `Đã thanh toán ${amount.toLocaleString('vi-VN')}₫ tiền lương.` : `Đã thanh toán toàn bộ ${amount.toLocaleString('vi-VN')}₫ tiền lương.`);
+    return true;
+  }
+
   closeDay(reason: 'manual' | 'time' | 'sold-out' = 'manual') {
     if (this.state.phase !== 'open') return;
-    const missedOnlineOrders = this.state.onlineOrders.length;
+    const missedOrders = [...this.state.onlineOrders];
+    const missedOnlineOrders = missedOrders.length;
     if (missedOnlineOrders) {
-      for (let index = 0; index < missedOnlineOrders; index++) this.applyOnlineReview(1.5, .85);
+      for (const order of missedOrders) {
+        const stars = this.applyOnlineReview(1.5, .85);
+        this.publishOnlineReview(order, stars, 'Đơn của mình không được xử lý trước khi shop đóng cửa. Trải nghiệm mua online lần này chưa tốt.', 0);
+      }
       this.state.onlineOrders = [];
       this.toast(`${missedOnlineOrders} đơn online chưa giao trước khi đóng cửa. Đánh giá kênh bán bị giảm.`, 'error');
     }
@@ -876,19 +1287,41 @@ export class GameStore {
     this.state.loanOverdueDays = (loan?.paymentDue ?? 0) > 0 ? this.state.loanOverdueDays + 1 : 0;
     if (this.state.loanOverdueDays > 7) this.state.gameOverReason = 'creditor';
     else if (this.state.rentOverdueDays > 7) this.state.gameOverReason = 'landlord';
-    const wageDue = this.state.employees.reduce((sum, employee) => sum + employee.salary, 0);
-    const wagesPaid = Math.min(this.state.money, wageDue);
-    this.state.money -= wagesPaid;
-    this.state.stats.staffWages = wagesPaid;
-    if (wagesPaid < wageDue) {
-      for (const employee of this.state.employees) employee.morale = Math.max(0, employee.morale - 22);
-      this.toast(`Shop còn thiếu ${(wageDue - wagesPaid).toLocaleString('vi-VN')}₫ tiền lương. Tinh thần đội ngũ giảm mạnh.`, 'error');
+    const shiftWorkers = activeEmployees(this.state);
+    for (const employee of shiftWorkers) {
+      employee.unpaidShifts = (employee.unpaidShifts ?? 0) + 1;
+      employee.unpaidWages = (employee.unpaidWages ?? 0) + employee.salary;
+      employee.totalShiftsWorked = (employee.totalShiftsWorked ?? 0) + 1;
     }
     this.awardStaffShiftExperience();
     this.processStaffShiftEnd();
+    const staffFinancialNotice = {
+      payrollAtRisk: this.state.employees
+        .filter(employee => (employee.unpaidShifts ?? 0) === 3)
+        .map(employee => ({
+          uid: employee.uid,
+          name: employee.name,
+          amount: employee.unpaidWages ?? 0,
+          shifts: employee.unpaidShifts ?? 0,
+        })),
+      departures: [] as { uid: string; name: string; amount: number }[],
+    };
+    for (const employee of [...this.state.employees]) {
+      if ((employee.unpaidShifts ?? 0) <= 3) continue;
+      const settledWages = this.settleDepartingStaffWages(employee);
+      staffFinancialNotice.departures.push({ uid: employee.uid, name: employee.name, amount: settledWages });
+      this.state.employees = this.state.employees.filter(item => item.uid !== employee.uid);
+      this.state.staffLeaveRequests = this.state.staffLeaveRequests.filter(request => request.employeeUid !== employee.uid);
+      this.toast(`${employee.name} đã nghỉ việc vì shop nợ lương quá 3 công.${settledWages ? ` ${settledWages.toLocaleString('vi-VN')}₫ công nợ đã bị trừ tự động.` : ''}`, 'error');
+    }
     this.commit();
     const debtNeedsWarning = this.state.loanOverdueDays >= 5 || this.state.rentOverdueDays >= 5;
-    this.emit({ type: this.state.gameOverReason ? 'game-over' : debtNeedsWarning ? 'debt-warning' : 'summary' });
+    const staffNeedsWarning = staffFinancialNotice.payrollAtRisk.length > 0 || staffFinancialNotice.departures.length > 0;
+    this.emit(this.state.gameOverReason
+      ? { type: 'game-over' }
+      : debtNeedsWarning || staffNeedsWarning
+        ? { type: 'debt-warning', staff: staffFinancialNotice }
+        : { type: 'summary' });
     if (this.state.gameOverReason) {
       this.toast(this.state.gameOverReason === 'creditor' ? 'Khoản vay đã quá hạn hơn 7 ngày. Chủ nợ đã tới thu hồi boutique.' : 'Tiền thuê đã quá hạn hơn 7 ngày. Chủ nhà đã thu hồi mặt bằng.', 'error');
       return;
@@ -926,9 +1359,10 @@ export class GameStore {
   nextDay() {
     if (this.state.phase !== 'closed' || this.state.gameOverReason) return;
     this.state.day++;
+    this.expireCampaignIfNeeded();
     this.state.phase = 'preparation';
     this.state.customerIndex = 0;
-    this.state.dayTimer = DAY_DURATION;
+    this.state.dayTimer = dayDuration(this.state);
     this.state.stats = emptyStats();
     this.state.currentCustomerId = null;
     this.state.customerMode = null;
@@ -939,11 +1373,13 @@ export class GameStore {
     this.state.patience = 0;
     this.receiveOrders();
     this.processStaffNewDay();
+    this.processAdvancedOperationsNewDay();
     this.commit();
-    this.toast(`Chào ngày ${this.state.day}! Khám phá xu hướng mới và chuẩn bị shop nhé.`);
+    this.toast(`Chào ${gameDate(this.state.day)}! Khám phá xu hướng mới và chuẩn bị shop nhé.`);
   }
   /** Partial delivery keeps paid overflow in transit, including saves from older builds. */
   private receiveOrders() {
+    const arrived: { productId: string; productName: string; quantity: number; supplierId?: string }[] = [];
     this.state.pendingOrders = this.state.pendingOrders.flatMap(o => {
       const p = products.find(p => p.id === o.productId);
       if (!p || o.arrivalDay > this.state.day) return [o];
@@ -951,12 +1387,13 @@ export class GameStore {
       const received = Math.min(o.quantity, Math.max(0, 999 - stock));
       if (!received) return [o];
       this.state.inventory[p.id] = stock + received;
+      arrived.push({ productId: p.id, productName: p.name, quantity: received, ...(o.supplierId ? { supplierId: o.supplierId } : {}) });
       this.toast(`Hàng về kho: ${p.name} × ${received}.`);
       if (received === o.quantity) return [];
       return [{ ...o, quantity: o.quantity - received, cost: Math.round(o.cost * (o.quantity - received) / o.quantity) }];
     });
+    if (arrived.length) this.emit({ type: 'orders-arrived', items: arrived });
   }
-  collectOrders() { this.receiveOrders(); this.commit(); }
   private consumeDisplayedItem(productId: string) {
     for (const placed of this.state.layout) {
       const index = placed.displayItems?.indexOf(productId) ?? -1;
@@ -1116,7 +1553,76 @@ export class GameStore {
   upgrade() {
     const next = levels[this.state.level]; if (!next) return;
     if (this.state.xp < next.xp || this.state.money < next.cost) { this.toast(`Cần ${next.xp} XP và ${next.cost.toLocaleString('vi-VN')}₫ để nâng cấp.`, 'error'); return; }
-    this.state.money -= next.cost; this.state.level++; this.commit(); this.toast(`Lên cấp ${this.state.level}! Thêm sản phẩm và nội thất mới đã mở khóa.`);
+    this.state.money -= next.cost; this.state.level++; this.commit(); this.toast(this.state.level === 3 ? 'Lên cấp 3! Studio hợp tác đã mở: nhận hợp đồng thương hiệu kéo dài nhiều ngày.' : `Lên cấp ${this.state.level}! Thêm sản phẩm và nội thất mới đã mở khóa.`);
+  }
+  startCampaign(id: string) {
+    const s = this.state;
+    if (s.level < 3) { this.toast('Studio hợp tác mở khóa khi boutique đạt cấp 3.', 'error'); return false; }
+    if (s.phase === 'open') { this.toast('Hãy chọn hợp đồng trước hoặc sau giờ bán.', 'error'); return false; }
+    if (s.activeCampaign) { this.toast('Boutique đang thực hiện một hợp đồng khác.', 'error'); return false; }
+    if (s.day < s.campaignAvailableDay) { this.toast(`Đối tác mới sẽ gửi brief vào ${gameDate(s.campaignAvailableDay)}.`, 'error'); return false; }
+    const offer = campaignOffers(s).find(candidate => candidate.id === id);
+    if (!offer) return false;
+    s.activeCampaign = { ...offer, startDay: s.day, deadlineDay: s.day + offer.durationDays - 1, units: 0, revenue: 0, onlineOrders: 0, status: 'active' };
+    this.commit();
+    this.toast(`Đã nhận “${offer.name}”. Bạn có ${offer.durationDays} ngày để hoàn thành brief.`);
+    return true;
+  }
+  acknowledgeCampaignGuide() {
+    if (this.state.claimed.includes(CAMPAIGN_GUIDE_SEEN)) return;
+    this.state.claimed.push(CAMPAIGN_GUIDE_SEEN);
+    this.commit();
+  }
+  claimCampaign() {
+    const s = this.state;
+    const campaign = s.activeCampaign;
+    if (!campaign || campaign.status !== 'ready') return false;
+    s.money += campaign.rewardMoney;
+    s.xp += campaign.rewardXp;
+    s.followers += campaign.rewardFollowers;
+    s.industryReputation += campaign.prestigeReward;
+    s.completedCampaigns.push(campaign.id);
+    s.activeCampaign = null;
+    s.campaignSeason++;
+    s.campaignAvailableDay = s.day + 1;
+    this.commit();
+    this.toast(`Chiến dịch thành công! Danh tiếng ngành +${campaign.prestigeReward}.`);
+    return true;
+  }
+  abandonCampaign() {
+    const s = this.state;
+    const campaign = s.activeCampaign;
+    if (!campaign) return false;
+    s.activeCampaign = null;
+    s.campaignSeason++;
+    s.campaignAvailableDay = s.day + 1;
+    this.commit();
+    this.toast(campaign.status === 'failed' ? 'Đã khép lại chiến dịch. Brief mới sẽ đến vào ngày mai.' : 'Đã rút khỏi chiến dịch. Brief mới sẽ đến vào ngày mai.', campaign.status === 'failed' ? 'error' : 'success');
+    return true;
+  }
+  private progressCampaign(items: Product[], total: number, online: boolean) {
+    const campaign = this.state.activeCampaign;
+    if (!campaign || campaign.status !== 'active' || this.state.day > campaign.deadlineDay) return;
+    const matching = items.filter(product => campaign.style
+      ? product.style === campaign.style || product.secondaryStyles?.includes(campaign.style)
+      : campaign.category ? product.category === campaign.category : true);
+    if (matching.length) {
+      campaign.units += matching.length;
+      campaign.revenue += campaign.style || campaign.category
+        ? matching.reduce((sum, product) => sum + sellPrice(this.state, product), 0)
+        : total;
+    }
+    if (online) campaign.onlineOrders++;
+    if (campaignIsComplete(campaign)) {
+      campaign.status = 'ready';
+      this.toast(`Hoàn thành “${campaign.name}”! Vào Studio hợp tác để nhận thưởng.`);
+    }
+  }
+  private expireCampaignIfNeeded() {
+    const campaign = this.state.activeCampaign;
+    if (!campaign || campaign.status !== 'active' || this.state.day <= campaign.deadlineDay) return;
+    campaign.status = campaignIsComplete(campaign) ? 'ready' : 'failed';
+    if (campaign.status === 'failed') this.toast(`“${campaign.name}” đã hết hạn. Hãy khép lại chiến dịch để nhận brief mới.`, 'error');
   }
   claimQuest(id: string) {
     const key = `${this.state.day}:${id}`;
@@ -1158,7 +1664,7 @@ export class GameStore {
     const generateApplicantsNow = () => {
       prepareRecruitment();
       s.staffApplicants = [];
-      s.recruitmentPost = { salary: 90000, postedDay: s.day, applicantsDay: s.day };
+      s.recruitmentPost = { salary: 120000, postedDay: s.day, applicantsDay: s.day };
       this.generateStaffApplicants();
     };
     switch (action) {
@@ -1171,6 +1677,35 @@ export class GameStore {
       case 'stock':
         for (const product of products.filter(product => product.level <= s.level)) s.inventory[product.id] = Math.max(10, s.inventory[product.id] ?? 0);
         this.commit(); this.toast('Debug: Đã bổ sung 10 món cho toàn bộ sản phẩm đang mở khóa.'); return true;
+      case 'advanced-features': {
+        if (s.phase === 'open') {
+          s.phase = 'preparation'; s.activeVisits = []; s.currentVisitId = null; s.currentCustomerId = null; s.customerMode = null; s.patience = 0;
+        } else if (s.phase === 'closed') s.phase = 'preparation';
+        s.level = Math.max(5, s.level); s.xp = Math.max(2000, s.xp); s.landLevel = Math.max(2, s.landLevel ?? 0); s.money = Math.max(3000000, s.money);
+        for (const product of products.filter(product => product.level <= 5)) s.inventory[product.id] = Math.max(12, s.inventory[product.id] ?? 0);
+        const rack = s.layout.find(item => furniture.find(definition => definition.id === item.id)?.display?.kind === 'clothing');
+        if (rack) rack.displayItems = ['baby-tee', 'ribbon-dress', 'silk'].filter(id => products.some(product => product.id === id));
+        if (!s.employees.some(employee => employee.uid === 'staff-debug-operations') && s.employees.length < 3) s.employees.push({ id: 'debug-stylist', uid: 'staff-debug-operations', name: 'Mai Anh', role: 'Stylist vận hành', bio: 'Nhân viên mẫu để thử xếp ca và năng lượng.', appearance: 2, salary: 120000, service: 78, persuasion: 74, charm: 72, reliability: 82, appliedDay: s.day, hiredDay: s.day, morale: 84, deniedLeaves: 0, sales: 6, tipsEarned: 45000, energy: 42, assignment: 'service', experience: 18, skillLevel: 2, shiftSales: 0 });
+        const shiftTester = s.employees.find(employee => employee.uid === 'staff-debug-operations') ?? s.employees[0];
+        if (shiftTester) { shiftTester.energy = 42; shiftTester.assignment = 'service'; }
+        s.returnCases = s.returnCases.filter(item => !item.id.startsWith('debug-'));
+        s.returnCases.push({ id: 'debug-return', productId: 'baby-tee', customerName: 'Chloe', amount: sellPrice(s, products.find(product => product.id === 'baby-tee')!), reason: 'Khách muốn đổi sang kích cỡ phù hợp hơn', availableDay: s.day, deadlineDay: s.day + 2 });
+        s.vipAppointments = s.vipAppointments.filter(item => !item.id.startsWith('debug-'));
+        s.vipAppointments.push(
+          { id: 'debug-vip-ready', customerName: 'Hạ Vy', style: 'Coquette', category: 'tops', budget: 900000, scheduledDay: s.day, minItems: 1, reward: 260000, status: 'accepted' },
+          { id: 'debug-vip-offer', customerName: 'Yuna', style: 'Luxury', category: 'dresses', budget: 1500000, scheduledDay: s.day + 2, minItems: 1, reward: 340000, status: 'offered' },
+        );
+        s.coutureOrder = { id: 'debug-couture', clientName: 'Maison Rosée', brief: 'Thiết kế độc bản cho đêm gala, ưu tiên phom thanh lịch và chi tiết thủ công.', stage: 'materials', quality: 30, acceptedDay: s.day, deadlineDay: s.day + 4, reward: 1450000, status: 'active' };
+        s.coutureAvailableDay = s.day;
+        s.reputation = 3.2; s.reviews = Math.max(8, s.reviews);
+        s.reputationCrisis = { startDay: s.day, deadlineDay: s.day + 3, positiveReviews: 1, sales: 2, targetReviews: 3, targetSales: 8 };
+        s.pendingOrders = s.pendingOrders.filter(order => !order.id.startsWith('debug-'));
+        s.pendingOrders.push(
+          { id: 'debug-delivery-soon', productId: 'jeans', quantity: 5, cost: 250000, arrivalDay: s.day + 1, supplierId: 'wholesale' },
+          { id: 'debug-delivery-later', productId: 'silk', quantity: 10, cost: 1800000, arrivalDay: s.day + 5, supplierId: 'global' },
+        );
+        this.commit(); this.toast('Debug: Đã tạo dữ liệu thử cho nguồn hàng, ca làm, đổi trả, VIP, couture và hàng chờ giao.'); return true;
+      }
       case 'recruitment-ready':
         prepareRecruitment();
         this.commit(); this.toast('Debug: Shop cấp 3, mặt bằng cấp 3 và ngân sách đã sẵn sàng.'); return true;
@@ -1180,10 +1715,11 @@ export class GameStore {
       case 'hire': {
         if (!s.staffApplicants.length) generateApplicantsNow();
         const candidate = s.staffApplicants[0];
-        if (!candidate || s.employees.length >= staffCapacity(s)) { this.commit(); this.toast('Debug: Không còn vị trí nhân viên trống.', 'error'); return false; }
-        s.employees.push({ ...candidate, uid: `staff-debug-${Date.now()}-${candidate.id}`, hiredDay: s.day, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0 });
-        s.staffApplicants = [];
-        s.recruitmentPost = null;
+        if (!candidate) { this.commit(); this.toast('Debug: Không có hồ sơ ứng viên.', 'error'); return false; }
+        const assignment: StaffAssignment = s.employees.filter(item => (item.assignment ?? 'service') !== 'off').length < staffCapacity(s) ? 'service' : 'off';
+        s.employees.push({ ...candidate, uid: `staff-debug-${Date.now()}-${candidate.id}`, hiredDay: s.day, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, energy: 100, assignment });
+        s.staffApplicants = s.staffApplicants.filter(item => item.id !== candidate.id);
+        if (!s.staffApplicants.length) s.recruitmentPost = null;
         this.commit(); this.toast(`Debug: Đã nhận ${candidate.name} vào làm.`); return true;
       }
       case 'leave': {
@@ -1194,10 +1730,12 @@ export class GameStore {
           s.staffApplicants = [];
           s.recruitmentPost = null;
         }
-        const employee = s.employees.find(item => !s.staffLeaveRequests.some(request => request.employeeUid === item.uid));
-        if (!employee) { this.commit(); this.toast('Debug: Mọi nhân viên đều đã có đơn nghỉ.', 'error'); return false; }
-        s.staffLeaveRequests.push({ employeeUid: employee.uid, requestedDay: s.day, days: 2, reason: 'cần giải quyết việc cá nhân' });
-        this.commit(); this.toast(`Debug: ${employee.name} đã gửi đơn xin nghỉ.`); return true;
+        const employee = s.employees.find(item => (!item.leaveUntilDay || item.leaveUntilDay <= s.day)
+          && !s.staffLeaveRequests.some(request => request.employeeUid === item.uid));
+        if (!employee) { this.commit(); this.toast('Debug: Không có nhân viên phù hợp để tạo đơn nghỉ.', 'error'); return false; }
+        const leaveDays = 1 + Math.floor(this.random() * 5);
+        s.staffLeaveRequests.push({ employeeUid: employee.uid, requestedDay: s.day, days: leaveDays, reason: 'cần giải quyết việc cá nhân' });
+        this.commit(); this.toast(`Debug: ${employee.name} đã xin nghỉ ${leaveDays} ngày.`); return true;
       }
       case 'next-day':
         s.phase = 'closed';

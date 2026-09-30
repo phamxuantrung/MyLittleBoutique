@@ -4,6 +4,66 @@ import { SAVE_KEY } from '../../src/systems/save';
 import { openState, preparedState } from './state';
 import { gameView } from './viewport';
 
+test('advanced operations are placed in import, staff and customer-care screens', async ({ page }) => {
+  const state = preparedState();
+  state.level = 5;
+  state.xp = 2000;
+  state.claimed.push('system:campaign-guide-v1');
+  state.returnCases.push({ id: 'return-e2e', productId: 'baby-tee', customerName: 'Chloe', amount: 99000, reason: 'Sai kích cỡ', availableDay: 1, deadlineDay: 3 });
+  state.reputationCrisis = { startDay: 1, deadlineDay: 4, positiveReviews: 1, sales: 2, targetReviews: 3, targetSales: 8 };
+  state.employees.push({ id: 'stylist', uid: 'stylist-1', name: 'Mai', role: 'Stylist', bio: 'Phối đồ tinh tế', appearance: 1, salary: 50000, service: 75, persuasion: 72, charm: 70, reliability: 80, appliedDay: 1, hiredDay: 1, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, energy: 75, assignment: 'service' });
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.goto('/');
+  await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+  await page.locator('[data-action="nav"][data-id="import"]').click();
+  await expect(page.locator('.supplier-choice-screen .supplier-bar-options > button')).toHaveCount(3);
+  const activeSupplier = page.locator('.supplier-bar-options .is-active');
+  const supplierCopyBox = await activeSupplier.locator('.supplier-card-copy').boundingBox();
+  const supplierStatusBox = await activeSupplier.locator('.supplier-card-status').boundingBox();
+  expect(supplierCopyBox!.x + supplierCopyBox!.width).toBeLessThanOrEqual(supplierStatusBox!.x);
+  await expect(page.locator('[data-action="supplier-select"][data-id="global"]')).toContainText('Xưởng thiết kế cao cấp');
+  await page.locator('[data-action="supplier-select"][data-id="wholesale"]').click();
+  await expect(page.locator('.inventory-toolbar')).toBeVisible();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).activeSupplierId, SAVE_KEY)).toBe('wholesale');
+  const firstQty = page.locator('.traditional-qty-control').first();
+  await expect(firstQty.locator('input')).toHaveValue('5');
+  await firstQty.locator('[data-action="product-qty-step"][data-id="1"]').click();
+  await expect(page.locator('.traditional-qty-control').first().locator('input')).toHaveValue('6');
+  await page.locator('.panel-close-btn').click();
+  await page.locator('[data-action="staff-open"]').click();
+  let dialog = page.getByRole('dialog');
+  await expect(dialog.locator('.employee-shift-control')).toContainText('Năng lượng');
+  await dialog.locator('[data-action="staff-assignment"][data-value="stock"]').click();
+  await expect(dialog.locator('[data-action="staff-assignment"][data-value="stock"]')).toHaveClass(/is-active/);
+  await dialog.locator('[data-action="close-modal"]').click();
+  await page.locator('[data-action="customer-care-open"]').click();
+  dialog = page.getByRole('dialog');
+  await expect(dialog).toHaveClass('dialog-customer-care');
+  await expect(dialog).toContainText('Chăm sóc đặc biệt');
+  await expect(dialog).toContainText('Đổi trả & khiếu nại');
+  await expect(dialog).toContainText('Lịch hẹn VIP');
+  await expect(dialog).toContainText('Atelier couture');
+  await expect(dialog).toContainText('Khủng hoảng uy tín');
+  await dialog.locator('[data-action="couture-start"]').click();
+  await expect(dialog).toContainText('Chốt ý tưởng');
+});
+
+test('delivered waiting stock is announced on the main shop screen', async ({ page }) => {
+  const state = preparedState();
+  state.phase = 'closed';
+  state.pendingOrders.push({ id: 'arrival-e2e', productId: 'baby-tee', quantity: 4, cost: 120000, arrivalDay: 2, supplierId: 'wholesale' });
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.goto('/');
+  await page.locator('[data-action="summary"]').click();
+  await page.getByRole('dialog').locator('[data-action="next-day"]').click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toHaveClass('dialog-orders-arrived');
+  await expect(dialog).toContainText('Hàng mới đã về kho!');
+  await expect(dialog).toContainText('Baby tee');
+  await expect(dialog).toContainText('×4');
+  await expect(page.locator('#shop-view')).toBeVisible();
+});
+
 test('a new boutique completes seven tutorial steps and keeps preparing', async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto('/');
@@ -17,6 +77,8 @@ test('a new boutique completes seven tutorial steps and keeps preparing', async 
   await expect(page.locator('.tutorial-callout')).toContainText('Bấm Nhập hàng');
   await expect(page.locator('.tutorial-callout')).toContainText('1/7');
   await page.locator('.tutorial-focus[data-id="import"]').click();
+  await expect(page.locator('.tutorial-callout')).toContainText('Chọn nguồn hàng');
+  await page.locator('.supplier-source-card.tutorial-focus').click();
   await expect(page.locator('.tutorial-callout')).toContainText('nhập mẫu đầu tiên');
   await page.locator('.import-btn.tutorial-focus').click();
   await page.locator('.panel-close-btn.tutorial-focus').click();
@@ -71,6 +133,56 @@ test('the player can take a chosen loan on top of starting capital', async ({ pa
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
   expect(saved.money).toBe(1200000);
   expect(saved.loan.balance).toBe(700000);
+});
+
+test('land expansion requires confirmation before spending money', async ({ page }) => {
+  const state = preparedState();
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.goto('/');
+  await page.locator('#land-expand-button').click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toHaveClass('dialog-land-expand-confirm');
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).money, SAVE_KEY)).toBe(500000);
+  await dialog.locator('[data-action="expand-land-confirmed"]').click();
+  await expect(dialog).not.toBeVisible();
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
+  expect(saved.money).toBe(150000);
+  expect(saved.landLevel).toBe(1);
+});
+
+test('closing card collapses and ready quests do not repeat the completed tag', async ({ page }) => {
+  const state = preparedState();
+  state.phase = 'closed';
+  state.stats.sold = 3;
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.goto('/');
+  await expect(page.locator('.closing-card')).toBeVisible();
+  await page.locator('.closing-card [data-action="closing-toggle"]').click();
+  await expect(page.locator('.closing-card')).toHaveClass(/is-collapsed/);
+  await expect(page.locator('#closing-details')).toBeHidden();
+  await page.locator('[data-action="quests"]').click();
+  const readyQuest = page.locator('.daily-quest-card.is-ready').first();
+  await expect(readyQuest.getByRole('button', { name: 'Nhận thưởng' })).toBeVisible();
+  await expect(readyQuest).not.toContainText('Hoàn thành!');
+});
+
+test('level 3 introduces the campaign guide before brand briefs', async ({ page }) => {
+  const state = preparedState();
+  state.level = 3;
+  state.xp = 650;
+  state.claimed = state.claimed.filter(key => !key.includes('campaign-guide'));
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.goto('/');
+  await expect(page.locator('.campaign-new-label')).toBeVisible();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Xây tên tuổi qua từng chiến dịch');
+  await expect(dialog.locator('.campaign-guide-steps li')).toHaveCount(4);
+  await dialog.locator('[data-action="campaign-guide-done"]').click();
+  await expect(page.locator('.campaign-new-label')).toBeHidden();
+  await expect(dialog.locator('.campaign-offer')).toHaveCount(3);
+  await dialog.locator('[data-action="campaign-start"]').first().click();
+  await expect(dialog).toContainText('Sản phẩm đúng brief');
+  expect((await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY)).activeCampaign).not.toBeNull();
 });
 
 test('the online channel accepts listings and fulfills a courier order', async ({ page }) => {

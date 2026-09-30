@@ -5,7 +5,7 @@ export { categories } from './fashion';
 
 const originalProducts: Omit<Product, 'subcategory' | 'occasions'>[] = [
   { id: 'baby-tee', name: 'Baby tee nơ hồng', category: 'tops', style: 'Coquette', color: '#e6a4b2', colorName: 'Hồng', buyPrice: 45000, sellPrice: 99000, quality: 82, level: 1, art: 'tee' },
-  { id: 'jeans', name: 'Jeans xanh mây', category: 'bottoms', style: 'Casual', color: '#8aa9bf', colorName: 'Xanh', buyPrice: 75000, sellPrice: 159000, quality: 85, level: 1, art: 'pants' },
+  { id: 'jeans', name: 'Jeans xanh mây', category: 'bottoms', style: 'Casual', color: '#8aa9bf', colorName: 'Xanh', buyPrice: 75000, sellPrice: 159000, quality: 85, level: 1, art: 'cloudJeans' },
   { id: 'ribbon-dress', name: 'Đầm Sunday date', category: 'dresses', style: 'Coquette', color: '#ebc4b9', colorName: 'Hồng', buyPrice: 110000, sellPrice: 229000, quality: 92, level: 1, art: 'dress' },
   { id: 'hoodie', name: 'Hoodie matcha', category: 'tops', style: 'Streetwear', color: '#8b9f8d', colorName: 'Xanh lá', buyPrice: 85000, sellPrice: 179000, quality: 88, level: 1, art: 'hoodie' },
   { id: 'ribbon', name: 'Nơ Ballet club', category: 'accessories', style: 'Coquette', color: '#d889a0', colorName: 'Hồng', buyPrice: 18000, sellPrice: 49000, quality: 80, level: 1, art: 'bow' },
@@ -35,10 +35,10 @@ export const customers: Customer[] = [
   { id: 'mia', name: 'Mia', handle: '@mia.vintage', personality: 'Nàng thơ Vintage', styles: ['Vintage', 'Preppy', 'Cottagecore'], colors: ['Nâu', 'Kem', 'Hồng'], budget: 480000, patience: 120, goal: 'Một chiếc mũ beret phối cùng yếm denim và sơ mi cổ bèo cho buổi café nha.', skin: '#fff0e6', hair: '#854d0e', outfit: '#2563eb', hairStyle: 0 },
   { id: 'zoe', name: 'Zoe', handle: '@zoe.lavender', personality: 'Gen Z Trendy', styles: ['Y2K', 'K-pop', 'Streetwear'], colors: ['Tím', 'Kem', 'Bạc'], budget: 580000, patience: 125, goal: 'Tone tím pastel đang hot trend! Tìm cho mình outfit hoodie rộng cá tính nhé.', skin: '#fff0e6', hair: '#c084fc', outfit: '#c084fc', hairStyle: 2 },
   { id: 'ruby', name: 'Ruby', handle: '@ruby.rebel', personality: 'Gothic Chic & Cá tính', styles: ['Dark Academia', 'Grunge', 'Y2K'], colors: ['Đen', 'Hồng', 'Bạc'], budget: 650000, patience: 110, goal: 'Tone đen đỏ với nơ ribbon và vest croptop, càng ngầu càng tốt!', skin: '#fff0e6', hair: '#f43f5e', outfit: '#18181b', hairStyle: 1 },
-  { id: 'kai', name: 'Kai', handle: '@kai.daily', personality: 'Tín đồ streetwear', styles: ['Streetwear', 'Casual', 'Y2K'], colors: ['Xanh lá', 'Xanh', 'Đen'], budget: 420000, patience: 110, goal: 'Có gì thoải mái, ngầu một chút để đi chơi không?', skin: '#c89370', hair: '#343c37', outfit: '#869786', hairStyle: 1 },
+  { id: 'kai', name: 'Kỳ Anh', handle: '@kyanh.daily', personality: 'Tín đồ streetwear', styles: ['Streetwear', 'Casual', 'Y2K'], colors: ['Xanh lá', 'Xanh', 'Đen'], budget: 420000, patience: 110, goal: 'Có gì thoải mái, ngầu một chút để đi chơi không?', skin: '#c89370', hair: '#343c37', outfit: '#869786', hairStyle: 1 },
   { id: 'linh', name: 'Linh', handle: '@linh.inbloom', personality: 'Influencer', styles: ['Coquette', 'Y2K', 'Soft Girl'], colors: ['Hồng', 'Tím'], budget: 520000, patience: 130, goal: 'Mình tìm một món thật nổi bật để quay outfit of the day!', skin: '#f0c6a4', hair: '#5b4239', outfit: '#bcafd0', hairStyle: 2 },
   { id: 'an', name: 'An', handle: '@an.slowdays', personality: 'Thợ săn giá tốt', styles: ['Casual', 'Minimal', 'Coquette'], colors: ['Kem', 'Xanh'], budget: 180000, patience: 120, goal: 'Một món dễ phối, giá dễ thương nha. Mình có 180k thôi.', skin: '#dba982', hair: '#513c34', outfit: '#ddb577', hairStyle: 0 },
-  { id: 'bao', name: 'Bảo', handle: '@bao.studio', personality: 'Khách kỹ tính', styles: ['Streetwear', 'Minimal', 'Preppy'], colors: ['Xanh lá', 'Nâu', 'Kem'], budget: 480000, patience: 100, goal: 'Mình thích đồ chất lượng, màu trung tính, càng tinh tế càng tốt.', skin: '#b88568', hair: '#3f3531', outfit: '#a3adbd', hairStyle: 1 },
+  { id: 'bao', name: 'Bảo Ngọc', handle: '@baongoc.studio', personality: 'Khách kỹ tính', styles: ['Streetwear', 'Minimal', 'Preppy'], colors: ['Xanh lá', 'Nâu', 'Kem'], budget: 480000, patience: 100, goal: 'Mình thích đồ chất lượng, màu trung tính, càng tinh tế càng tốt.', skin: '#b88568', hair: '#3f3531', outfit: '#a3adbd', hairStyle: 1 },
   { id: 'chloe', name: 'Chloe', handle: '@chloe.archive', personality: 'Nhà sưu tầm', styles: ['Vintage', 'Luxury', 'Coquette'], colors: ['Vàng', 'Hồng', 'Đen'], budget: 750000, patience: 120, goal: 'Một thiết kế đặc biệt cho buổi hẹn tối nay, bạn chọn giúp nhé.', skin: '#edc8ad', hair: '#98694e', outfit: '#c59e82', hairStyle: 2 },
   { id: 'nari', name: 'Nari', handle: '@nari.playlist', personality: 'Trend hunter', styles: ['K-pop', 'Y2K', 'Coquette'], colors: ['Tím', 'Hồng'], budget: 550000, patience: 100, goal: 'Concert cuối tuần rồi! Cho mình món nào đang hot nhất đi.', skin: '#ebc0a0', hair: '#454043', outfit: '#c0afd0', hairStyle: 0 },
   { id: 'jade', name: 'Jade', handle: '@jade.edit', personality: 'VIP', styles: ['Luxury', 'Minimal', 'Preppy'], colors: ['Kem', 'Đen', 'Nâu'], budget: 990000, patience: 140, goal: 'Mình muốn đầu tư một món thật đẹp, chất lượng là ưu tiên.', skin: '#9b6c51', hair: '#302d30', outfit: '#d9cfb9', hairStyle: 2 },
@@ -141,7 +141,7 @@ export const levels = [
 ];
 export const dailyEvents = [
   { name: 'Ngày khai trương', description: 'Những khách đầu tiên đang chờ khám phá shop của bạn.', discount: 1, extra: 0 },
-  { name: 'Ưu đãi nhà cung cấp', description: 'Giảm 20% giá nhập tất cả sản phẩm trong hôm nay.', discount: .8, extra: 0 },
+  { name: 'Ưu đãi nhà cung cấp', description: 'Giảm 5% giá nhập tất cả sản phẩm trong hôm nay.', discount: .95, extra: 0 },
   { name: 'Một ngày mưa nhẹ', description: 'Ít khách hơn một chút. Dành thời gian chọn đồ thật xinh nhé.', discount: 1, extra: -1 },
   { name: 'Fashion weekend', description: 'Thêm 2 khách ghé shop. Sẵn sàng cho một ngày bận rộn!', discount: 1, extra: 2 },
 ];

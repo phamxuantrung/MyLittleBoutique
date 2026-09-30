@@ -3,6 +3,13 @@ import { employeePortraitSvg } from '../art/characters';
 import type { Customer, Furniture, Product } from '../types';
 
 export const money = (value: number) => `${Math.round(value).toLocaleString('vi-VN')}₫`;
+export const compactMoney = (value: number) => {
+  const absolute = Math.abs(value);
+  const format = (scaled: number, suffix: 'M' | 'B') => `${scaled.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}${suffix}₫`;
+  if (absolute >= 1_000_000_000) return format(value / 1_000_000_000, 'B');
+  if (absolute >= 1_000_000) return format(value / 1_000_000, 'M');
+  return money(value);
+};
 export const compact = (value: number) => value >= 1000000 ? `${(value / 1000000).toFixed(1)}tr` : value >= 1000 ? `${Math.round(value / 1000)}k` : `${value}`;
 export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 export const productImage = (p: Product, cls = '') => `<img class="product-art ${cls}" src="${svgUrl(productSvg(p))}" alt="${escapeHtml(p.name)}" draggable="false" />`;

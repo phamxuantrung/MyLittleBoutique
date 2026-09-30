@@ -22,6 +22,10 @@ test('day two explains categories, opens a fixture and remembers acknowledgement
   const upgradeBox = (await upgrade.boundingBox())!;
   expect(upgradeBox.y).toBeGreaterThanOrEqual(studio.y + studio.height - 1);
   await upgrade.click();
+  await expect(dialog).toHaveClass('dialog-display-upgrade-confirm');
+  await expect(dialog).toContainText('Xác nhận nâng cấp');
+  await dialog.locator('[data-action="display-upgrade-confirmed"]').click();
+  await expect(dialog).toHaveClass('dialog-display');
   await expect(dialog.locator('.fixture-capacity-chip')).toContainText('24');
   await page.screenshot({ path: 'test-results/fixture-upgrade-bottom.png' });
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);

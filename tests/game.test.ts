@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { customers, furniture, products } from '../src/data/catalog';
-import { activeCustomer, buyPrice, canPlace, currentEvent, DAY_DURATION, displayCapacity, displayUpgradeCost, isOutOfTrend, isTrending, landSize, matchScore, nextStaffRequirement, onlineOrderChance, staffCapacity, validOutfit } from '../src/systems/rules';
+import { activeCustomer, buyPrice, canPlace, currentEvent, DAY_DURATION, dayDuration, displayCapacity, displayUpgradeCost, isOutOfTrend, isTrending, landSize, matchScore, nextStaffRequirement, onlineOrderChance, staffCapacity, validOutfit } from '../src/systems/rules';
 import { initialState, parseSave, SaveSystem } from '../src/systems/save';
 import { GameStore } from '../src/systems/store';
 import type { GameState } from '../src/types';
 import { shopReviewStats } from '../src/systems/reviews';
+import { campaignOffers } from '../src/systems/campaigns';
 
 class MemorySave extends SaveSystem { snapshot = ''; override write(s: GameState) { this.snapshot = JSON.stringify(s); } }
 const stockStarter = (s: GameState) => {
@@ -32,7 +33,7 @@ describe('inventory and economy', () => {
   it('buys stock at the daily wholesale price and persists it atomically', () => {
     const store = makeStore(s => { s.day = 2; });
     const p = products[0], price = buyPrice(store.state, p);
-    expect(price).toBe(36000); expect(store.buy(p.id, 5)).toBe(true);
+    expect(price).toBe(42750); expect(store.buy(p.id, 5)).toBe(true);
     expect(store.state.money).toBe(500000 - price * 5); expect(store.state.inventory[p.id]).toBe(7);
     expect(parseSave((store.save as MemorySave).snapshot).money).toBe(store.state.money);
   });
@@ -192,6 +193,74 @@ describe('inventory and economy', () => {
     expect(store.takeLoan(2300000)).toBe(true);
     expect(store.takeLoan(10000)).toBe(false);
     expect(store.state.loan?.principal).toBe(3000000);
+  });
+});
+
+describe('staff payroll', () => {
+  const addEmployee = (s: GameState, assignment: 'service' | 'off' = 'service') => {
+    s.level = 3;
+    s.landLevel = 2;
+    s.employees.push({
+      id: 'staff-test', uid: 'staff-test-uid', name: 'Mai An', role: 'Tư vấn viên', bio: 'Nhân viên kiểm thử.',
+      appearance: 0, salary: 100000, service: 70, persuasion: 70, charm: 70, reliability: 99, appliedDay: 1,
+      hiredDay: 1, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, energy: 100, assignment,
+      unpaidShifts: 0, unpaidWages: 0, totalShiftsWorked: 0,
+    });
+  };
+
+  it('accrues salary only for a real worked shift and pays it manually', () => {
+    const store = makeStore(s => { s.money = 1000000; addEmployee(s); });
+    store.openShop();
+    store.closeDay();
+    const employee = store.state.employees[0];
+    expect(employee).toMatchObject({ unpaidShifts: 1, unpaidWages: 100000, totalShiftsWorked: 1 });
+    const beforePay = store.state.money;
+    expect(store.payStaffWages(employee.uid)).toBe(true);
+    expect(store.state.money).toBe(beforePay - 100000);
+    expect(employee).toMatchObject({ unpaidShifts: 0, unpaidWages: 0 });
+  });
+
+  it('does not accrue salary while an employee is off shift', () => {
+    const store = makeStore(s => { addEmployee(s, 'off'); });
+    store.openShop();
+    store.closeDay();
+    expect(store.state.employees[0]).toMatchObject({ unpaidShifts: 0, unpaidWages: 0, totalShiftsWorked: 0 });
+  });
+
+  it('automatically settles old wages when an employee is fired', () => {
+    const store = makeStore(s => {
+      s.money = 500000;
+      addEmployee(s);
+      s.employees[0].unpaidShifts = 2;
+      s.employees[0].unpaidWages = 200000;
+    });
+    expect(store.fireStaff('staff-test-uid')).toBe(true);
+    expect(store.state.money).toBe(300000);
+    expect(store.state.stats.staffWages).toBe(200000);
+    expect(store.state.employees).toHaveLength(0);
+  });
+
+  it('makes an employee leave after the fourth unpaid shift and settles all old wages', () => {
+    const state = initialState();
+    stockStarter(state);
+    state.money = 1000000;
+    addEmployee(state);
+    const store = new GameStore(state, new MemorySave(), () => .99);
+    for (let shift = 0; shift < 4; shift++) {
+      store.openShop();
+      store.closeDay();
+      if (shift < 3) store.nextDay();
+    }
+    expect(store.state.employees).toHaveLength(0);
+    expect(store.state.money).toBe(600000);
+    expect(store.state.stats.staffWages).toBe(400000);
+  });
+
+  it('charges a fee when posting a recruitment notice', () => {
+    const store = makeStore(s => { s.level = 3; s.landLevel = 2; s.money = 100000; });
+    expect(store.postRecruitment(100000)).toBe(true);
+    expect(store.state.money).toBe(70000);
+    expect(store.state.recruitmentPost?.salary).toBe(100000);
   });
 });
 
@@ -397,9 +466,9 @@ describe('employee recruitment and payroll', () => {
     expect(store.state.recruitmentPost).toBeNull();
   });
 
-  it('deducts the daily salary and records it in the end-of-day report', () => {
+  it('accrues shift salary and records it only when paid manually', () => {
     const store = makeStore(s => {
-      s.day = 2;
+      s.day = 2; s.level = 3; s.landLevel = 2;
       s.employees.push({
         id: 'candidate-1', uid: 'staff-1', name: 'Mai An', role: 'Stylist', bio: 'Tư vấn phối đồ.', appearance: 0,
         salary: 70000, service: 72, persuasion: 74, charm: 68, reliability: 80, appliedDay: 1,
@@ -409,6 +478,10 @@ describe('employee recruitment and payroll', () => {
     const before = store.state.money;
     store.state.phase = 'open';
     store.closeDay();
+    expect(store.state.money).toBe(before);
+    expect(store.state.employees[0]).toMatchObject({ unpaidShifts: 1, unpaidWages: 70000 });
+    expect(store.state.stats.staffWages).toBe(0);
+    expect(store.payStaffWages('staff-1')).toBe(true);
     expect(store.state.money).toBe(before - 70000);
     expect(store.state.stats.staffWages).toBe(70000);
   });
@@ -617,6 +690,166 @@ describe('decoration, upgrades and resilient saves', () => {
     const parsed = parseSave(JSON.stringify(store.state));
     expect(parsed.landLevel).toBe(7);
     expect(parsed.layout.find(item => item.uid === 'starter-rack')?.customName).toBe('Kệ Best Seller');
+  });
+  it('adds 30 seconds only when shop and land levels advance together', () => {
+    const state = initialState();
+    expect(dayDuration(state)).toBe(180);
+    state.level = 2;
+    expect(dayDuration(state)).toBe(180);
+    state.landLevel = 1;
+    expect(dayDuration(state)).toBe(210);
+    state.landLevel = 4;
+    expect(dayDuration(state)).toBe(210);
+    state.level = 4;
+    expect(dayDuration(state)).toBe(270);
+    state.level = 7;
+    state.landLevel = 7;
+    expect(dayDuration(state)).toBe(300);
+    state.level = 4;
+    state.landLevel = 4;
+    stockStarter(state);
+    const store = new GameStore(state, new MemorySave(), () => 0);
+    store.openShop();
+    expect(store.state.dayTimer).toBe(270);
+  });
+  it('starts new games with background music turned off', () => {
+    expect(initialState().music).toBe(false);
+    expect(parseSave(JSON.stringify({ ...initialState(), music: undefined })).music).toBe(false);
+  });
+  it('runs multi-day brand campaigns and rewards industry reputation', () => {
+    const store = makeStore(state => { state.level = 3; state.xp = 650; });
+    const offer = campaignOffers(store.state)[0];
+    expect(store.startCampaign(offer.id)).toBe(true);
+    const product = products.find(item => item.style === offer.style)!;
+    const campaign = store.state.activeCampaign!;
+    campaign.targetUnits = 1;
+    campaign.targetRevenue = product.sellPrice;
+    (store as unknown as { progressCampaign(items: typeof products, total: number, online: boolean): void }).progressCampaign([product], product.sellPrice, false);
+    expect(campaign.status).toBe('ready');
+    const before = { money: store.state.money, prestige: store.state.industryReputation };
+    expect(store.claimCampaign()).toBe(true);
+    expect(store.state.money).toBe(before.money + offer.rewardMoney);
+    expect(store.state.industryReputation).toBe(before.prestige + offer.prestigeReward);
+    expect(store.state.activeCampaign).toBeNull();
+    expect(store.state.campaignSeason).toBe(2);
+  });
+  it('uses supplier contracts to trade cheaper stock for delayed delivery', () => {
+    const store = makeStore(state => { state.level = 3; state.money = 1000000; });
+    expect(store.selectSupplier('wholesale')).toBe(true);
+    const before = store.state.money;
+    const unitPrice = buyPrice(store.state, products.find(item => item.id === 'baby-tee')!);
+    expect(store.buy('baby-tee', 5)).toBe(true);
+    expect(store.state.money).toBe(before - unitPrice * 5);
+    expect(store.state.pendingOrders.at(-1)).toMatchObject({ productId: 'baby-tee', quantity: 5, supplierId: 'wholesale' });
+    expect(store.state.pendingOrders.at(-1)!.arrivalDay).toBeGreaterThanOrEqual(store.state.day + 1);
+    expect(store.state.pendingOrders.at(-1)!.arrivalDay).toBeLessThanOrEqual(store.state.day + 2);
+  });
+  it('adds the three international shipping days after the selected source lead time', () => {
+    const state = initialState();
+    stockStarter(state);
+    state.level = 5;
+    state.money = 10000000;
+    const store = new GameStore(state, new MemorySave(), () => 0);
+    expect(store.selectSupplier('global')).toBe(true);
+    const product = products.find(item => item.id === 'silk')!;
+    const before = store.state.money;
+    expect(store.orderImport(product.id, 10)).toBe(true);
+    expect(store.state.money).toBe(before - buyPrice(store.state, product) * 10);
+    expect(store.state.pendingOrders.at(-1)?.arrivalDay).toBe(store.state.day + 5);
+  });
+  it('announces delivered waiting orders when the next day starts', () => {
+    const store = makeStore(state => {
+      state.pendingOrders.push({ id: 'delivery-1', productId: 'baby-tee', quantity: 4, cost: 100000, arrivalDay: 2, supplierId: 'wholesale' });
+      state.phase = 'closed';
+    });
+    let delivered = 0;
+    store.subscribe(event => { if (event.type === 'orders-arrived') delivered += event.items.reduce((sum, item) => sum + item.quantity, 0); });
+    store.nextDay();
+    expect(delivered).toBe(4);
+    expect(store.state.pendingOrders).toHaveLength(0);
+  });
+  it('assigns staff shifts and restores energy on a rest day', () => {
+    const store = makeStore(state => {
+      state.level = 3;
+      state.employees.push({ id: 'e', uid: 'e-1', name: 'Mai', role: 'Stylist', bio: '', appearance: 3, salary: 40000, service: 70, persuasion: 70, charm: 70, reliability: 80, appliedDay: 1, hiredDay: 1, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, energy: 40, assignment: 'service' });
+    });
+    expect(store.setStaffAssignment('e-1', 'off')).toBe(true);
+    store.state.phase = 'open';
+    store.closeDay();
+    expect(store.state.employees[0].energy).toBeGreaterThan(40);
+  });
+  it('resolves returns with a refund and keeps the returned product in stock', () => {
+    const store = makeStore(state => {
+      state.level = 3;
+      state.returnCases.push({ id: 'r-1', productId: 'baby-tee', customerName: 'Chloe', amount: 45000, reason: 'Sai kích cỡ', availableDay: 1, deadlineDay: 3 });
+    });
+    const beforeMoney = store.state.money;
+    const beforeStock = store.state.inventory['baby-tee'];
+    expect(store.resolveReturn('r-1', 'refund')).toBe(true);
+    expect(store.state.money).toBe(beforeMoney - 45000);
+    expect(store.state.inventory['baby-tee']).toBe(beforeStock + 1);
+    expect(store.state.returnCases).toHaveLength(0);
+  });
+  it('charges only return shipping for an exchange and keeps inventory unchanged', () => {
+    const store = makeStore(state => {
+      state.level = 3;
+      state.returnCases.push({ id: 'r-exchange', productId: 'baby-tee', customerName: 'Chloe', amount: 77000, reason: 'Đổi kích cỡ', availableDay: 1, deadlineDay: 3 });
+    });
+    const beforeMoney = store.state.money;
+    const beforeStock = store.state.inventory['baby-tee'];
+    expect(store.resolveReturn('r-exchange', 'exchange')).toBe(true);
+    expect(store.state.money).toBe(beforeMoney - 20000);
+    expect(store.state.inventory['baby-tee']).toBe(beforeStock);
+    expect(store.state.returnCases).toHaveLength(0);
+  });
+  it('requires quality investment before a couture order can be delivered', () => {
+    const store = makeStore(state => { state.level = 5; state.money = 2000000; });
+    expect(store.startCoutureOrder()).toBe(true);
+    expect(store.advanceCouture('premium')).toBe(true);
+    expect(store.advanceCouture('premium')).toBe(true);
+    expect(store.advanceCouture('safe')).toBe(true);
+    expect(store.state.coutureOrder).toMatchObject({ status: 'ready', quality: 78 });
+    const reward = store.state.coutureOrder!.reward;
+    const before = store.state.money;
+    expect(store.deliverCouture()).toBe(true);
+    expect(store.state.money).toBe(before + reward);
+    expect(store.state.coutureOrder).toBeNull();
+  });
+  it('lets a VIP automatically collect suitable displayed products when the shop opens', () => {
+    const store = makeStore(state => {
+      state.level = 4;
+      state.vipAppointments.push({ id: 'vip-1', customerName: 'Hạ Vy', style: 'Coquette', category: 'tops', budget: 1000000, scheduledDay: 1, minItems: 1, reward: 200000, status: 'accepted' });
+    });
+    const before = store.state.inventory['baby-tee'];
+    store.openShop();
+    expect(store.state.inventory['baby-tee']).toBe(before - 1);
+    expect(store.state.vipAppointments).toHaveLength(0);
+    expect(store.state.stats.sold).toBe(1);
+  });
+  it('penalizes the shop when a VIP pickup is unavailable on the scheduled day', () => {
+    const store = makeStore(state => {
+      state.level = 4;
+      state.vipAppointments.push({ id: 'vip-1', customerName: 'Yuna', style: 'Luxury', category: 'dresses', budget: 1000000, scheduledDay: 1, minItems: 1, reward: 200000, status: 'accepted' });
+    });
+    const reputation = store.state.reputation;
+    store.openShop();
+    expect(store.state.vipAppointments).toHaveLength(0);
+    expect(store.state.reputation).toBeLessThan(reputation);
+    expect(store.state.stats.walkouts).toBe(1);
+  });
+  it('starts a recovery challenge when reputation falls into crisis', () => {
+    const store = makeStore(state => { state.level = 3; state.reviews = 5; state.reputation = 3.1; });
+    (store as unknown as { applyShopReview(stars: number): number }).applyShopReview(1);
+    expect(store.state.reputationCrisis).toMatchObject({ targetReviews: 3, targetSales: 8, deadlineDay: store.state.day + 3 });
+  });
+  it('expires an unfinished campaign after its inclusive deadline', () => {
+    const store = makeStore(state => { state.level = 3; state.day = 4; });
+    expect(store.startCampaign(campaignOffers(store.state)[1].id)).toBe(true);
+    store.state.activeCampaign!.deadlineDay = 4;
+    store.state.phase = 'closed';
+    store.nextDay();
+    expect(store.state.day).toBe(5);
+    expect(store.state.activeCampaign?.status).toBe('failed');
   });
   it('adds purchased furniture only to an unoccupied legal cell', () => {
     const store = makeStore(); store.buyFurniture('flowers');

@@ -341,6 +341,17 @@ export function fashionShapes(c: string): Record<string, string> {
     <rect x="74" y="72" width="14" height="18" rx="2" fill="${c}" stroke="${ink}" stroke-width="1.2"/>
   `;
 
+  // Cloud Jeans: relaxed wide denim with curved legs and soft cloud-wash panels
+  const cloudJeans = `
+    <path d="M33 40 H87 L99 130 H64 L60 76 L56 130 H21 Z" fill="${c}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M33 40 H87 V50 H33 Z" fill="#d9e8f1" stroke="${ink}" stroke-width="1.2"/>
+    <circle cx="60" cy="45" r="1.8" fill="${gold}" stroke="${ink}" stroke-width=".7"/>
+    <path d="M38 52 Q45 62 55 53 M82 52 Q75 62 65 53" fill="none" stroke="#f5fbff" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M43 61 Q31 74 35 91 Q24 104 29 121 M77 61 Q89 74 85 91 Q96 104 91 121" fill="none" stroke="#dcecf5" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+    <path d="M42 55 L36 127 M78 55 L84 127" fill="none" stroke="#668ba5" stroke-width="1.1" stroke-dasharray="3 2" opacity=".65"/>
+    <path d="M23 122 H55 M65 122 H97" stroke="#f5fbff" stroke-width="3" opacity=".72"/>
+  `;
+
   // Cargo / Cargo Pants: Multi-pocket baggy utility parachute cargo
   const cargo = `
     <path d="M34 42 H86 L94 130 H66 L59 78 L52 130 H26 Z" fill="${c}" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"/>
@@ -728,6 +739,18 @@ export function fashionShapes(c: string): Record<string, string> {
     <rect x="79" y="78" width="8" height="6" fill="${gold}" stroke="${ink}" stroke-width="0.8"/>
   `;
 
+  // Private Archive: a taller, dark collector satchel with a crossbody strap and moon seal
+  const nocturneSatchel = `
+    <path d="M25 62 Q38 14 92 26" fill="none" stroke="${ink}" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M26 50 Q60 34 94 50 L90 114 Q60 121 30 114 Z" fill="#302a31" stroke="${ink}" stroke-width="1.7" stroke-linejoin="round"/>
+    <path d="M26 50 Q60 35 94 50 V77 Q60 91 28 76 Z" fill="${c}" stroke="${ink}" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M34 84 V108 M86 84 V108" stroke="#745744" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+    <path d="M56 48 V93 Q60 99 64 93 V48" fill="#4f392e" stroke="${ink}" stroke-width="1"/>
+    <rect x="54" y="82" width="12" height="12" rx="3" fill="${gold}" stroke="${ink}" stroke-width="1"/>
+    <path d="M62 84 A4 4 0 1 0 62 92 A3 3 0 1 1 62 84" fill="#fff3c4" opacity=".92"/>
+    <path d="M32 104 Q60 113 88 104" fill="none" stroke="#a98669" stroke-width="1.2" opacity=".55"/>
+  `;
+
   // Utility Bag: Crossbody utility bag with front zip pouch and clips
   const utilityBag = `
     <path d="M26 66 L50 20 L94 66" fill="none" stroke="#18181b" stroke-width="4" stroke-linecap="round"/>
@@ -769,21 +792,27 @@ export function fashionShapes(c: string): Record<string, string> {
     ${ribbon(60, 52, '#ffffff', 0.9)}
   `;
 
-  // Tote Bag / Tote: Canvas tote with dual shoulder straps
+  // Everyday Poetry: soft daily canvas tote with a front pocket
   const toteBag = `
-    <path d="M42 54 V26 M78 54 V26" stroke="${ink}" stroke-width="4.5" stroke-linecap="round"/>
-    <path d="M22 52 H98 L92 118 Q60 124 28 118 Z" fill="${c}" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M42 52 V82 M78 52 V82" stroke="#ffffff" stroke-width="3" opacity="0.6"/>
-    <path d="M60 82 C57 78 52 79 52 83 C52 88 60 92 60 93 C60 92 68 88 68 83 C68 79 63 78 60 82 Z" fill="#ffffff"/>
+    <path d="M34 55 V34 Q34 17 48 17 H72 Q86 17 86 34 V55" fill="none" stroke="${ink}" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M18 52 Q60 46 102 52 L95 115 Q60 124 25 115 Z" fill="${c}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M18 52 Q60 61 102 52" fill="none" stroke="#fffdf8" stroke-width="2.2" opacity=".72"/>
+    <path d="M37 54 V106 M83 54 V106" fill="none" stroke="#fffdf8" stroke-width="4" opacity=".55"/>
+    <path d="M39 72 H81 V99 Q60 106 39 99 Z" fill="#fffdf8" stroke="${ink}" stroke-width="1" opacity=".52"/>
+    <path d="M60 83 C56 78 49 80 49 86 C49 92 60 98 60 99 C60 98 71 92 71 86 C71 80 64 78 60 83 Z" fill="${gold}" stroke="${ink}" stroke-width=".8"/>
+    <path d="M29 110 Q60 118 91 110" fill="none" stroke="#fffdf8" stroke-width="1.2" stroke-dasharray="3 3" opacity=".65"/>
   `;
 
-  // Book Tote: Structured rectangular tote bag with book graphic
+  // Book Tote: bookstore canvas tote with an open-book print and bookmark
   const bookTote = `
-    <path d="M42 52 V24 M78 52 V24" stroke="${ink}" stroke-width="4.5" stroke-linecap="round"/>
-    <rect x="22" y="50" width="76" height="68" rx="4" fill="${c}" stroke="${ink}" stroke-width="1.5"/>
-    <rect x="38" y="68" width="44" height="32" rx="2" fill="#ffffff" stroke="${ink}" stroke-width="1" opacity="0.8"/>
-    <path d="M60 68 V100" stroke="${ink}" stroke-width="1.2"/>
-    <path d="M42 76 H56 M42 84 H56 M64 76 H78 M64 84 H78" stroke="${ink}" stroke-width="1" opacity="0.5"/>
+    <path d="M35 54 V34 Q35 16 49 16 H71 Q85 16 85 34 V54" fill="none" stroke="${ink}" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M20 50 Q60 45 100 50 L94 116 Q60 124 26 116 Z" fill="${c}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M20 50 Q60 58 100 50" fill="none" stroke="#fff8ef" stroke-width="2.4" opacity=".72"/>
+    <path d="M38 52 V108 M82 52 V108" fill="none" stroke="#fff8ef" stroke-width="3.5" opacity=".48"/>
+    <path d="M34 73 Q47 68 60 77 Q73 68 86 73 V101 Q73 97 60 105 Q47 97 34 101 Z" fill="#fffaf0" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M60 77 V105 M39 80 Q49 77 56 82 M39 87 Q49 84 56 89 M64 82 Q72 77 81 80 M64 89 Q72 84 81 87" fill="none" stroke="#8e6a54" stroke-width="1" stroke-linecap="round" opacity=".72"/>
+    <path d="M57 76 L63 76 L63 94 L60 91 L57 94 Z" fill="${gold}" stroke="${ink}" stroke-width=".7"/>
+    <path d="M30 111 Q60 118 90 111" fill="none" stroke="#fff8ef" stroke-width="1.2" stroke-dasharray="3 3" opacity=".68"/>
   `;
 
   // Crochet Bag: Cottagecore crochet openwork knit tote with flower motif
@@ -957,12 +986,29 @@ export function fashionShapes(c: string): Record<string, string> {
   const atelierWideJeans = `${wideLeg}
     <path d="M40 51 Q49 57 55 50 M80 51 Q71 57 65 50" fill="none" stroke="${gold}" stroke-width="1.2"/>
     <path d="M31 123 H53 M67 123 H89" stroke="#fff" stroke-width="2" opacity=".48"/>`;
-  const atelierStraightJeans = `${straight}
-    <path d="M39 52 Q47 59 54 51 M81 52 Q73 59 66 51" fill="none" stroke="${gold}" stroke-width="1.2"/>
-    <path d="M33 124 H51 M69 124 H87" stroke="#fff" stroke-width="1.6" opacity=".5"/>`;
-  const atelierCargo = `${cargo}
-    <path d="M27 72 H35 M85 72 H93 M28 98 H35 M85 98 H92" stroke="${gold}" stroke-width="1.1"/>
-    <path d="M29 124 H50 M70 124 H91" stroke="#fff" stroke-width="1.7" opacity=".42"/>`;
+  const atelierStraightJeans = `
+    <path d="M38 41 H82 L85 132 H64 L60 73 L56 132 H35 Z" fill="${c}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M38 41 H82 V50 H38 Z" fill="#eef6fa" stroke="${ink}" stroke-width="1.15" opacity=".72"/>
+    <circle cx="60" cy="45.5" r="1.7" fill="${gold}" stroke="${ink}" stroke-width=".65"/>
+    <path d="M39 51 Q47 61 55 51 M81 51 Q73 61 65 51" fill="none" stroke="#f8fcff" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M60 50 V72 M45 58 L43 127 M75 58 L77 127" fill="none" stroke="#63859c" stroke-width="1.05" opacity=".58"/>
+    <path d="M36 124 H56 M64 124 H84" stroke="#f8fcff" stroke-width="2.3" opacity=".8"/>
+    <rect x="72" y="54" width="7" height="5" rx="1" fill="#f2cf7b" stroke="${ink}" stroke-width=".7"/>
+  `;
+  const atelierCargo = `
+    <path d="M33 40 H87 L99 122 Q91 130 76 126 L62 78 L58 78 L44 126 Q29 130 21 122 L33 40 Z" fill="${c}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M33 40 H87 V50 H33 Z" fill="#dce8d6" stroke="${ink}" stroke-width="1.15" opacity=".78"/>
+    <path d="M55 47 L53 60 M65 47 L67 60" stroke="#fffdf4" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="53" cy="61" r="2" fill="${gold}"/><circle cx="67" cy="61" r="2" fill="${gold}"/>
+    <path d="M34 57 Q45 66 54 56 M86 57 Q75 66 66 56" fill="none" stroke="#f8fff4" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M31 69 H49 L52 91 H27 Z M71 69 H89 L93 91 H68 Z" fill="#91a887" stroke="${ink}" stroke-width="1.25" stroke-linejoin="round"/>
+    <path d="M31 69 L40 77 L49 69 M71 69 L80 77 L89 69" fill="none" stroke="#eaf3e5" stroke-width="1.4"/>
+    <rect x="27" y="92" width="20" height="9" rx="3" fill="#6f8968" stroke="${ink}" stroke-width="1"/>
+    <rect x="73" y="92" width="20" height="9" rx="3" fill="#6f8968" stroke="${ink}" stroke-width="1"/>
+    <path d="M40 101 L35 121 M80 101 L85 121" stroke="#587052" stroke-width="1.2" stroke-dasharray="3 2" opacity=".8"/>
+    <path d="M22 120 Q34 126 45 122 L44 130 H24 Q19 127 22 120 Z M75 122 Q86 126 98 120 Q101 127 96 130 H76 Z" fill="#dce8d6" stroke="${ink}" stroke-width="1.2"/>
+    <path d="M29 126 H40 M80 126 H91" stroke="${gold}" stroke-width="1.5" stroke-linecap="round"/>
+  `;
   const atelierDenimShorts = `${shorts}
     <path d="M41 60 Q48 67 55 60 M79 60 Q72 67 65 60" fill="none" stroke="${gold}" stroke-width="1.2"/>
     <path d="M35 87 L43 90 M77 90 L85 87" stroke="#fff" stroke-width="1.5" opacity=".65"/>`;
@@ -980,10 +1026,17 @@ export function fashionShapes(c: string): Record<string, string> {
     <path d="M35 64 Q60 72 85 64" fill="none" stroke="${gold}" stroke-width="1.5"/>
     <path d="M21 126 Q60 136 99 126" fill="none" stroke="#fff" stroke-width="2" opacity=".72"/>
     ${ribbon(60, 55, '#fff', .58)}`;
-  const atelierSneakers = `${sneakers}
-    <path d="M20 85 L45 91 M75 91 L100 85" stroke="${gold}" stroke-width="1.5"/>
-    <path d="M25 77 L37 84 M83 84 L95 77" stroke="#fff" stroke-width="2" opacity=".85"/>
-    <circle cx="48" cy="91" r="2" fill="#ff7da7"/><circle cx="72" cy="91" r="2" fill="#ff7da7"/>`;
+  const atelierSneakers = `
+    <path d="M18 91 L28 66 Q29 57 39 54 L50 50 L67 78 L98 82 Q113 86 111 101 L105 106 H20 Q13 101 18 91 Z" fill="#fffdf8" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M29 66 Q42 58 51 57 L64 79 L48 91 L24 88 Z" fill="${c}" stroke="${ink}" stroke-width="1.1"/>
+    <path d="M57 78 Q72 88 96 87 L104 96 Q79 95 62 101 L46 91 Z" fill="#f39ac4" stroke="${ink}" stroke-width="1.1" stroke-linejoin="round"/>
+    <path d="M43 60 L57 76 M38 67 L55 82 M35 75 L50 87" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+    <path d="M67 82 L80 91 L65 94" fill="none" stroke="${gold}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M15 104 H111 L106 116 H76 L70 111 H45 L38 119 H17 Q12 112 15 104 Z" fill="#ffffff" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M20 112 H38 M79 111 H103" stroke="#f39ac4" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M45 116 H70" stroke="${gold}" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="31" cy="97" r="2.2" fill="${gold}"/><circle cx="96" cy="97" r="2.2" fill="${gold}"/>
+  `;
 
   return {
     // Tops
@@ -1060,6 +1113,7 @@ export function fashionShapes(c: string): Record<string, string> {
     wideLeg,
     straight,
     pants: straight,
+    cloudJeans,
     cargo,
     cargoPants: cargo,
     shorts,
@@ -1100,7 +1154,7 @@ export function fashionShapes(c: string): Record<string, string> {
     // Bags (Distinct models)
     handbag,
     topHandle: handbag,
-    bag: handbag,
+    bag: shoulderBag,
     ribbonBag,
     shoulderBag,
     shoulder: shoulderBag,
@@ -1112,6 +1166,7 @@ export function fashionShapes(c: string): Record<string, string> {
     chainBag,
     heartBag,
     satchel,
+    nocturneSatchel,
     utilityBag,
     pouch,
     charmBag,

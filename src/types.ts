@@ -19,7 +19,12 @@ export interface DisplayUpgrade { maxLevel: number; slotsPerLevel: number; baseC
 export interface FurnitureDisplay { kind: DisplayKind; capacity: number; categories: Category[]; upgrade?: DisplayUpgrade; }
 export interface Furniture { id: string; name: string; price: number; appeal: number; level: number; art: string; width: number; height: number; style?: Style; description?: string; display?: FurnitureDisplay; }
 export interface PlacedFurniture { uid: string; id: string; x: number; y: number; rotation: number; displayItems?: string[]; displayLevel?: number; customName?: string; }
-export interface SocialPost { id: string; name: string; handle: string; text: string; likes: number; day: number; viral: boolean; color: string; reviewStars: number; }
+export interface SocialPost {
+  id: string; name: string; handle: string; text: string; likes: number; day: number; viral: boolean; color: string; reviewStars: number;
+  channel?: 'shop' | 'online';
+  avatar?: { id: string; skin: string; hair: string; outfit: string; hairStyle: number };
+  likedByShop?: boolean;
+}
 export interface DayStats { revenue: number; spent: number; costOfGoods: number; sold: number; served: number; happy: number; trendSales: number; followers: number; rent: number; loanInterest: number; tips: number; staffWages: number; walkouts?: number; soldProducts?: Record<string, number>; }
 export interface ShopLoan {
   principal: number;
@@ -36,10 +41,35 @@ export interface StaffCandidate {
 export interface StaffMember extends StaffCandidate {
   uid: string; hiredDay: number; morale: number; deniedLeaves: number; sales: number; tipsEarned: number;
   leaveUntilDay?: number; experience?: number; skillLevel?: number; shiftSales?: number;
+  energy?: number; assignment?: StaffAssignment;
+  unpaidShifts?: number; unpaidWages?: number; totalShiftsWorked?: number;
 }
+export type StaffAssignment = 'off' | 'service' | 'cashier' | 'stock';
 export interface RecruitmentPost { salary: number; postedDay: number; applicantsDay: number; }
 export interface StaffLeaveRequest { employeeUid: string; requestedDay: number; days: number; reason: string; }
-export interface PendingOrder { id: string; productId: string; quantity: number; cost: number; arrivalDay: number; }
+export interface StaffFinancialNotice {
+  payrollAtRisk: { uid: string; name: string; amount: number; shifts: number }[];
+  departures: { uid: string; name: string; amount: number }[];
+}
+export interface PendingOrder { id: string; productId: string; quantity: number; cost: number; arrivalDay: number; supplierId?: string; }
+export interface ArrivedOrderSummary { productId: string; productName: string; quantity: number; supplierId?: string; }
+export type SupplierId = 'local' | 'wholesale' | 'global';
+export interface ReturnCase {
+  id: string; productId: string; customerName: string; amount: number; reason: string;
+  availableDay: number; deadlineDay: number;
+}
+export interface VipAppointment {
+  id: string; customerName: string; style: Style; category: Category; budget: number;
+  scheduledDay: number; minItems: number; reward: number; status: 'offered' | 'accepted';
+}
+export interface CoutureOrder {
+  id: string; clientName: string; brief: string; stage: 'concept' | 'materials' | 'fitting' | 'delivery';
+  quality: number; acceptedDay: number; deadlineDay: number; reward: number; status: 'active' | 'ready';
+}
+export interface ReputationCrisis {
+  startDay: number; deadlineDay: number; positiveReviews: number; sales: number;
+  targetReviews: number; targetSales: number;
+}
 export interface OnlineOrder {
   id: string; productId: string; customerName: string; customerHandle: string;
   productIds?: string[];
@@ -63,6 +93,32 @@ export interface CustomerLoyalty {
   lastVisitDay: number;
   rewardsClaimed: number[];
 }
+export type CampaignKind = 'editorial' | 'category' | 'omnichannel';
+export interface BrandCampaign {
+  id: string;
+  name: string;
+  client: string;
+  description: string;
+  kind: CampaignKind;
+  durationDays: number;
+  targetUnits: number;
+  targetRevenue: number;
+  targetOnline: number;
+  style?: Style;
+  category?: Category;
+  rewardMoney: number;
+  rewardXp: number;
+  rewardFollowers: number;
+  prestigeReward: number;
+}
+export interface ActiveBrandCampaign extends BrandCampaign {
+  startDay: number;
+  deadlineDay: number;
+  units: number;
+  revenue: number;
+  onlineOrders: number;
+  status: 'active' | 'ready' | 'failed';
+}
 export interface GameState {
   version: 1; money: number; xp: number; level: number; reputation: number; reviews: number; followers: number;
   shopReviewTotal: number; shopReviewCount: number;
@@ -82,7 +138,12 @@ export interface GameState {
   onlineRating: number; onlineReviews: number; onlineSales: number;
   stats: DayStats; posts: SocialPost[]; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; tutorialDone: boolean;
   employees: StaffMember[]; staffApplicants: StaffCandidate[]; recruitmentPost: RecruitmentPost | null; staffLeaveRequests: StaffLeaveRequest[];
+  campaignSeason: number; industryReputation: number; activeCampaign: ActiveBrandCampaign | null; campaignAvailableDay: number;
+  completedCampaigns: string[];
+  activeSupplierId: SupplierId; supplierRelations: Record<SupplierId, number>;
+  returnCases: ReturnCase[]; vipAppointments: VipAppointment[]; coutureOrder: CoutureOrder | null; coutureAvailableDay: number;
+  operationSequence: number; reputationCrisis: ReputationCrisis | null;
   shopName: string; hasNamedShop?: boolean;
 }
 export interface SaleResult { success: boolean; score: number; reason: string; total: number; followers: number; viral: boolean; customer: Customer; products: Product[]; isSelfPick?: boolean; isStaffAssisted?: boolean; visitUid?: string; xpEarned?: number; tip?: number; staffName?: string; loyaltyPoints?: number; loyaltyTier?: LoyaltyTier; loyaltyReward?: string; reviewStars?: number; }
-export type GameEvent = { type: 'change' } | { type: 'toast'; message: string; tone?: 'success' | 'error' } | { type: 'sale'; result: SaleResult } | { type: 'customer' } | { type: 'summary' } | { type: 'debt-warning' } | { type: 'game-over' };
+export type GameEvent = { type: 'change' } | { type: 'toast'; message: string; tone?: 'success' | 'error' } | { type: 'sale'; result: SaleResult } | { type: 'customer' } | { type: 'summary' } | { type: 'debt-warning'; staff?: StaffFinancialNotice } | { type: 'game-over' } | { type: 'orders-arrived'; items: ArrivedOrderSummary[] };

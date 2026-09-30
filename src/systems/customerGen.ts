@@ -23,17 +23,12 @@ function pickN<T>(arr: T[], n: number, rand: () => number): T[] {
 }
 
 const NAMES_FEMALE = [
-  'An', 'Ân', 'Bảo', 'Bích', 'Chi', 'Dao', 'Dung', 'Giang', 'Hà', 'Hân',
-  'Hoa', 'Huyền', 'Khanh', 'Lan', 'Linh', 'Loan', 'Mai', 'Mây', 'Mi', 'Minh',
-  'My', 'Nga', 'Ngân', 'Ngọc', 'Nhi', 'Như', 'Phương', 'Quỳnh', 'Thanh', 'Thảo',
-  'Thu', 'Thư', 'Trang', 'Trinh', 'Tú', 'Tuệ', 'Uyên', 'Vân', 'Vi', 'Vy',
+  'An Nhiên', 'Ánh', 'Bảo Anh', 'Bích Ngọc', 'Chi', 'Diệu Anh', 'Diệu Linh', 'Giang', 'Hà My', 'Gia Hân',
+  'Hoa', 'Huyền', 'Khánh Linh', 'Lan', 'Linh Chi', 'Mai Anh', 'Mai', 'Mây', 'Mi', 'Minh Châu',
+  'Mỹ Anh', 'Nga', 'Ngân', 'Ngọc Anh', 'Nhi', 'Như', 'Phương Anh', 'Quỳnh Anh', 'Thanh Trúc', 'Thảo Nhi',
+  'Thu Hà', 'Thư', 'Trang', 'Trinh', 'Tú Anh', 'Tuệ Nhi', 'Uyên', 'Vân Anh', 'Vi An', 'Yến Vy',
   'Yến', 'Ý', 'Zoe', 'Mia', 'Rina', 'Elle', 'Chloe', 'Nari', 'Luna', 'Nova',
   'Iris', 'Aria', 'Lena', 'Nora', 'Mila', 'Sora', 'Yuna', 'Hana', 'Remi', 'Vivi',
-];
-const NAMES_MALE = [
-  'Anh', 'Bảo', 'Đức', 'Hải', 'Hùng', 'Kai', 'Khoa', 'Khôi', 'Lâm', 'Long',
-  'Minh', 'Nam', 'Phong', 'Quân', 'Tài', 'Thắng', 'Tiến', 'Trí', 'Tuấn', 'Việt',
-  'Khải', 'Duy', 'Huy', 'Leon', 'Ren', 'Axel', 'Neo', 'Ray', 'Rio', 'Jun',
 ];
 
 const HANDLE_ADJECTIVES = [
@@ -299,9 +294,8 @@ export function generateCustomer(seed: GeneratedCustomerSeed): Customer {
   }
   const template = pick(weightedPool, rand);
 
-  // Giới tính
-  const isMale = template.gender === 'male' || (template.gender === 'any' && rand() < 0.35);
-  const name = pick(isMale ? NAMES_MALE : NAMES_FEMALE, rand);
+  // Boutique chỉ sinh khách nữ; template vẫn giữ trường gender để tương thích dữ liệu cũ.
+  const name = pick(NAMES_FEMALE, rand);
 
   // Handle
   const handleAdj = pick(HANDLE_ADJECTIVES, rand);
@@ -340,14 +334,14 @@ export function generateCustomer(seed: GeneratedCustomerSeed): Customer {
     : undefined;
 
   // Skin
-  const skinPool = isMale ? SKIN_TONES.slice(3, 11) : [...SKIN_TONES.slice(0, 8), ...SKIN_TONES.slice(0, 3)];
+  const skinPool = [...SKIN_TONES.slice(0, 8), ...SKIN_TONES.slice(0, 3)];
   const skin = pick(skinPool, rand);
 
   // Hair
   const colorfulPersonalities = ['Trend hunter', 'Influencer', 'Gothic Chic'];
   const useColorfulHair = colorfulPersonalities.includes(template.personality) && rand() < 0.55;
   const hairPool = useColorfulHair ? HAIR_COLORS.slice(12, 24)
-    : isMale ? HAIR_COLORS.slice(0, 12) : [...HAIR_COLORS.slice(0, 14), ...HAIR_COLORS.slice(12, 18)];
+    : [...HAIR_COLORS.slice(0, 14), ...HAIR_COLORS.slice(12, 18)];
   const hair = pick(hairPool, rand);
 
   // Outfit color
@@ -356,7 +350,7 @@ export function generateCustomer(seed: GeneratedCustomerSeed): Customer {
   const outfit = pick(outfitPalette, rand);
 
   // Hair style
-  const hairStylePool = isMale ? [1, 1, 2] : [0, 0, 1, 2, 0];
+  const hairStylePool = [0, 0, 1, 2, 0];
   const hairStyle = pick(hairStylePool, rand);
 
   const templateKey = template.personality.replace(/\s+/g, '_').toLowerCase();

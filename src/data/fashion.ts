@@ -179,7 +179,7 @@ export const expandedProducts: Product[] = [
   item('nocturne-velvet-dress', 'Đầm nhung Midnight Column', 'dresses', 'slip', 'Luxury', 'black', 360, 769, 6, 'slipDress', ['date', 'party'], ['K-pop']),
   item('nocturne-trench', 'Trench Eclipse Atelier', 'outerwear', 'trench', 'Poetcore', 'brown', 330, 709, 6, 'trench', ['campus', 'city'], ['Dark Academia']),
   item('nocturne-boots', 'Boots Opera Platform', 'shoes', 'boot', 'Grunge', 'black', 285, 619, 6, 'combatBoot', ['concert', 'party'], ['Luxury']),
-  item('nocturne-satchel', 'Túi Satchel Private Archive', 'bags', 'satchel', 'Dark Academia', 'brown', 295, 639, 6, 'satchel', ['campus', 'city'], ['Poetcore']),
+  item('nocturne-satchel', 'Túi Satchel Private Archive', 'bags', 'satchel', 'Dark Academia', 'brown', 295, 639, 6, 'nocturneSatchel', ['campus', 'city'], ['Poetcore']),
 
   // Endgame capsule III — Global Runway (level 7)
   item('global-runway-gown', 'Đầm Runway Aurora', 'dresses', 'maxi', 'Luxury', 'silver', 480, 999, 7, 'maxiDress', ['party'], ['K-pop']),

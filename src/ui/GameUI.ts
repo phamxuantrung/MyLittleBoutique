@@ -1,26 +1,44 @@
-import { furniture, levels, products } from '../data/catalog';
+import { customers, furniture, levels, products } from '../data/catalog';
 import { looks } from '../data/fashion';
 import type { GameStore } from '../systems/store';
 import type { AudioSystem } from '../systems/audio';
-import { activeCustomer, activeVisit, currentEvent, currentTrend, DAY_DURATION, customerNeedsAdvice, decorAppealScore, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
+import { activeCustomer, activeVisit, currentEvent, currentTrend, DAY_DURATION, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, landSize, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
 import { defaultFilters } from '../systems/catalog';
 import { icon } from './icons';
-import { ownerPortrait } from '../art/svg';
+import { characterSvg, courierSvg, ownerPortrait } from '../art/svg';
 import { isWallFurnitureId } from '../systems/rules';
-import { compact, escapeHtml, money, productImage } from './format';
-import { debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, nameShopModal, onlineChannelModal, onlineOrderModal, questPanel, resultModal, serveModal, socialPanel, staffManagementModal, summaryModal, trendPanel, upgradeModal } from './panels';
+import { compact, compactMoney, escapeHtml, furnitureImage, money, productImage } from './format';
+import { boutiqueProfileModal, campaignModal, debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, nameShopModal, onlineChannelModal, onlineOrderModal, questPanel, serveModal, socialPanel, staffManagementModal, summaryModal, supplierSelectionPanel, trendPanel, upgradeModal } from './panels';
 import type { ShopScene } from '../scenes/ShopScene';
 import { DISPLAY_GUIDE_SEEN, displayGuideModal, needsDisplayGuide } from './displayGuide';
+import { CAMPAIGN_GUIDE_SEEN } from '../systems/campaigns';
+import { customerCareModal } from './operationsPanel';
+import type { ArrivedOrderSummary, StaffAssignment, SupplierId } from '../types';
+import { supplierFor, suppliers } from '../systems/operations';
+import { gameCalendarDate } from '../systems/calendar';
+import { lookupCustomer } from '../systems/customerGen';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social';
-type Modal = 'none' | 'serve' | 'display' | 'result' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'tutorial-recap' | 'display-guide';
-const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'buy-furniture']);
+type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide';
+const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
+const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look']);
+const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
+const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
+  const duration = Math.max(1, totalSeconds);
+  const remaining = Math.max(0, Math.min(duration, remainingSeconds));
+  const openingMinutes = 8 * 60;
+  const tradingMinutes = 14 * 60;
+  const currentMinutes = openingMinutes + Math.round((1 - remaining / duration) * tradingMinutes);
+  const hours = Math.floor(currentMinutes / 60);
+  const minutes = currentMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
 const navItems: { id: Tab; label: string; icon: string; subtitle: string }[] = [
-  { id: 'stock', label: 'Kho hàng', icon: 'hanger', subtitle: 'Hàng đang có' },
-  { id: 'import', label: 'Nhập hàng', icon: 'bag', subtitle: 'Bổ sung kho & Lookbook' },
-  { id: 'trend', label: 'Xu hướng', icon: 'trend', subtitle: 'Một chút cảm hứng' },
-  { id: 'decor', label: 'Bày trí', icon: 'decor', subtitle: 'Nội thất & trưng hàng' },
-  { id: 'social', label: 'Bảng tin', icon: 'social', subtitle: 'Chuyện của boutique' },
+  { id: 'stock', label: 'Kho hàng', icon: 'hudStock', subtitle: 'Hàng đang có' },
+  { id: 'import', label: 'Nhập hàng', icon: 'hudImport', subtitle: 'Bổ sung kho & Lookbook' },
+  { id: 'trend', label: 'Xu hướng', icon: 'hudTrend', subtitle: 'Một chút cảm hứng' },
+  { id: 'decor', label: 'Bày trí', icon: 'hudDecor', subtitle: 'Nội thất & trưng hàng' },
+  { id: 'social', label: 'Bảng tin', icon: 'hudSocial', subtitle: 'Chuyện của boutique' },
 ];
 
 export class GameUI {
@@ -33,9 +51,11 @@ export class GameUI {
   private outfitCategory = 'all';
   private selectedFurniture?: string;
   private filter = 'all';
+  private inventoryMode: 'stock' | 'pending' = 'stock';
   private importFilters = defaultFilters();
   private lookFilters = defaultFilters();
   private importMode: 'products' | 'looks' = 'products';
+  private importSourceSelected = false;
   private sort = 'level';
   private quantity = 1;
   private importQty = 1;
@@ -53,13 +73,27 @@ export class GameUI {
   private tutorialRetry = 0;
   private displayGuideTimer = 0;
   private onlineOrderId = '';
+  private pendingDisplayUpgradeUid = '';
+  private campaignGuideForced = false;
+  private campaignGuideTimer = 0;
+  private campaignUnlockPrompted = false;
   private suppressSuccessToastAudio = false;
+  private suppressTransactionSuccessToast = false;
+  private catalogSearchTimer = 0;
+  private composingCatalogSearch = false;
   private onlineHandoverProductIds: string[] = [];
   private serveVisitId = '';
+  private staffDetailUid = '';
+  private financeSection: 'loan' | 'payroll' | 'land' = 'loan';
+  private displayHoldDelay = 0;
+  private displayHoldRepeat = 0;
+  private displayHoldStart?: { x: number; y: number };
+  private suppressDisplayAddClick = false;
 
   constructor(private store: GameStore, private audio: AudioSystem) {
     this.shell(); this.render(); this.bind();
     this.queueDisplayGuide();
+    this.queueCampaignUnlock();
     if (this.store.state.gameOverReason) {
       setTimeout(() => this.openModal('gameover', financialGameOverModal(this.store.state)), 100);
     } else if (this.store.state.loanOverdueDays >= 5 || this.store.state.rentOverdueDays >= 5) {
@@ -77,41 +111,52 @@ export class GameUI {
         this.render();
         if (this.modal === 'serve' && activeVisit(store.state)?.uid !== this.serveVisitId) this.closeModal();
         if (this.modal === 'quests') this.dialog.querySelector('.dialog-inner')!.innerHTML = questPanel(store.state);
-        if (this.modal === 'staff') this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(store.state);
+        if (this.modal === 'campaign') this.dialog.querySelector('.dialog-inner')!.innerHTML = campaignModal(store.state, this.campaignGuideForced);
+        if (this.modal === 'customer-care') this.dialog.querySelector('.dialog-inner')!.innerHTML = customerCareModal(store.state);
+        if (this.modal === 'staff') this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(store.state, this.staffDetailUid);
         if (this.modal === 'online') this.refreshOnlineChannel();
         if (this.modal === 'online-order') this.refreshOnlineOrder();
-        if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(store.state);
+        if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(store.state, this.financeSection);
         if (this.modal === 'debug') this.dialog.querySelector('.dialog-inner')!.innerHTML = debugPanel(store.state);
         this.queueTutorialCue();
         this.queueDisplayGuide();
+        this.queueCampaignUnlock();
       }
       if (event.type === 'toast') {
+        if (this.suppressTransactionSuccessToast && event.tone !== 'error') return;
         this.toast(event.message, event.tone);
         if (event.tone === 'error') audio.play('error');
         else if (!this.suppressSuccessToastAudio) audio.play('click');
       }
       if (event.type === 'sale') {
-        if (!event.result.isSelfPick && !event.result.isStaffAssisted) {
-          this.openModal('result', resultModal(event.result));
-        } else {
-          this.toast(
-            event.result.success
-              ? event.result.isStaffAssisted
-                ? `${event.result.staffName ?? 'Nhân viên'} đã tư vấn và chốt đơn cho ${event.result.customer.name} (+${money(event.result.total)})!`
-                : `${event.result.customer.name} chốt đơn (+${money(event.result.total)})!`
-              : `${event.result.customer.name} rời shop (chưa hợp gu)`,
-            event.result.success ? 'success' : 'error'
-          );
-        }
+        if (this.modal === 'serve') this.closeModal();
+        this.toast(
+          event.result.success
+            ? event.result.isStaffAssisted
+              ? `${event.result.staffName ?? 'Nhân viên'} đã chốt đơn cho ${event.result.customer.name} · +${money(event.result.total)}`
+              : `${event.result.customer.name} mua thành công · +${money(event.result.total)}`
+            : `${event.result.customer.name} rời shop · chưa tìm được món phù hợp`,
+          event.result.success ? 'success' : 'error'
+        );
         audio.play(event.result.viral ? 'reward' : event.result.success ? 'sale' : 'error');
       }
       if (event.type === 'summary') this.openModal('summary', summaryModal(store.state));
-      if (event.type === 'debt-warning') this.openModal('debt-warning', debtWarningModal(store.state));
+      if (event.type === 'debt-warning') this.openModal('debt-warning', debtWarningModal(store.state, event.staff));
       if (event.type === 'game-over') this.openModal('gameover', financialGameOverModal(store.state));
       if (event.type === 'customer') audio.play('bell');
+      if (event.type === 'orders-arrived') {
+        const items = event.items;
+        window.setTimeout(() => {
+          if (this.store.state.phase !== 'preparation') return;
+          if (this.tab !== 'shop') this.navigate('shop');
+          if (this.modal !== 'none') this.closeModal();
+          this.openModal('orders-arrived', this.ordersArrivedHtml(items));
+          this.audio.play('reward');
+        }, 60);
+      }
     });
     setInterval(() => {
-      const modalPausesSale = !['none', 'serve', 'online-order'].includes(this.modal);
+      const modalPausesSale = !['none', 'serve', 'online-order', 'campaign'].includes(this.modal);
       const paused = document.hidden || this.moveMode || this.tab !== 'shop' || modalPausesSale;
       if (!paused && this.store.state.phase === 'open') {
         this.saleTickProgress += this.saleSpeed / 4;
@@ -128,40 +173,78 @@ export class GameUI {
   attachScene(scene: ShopScene) {
     this.scene = scene;
     this.scene.setMoveModeCallback((active, uid) => this.handleMoveMode(active, uid));
+    this.syncSceneInteraction();
+  }
+
+  private syncSceneInteraction() {
+    const enabled = this.modal === 'none' && (this.tab === 'shop' || this.tab === 'decor');
+    // A character can open the advice dialog from Phaser's object-level
+    // pointerup before the scene-level pointerup clears camera panning. Reset
+    // that gesture explicitly so the camera does not remain attached to the
+    // cursor after the dialog closes.
+    this.scene?.releasePointerGesture();
+    const canvasEl = document.querySelector<HTMLElement>('#game-canvas');
+    if (canvasEl) {
+      canvasEl.style.pointerEvents = enabled ? 'auto' : 'none';
+      const innerCanvas = canvasEl.querySelector<HTMLElement>('canvas');
+      if (innerCanvas) innerCanvas.style.pointerEvents = enabled ? 'auto' : 'none';
+    }
+    if (this.scene?.input) this.scene.input.enabled = enabled;
   }
   private shell() {
     document.querySelector('#app')!.innerHTML = `
       <div class="game-viewport">
         <!-- Ask players to rotate the device before playing. -->
         <div class="landscape-banner" id="landscape-hint">
-          <span class="banner-icon">${icon('rotate')}</span>
-          <strong class="banner-title">Vui lòng xoay ngang màn hình</strong>
-          <span class="banner-text">Game sẽ tiếp tục ngay khi thiết bị ở chế độ ngang.</span>
+          <div class="rotate-brand"><span>ML</span><p><b>MY LITTLE</b><strong>BOUTIQUE</strong></p></div>
+          <div class="rotate-visual" aria-hidden="true">
+            <span class="rotate-orbit"></span>
+            <span class="rotate-phone"><i></i><b>${icon('shop')}</b></span>
+            <span class="rotate-arrow">${icon('rotate')}</span>
+            <i class="rotate-star star-a">✦</i><i class="rotate-star star-b">✦</i>
+          </div>
+          <div class="rotate-copy">
+            <span class="rotate-eyebrow">TRẢI NGHIỆM TỐT NHẤT</span>
+            <strong class="banner-title">Xoay ngang để mở cửa tiệm</strong>
+            <span class="banner-text">Boutique của bạn đẹp nhất ở chế độ ngang. Game sẽ tiếp tục ngay khi bạn xoay thiết bị.</span>
+          </div>
+          <div class="rotate-status"><i></i><span>Đang chờ xoay màn hình</span><i></i></div>
         </div>
 
         <div class="game-stage">
           <!-- Top HUD Bar: Level, Day, Currencies, Quick Controls (Fixed trên đỉnh toàn bộ game) -->
           <header class="game-top-bar">
-            <!-- LEFT: Level + Day trong 1 capsule nhỏ gọn -->
-            <div class="top-left-cluster">
-              <button class="level-capsule" data-action="upgrade-open" title="Nâng cấp boutique" aria-label="Cấp boutique 1">
-                <span class="level-crown">${icon('trophy')}</span>
-                <span class="level-copy"><strong class="level-title" id="shop-level-pill">01</strong></span>
+            <div class="shop-profile-hud coc-profile-hud">
+              <button class="level-capsule coc-level-box" data-action="upgrade-open" title="Nâng cấp boutique" aria-label="Cấp boutique 1">
+                <span class="coc-profile-avatar">${ownerPortrait(46)}</span>
+                <strong class="level-title coc-level-num" id="shop-level-pill">01</strong>
               </button>
+              <div class="coc-bar-column">
+                <button class="shop-profile-main coc-name-btn" data-action="home" aria-label="Mở trang cá nhân boutique" title="Trang cá nhân boutique">
+                  <strong id="shop-hud-name">My Little Boutique</strong>
+                </button>
+                <div class="coc-exp-bar-track" data-action="upgrade-open" title="Kinh nghiệm boutique">
+                  <div class="coc-exp-bar-fill" id="shop-hud-exp-bar">
+                    <span class="coc-exp-gloss"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="top-left-cluster">
               <div id="day-card"></div>
               <div id="shop-status"></div>
             </div>
 
-            <!-- RIGHT: HUD Capsule + Tool Buttons -->
-            <div class="top-right-cluster">
-              <section class="hud" id="hud" aria-label="Chỉ số cửa hàng"></section>
-              <div class="quick-tools-bar">
-                <button class="hud-circle-btn quest-hud-button" data-action="quests" title="Nhiệm vụ ngày" aria-label="Nhiệm vụ ngày">${icon('gift')}<b id="quest-ready-badge" class="quest-ready-badge" hidden></b></button>
-                <button class="hud-circle-btn" data-action="settings" id="settings-button" aria-label="Cài đặt boutique" title="Cài đặt">${icon('settings')}</button>
-                <button class="owner-avatar hud-circle-btn" data-action="home" aria-label="Về trang chủ boutique" title="Về trang chủ boutique">${ownerPortrait(36)}<span class="avatar-home-badge" title="Về trang chủ">${icon('home')}</span></button>
-              </div>
+            <div class="top-right-cluster"><section class="hud" id="hud" aria-label="Chỉ số cửa hàng"></section></div>
+
+            <div class="quick-tools-bar">
+              <button class="hud-circle-btn campaign-hud-button" data-action="campaign-open" title="Studio hợp tác" aria-label="Studio hợp tác">${icon('hudStudio')}<span class="hud-side-label">Studio</span><span class="campaign-new-label" hidden>MỚI</span><b id="campaign-hud-badge" class="quest-ready-badge" hidden></b></button>
+              <button class="hud-circle-btn settings-hud-button" data-action="settings" id="settings-button" aria-label="Cài đặt boutique" title="Cài đặt">${icon('hudSettings')}<span class="hud-side-label">Cài đặt</span></button>
             </div>
           </header>
+
+          <output id="sale-shift-timer" class="sale-shift-timer" aria-live="polite" hidden></output>
 
           <!-- Shop Screen View (Canvas + Shop Floating HUD) -->
           <div id="shop-view" class="shop-main-view">
@@ -172,14 +255,26 @@ export class GameUI {
             <!-- In-Game Floating HUD Layer (Shop controls only) -->
             <div class="game-hud-layer">
               <button id="staff-manager-button" class="staff-manager-fab" data-action="staff-open" aria-label="Quản lý nhân viên" title="Quản lý nhân viên">
-                <span class="staff-fab-icon">${icon('users')}</span><span class="staff-fab-copy"><strong>Đội ngũ</strong><small id="staff-fab-status">Chưa tuyển</small></span><b id="staff-fab-badge" hidden></b>
+                ${icon('hudStaff')}<span class="staff-fab-copy"><strong id="staff-fab-status">Nhân viên: 0</strong></span>
+                <b id="staff-leave-badge" class="coc-badge-pill" hidden></b>
               </button>
-              <button id="online-channel-button" class="online-channel-fab" data-action="online-open" aria-label="Kênh bán hàng online" title="Quản lý kênh bán hàng online">
-                <span class="staff-fab-icon online-fab-icon">${icon('globe')}</span><span class="staff-fab-copy"><strong>Kênh online</strong><small id="online-fab-status">Chưa đăng hàng</small></span><b id="online-fab-badge" hidden></b>
+              <div id="online-care-cluster" class="online-care-cluster coc-buttons-stack">
+                <button id="online-channel-button" class="online-channel-fab coc-square-btn coc-btn-online" data-action="online-open" aria-label="Kênh bán hàng online" title="Quản lý kênh bán hàng online">
+                  ${icon('hudOnline')}
+                  <small id="online-fab-status" hidden></small>
+                  <b id="online-fab-badge" hidden></b>
+                </button>
+                <button class="hud-circle-btn customer-care-hud-button coc-square-btn coc-btn-care" data-action="customer-care-open" title="Chăm sóc khách hàng" aria-label="Đổi trả và đơn VIP đặt trước">
+                  ${icon('hudCare')}
+                  <b id="customer-care-hud-badge" class="coc-badge-pill" hidden>1</b>
+                </button>
+              </div>
+              <button id="land-expand-button" class="land-expand-fab" data-action="expand-land-confirm" aria-label="Mở rộng mặt bằng" title="Xem thông tin mở rộng mặt bằng">
+                <span class="staff-fab-icon land-fab-icon">${icon('hudExpand')}</span><span class="staff-fab-copy"><strong>Mở rộng</strong><small id="land-expand-status">Xem nâng cấp</small></span>
               </button>
-              <button id="land-expand-button" class="land-expand-fab" data-hold-action="expand-land" aria-label="Nhấn giữ để mở rộng mặt bằng" title="Nhấn giữ 1,2 giây để mở rộng mặt bằng">
-                <span class="land-expand-progress" aria-hidden="true"></span>
-                <span class="staff-fab-icon land-fab-icon">${icon('expand')}</span><span class="staff-fab-copy"><strong>Mở rộng</strong><small id="land-expand-status">Giữ 1,2 giây</small></span>
+              <button id="finance-hud-button" class="finance-hud-button hud-edge-button" data-action="finance-open" aria-label="Tài chính" title="Quản lý tài chính"><span>${icon('hudFinance')}</span><strong>Tài chính</strong><b id="finance-hud-badge" class="coc-badge-pill" hidden></b></button>
+              <button id="debug-button" class="debug-fab" data-action="debug-open" aria-label="Mở công cụ debug" title="Mở công cụ debug">
+                ${icon('settings')}<span>Debug</span>
               </button>
               <!-- Center Zone: Sub-HUD Tools -->
               <div class="game-center-hud"></div>
@@ -187,6 +282,7 @@ export class GameUI {
               <!-- Bottom Zone: Customer Card, Move Toolbar & Dock Nav -->
               <footer class="game-bottom-hud">
                 <div id="sale-controls" class="sale-controls" hidden></div>
+                <nav id="sale-interaction-bar" class="sale-interaction-bar" aria-label="Nhân vật đang chờ tương tác" hidden></nav>
                 <!-- Customer Interaction Card / Welcome / Closing -->
                 <div id="customer-card"></div>
 
@@ -225,85 +321,6 @@ export class GameUI {
     this.updateDockVisibility();
   }
   private bind() {
-    const landButton = document.querySelector<HTMLButtonElement>('#land-expand-button');
-    if (landButton) {
-      const landHoldDuration = 1200;
-      let holdTimer = 0;
-      let holdFrame = 0;
-      let startTime = 0;
-      let startX = 0;
-      let startY = 0;
-      let draggingShop = false;
-      let activePointerId: number | null = null;
-      const resetHold = () => {
-        window.clearTimeout(holdTimer);
-        window.cancelAnimationFrame(holdFrame);
-        holdTimer = 0;
-        holdFrame = 0;
-        landButton.classList.remove('is-holding');
-        landButton.style.setProperty('--hold-progress', '0%');
-      };
-      const drawProgress = () => {
-        const progress = Math.min(1, (performance.now() - startTime) / landHoldDuration);
-        landButton.style.setProperty('--hold-progress', `${Math.round(progress * 100)}%`);
-        if (progress < 1) holdFrame = window.requestAnimationFrame(drawProgress);
-      };
-      landButton.addEventListener('pointerdown', event => {
-        if (event.button !== 0 || landButton.disabled || this.store.state.phase === 'open') return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        resetHold();
-        activePointerId = event.pointerId;
-        this.scene?.setHudPointerBlocked(true);
-        startTime = performance.now();
-        startX = event.clientX;
-        startY = event.clientY;
-        draggingShop = false;
-        landButton.setPointerCapture(event.pointerId);
-        landButton.classList.add('is-holding');
-        holdFrame = window.requestAnimationFrame(drawProgress);
-        holdTimer = window.setTimeout(() => {
-          holdTimer = 0;
-          landButton.classList.add('is-complete');
-          this.store.expandLand();
-          window.setTimeout(() => landButton.classList.remove('is-complete'), 260);
-          resetHold();
-        }, landHoldDuration);
-      });
-      landButton.addEventListener('pointermove', event => {
-        if (event.pointerId === activePointerId) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-        if (!holdTimer && !draggingShop) return;
-        if (!draggingShop && Math.hypot(event.clientX - startX, event.clientY - startY) > 10) {
-          resetHold();
-          draggingShop = true;
-          this.scene?.beginHudPan(startX, startY);
-        }
-        if (draggingShop) this.scene?.moveHudPan(event.clientX, event.clientY);
-      });
-      const finishLandInteraction = (event: PointerEvent) => {
-        if (activePointerId !== null && event.pointerId !== activePointerId) return;
-        if (activePointerId !== null) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-        resetHold();
-        if (draggingShop) this.scene?.endHudPan();
-        draggingShop = false;
-        activePointerId = null;
-        // Keep Phaser disabled until this pointer event has fully left the DOM.
-        // Otherwise iOS may deliver the same release to an item under the HUD.
-        window.setTimeout(() => this.scene?.setHudPointerBlocked(false), 0);
-      };
-      landButton.addEventListener('pointerup', finishLandInteraction);
-      landButton.addEventListener('pointercancel', finishLandInteraction);
-      landButton.addEventListener('lostpointercapture', finishLandInteraction);
-      landButton.addEventListener('click', event => { event.preventDefault(); event.stopImmediatePropagation(); });
-      landButton.addEventListener('contextmenu', event => { event.preventDefault(); event.stopImmediatePropagation(); });
-      landButton.addEventListener('dragstart', event => { event.preventDefault(); event.stopImmediatePropagation(); });
-    }
     document.addEventListener('pointerdown', event => {
       if ((event.target as HTMLElement).closest('#move-toolbar')) this.scene?.preserveSelectionForUiAction();
     });
@@ -313,8 +330,47 @@ export class GameUI {
       event.stopImmediatePropagation();
       this.openTutorialRack();
     }, true);
+    document.addEventListener('pointerdown', event => {
+      const target = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action="display-add"]');
+      if (!target || target.disabled || event.button !== 0) return;
+      this.stopDisplayAddHold();
+      this.displayHoldStart = { x: event.clientX, y: event.clientY };
+      const productId = target.dataset.id ?? '';
+      const fixtureUid = target.dataset.fixture ?? '';
+      this.displayHoldDelay = window.setTimeout(() => {
+        this.displayHoldDelay = 0;
+        this.suppressDisplayAddClick = true;
+        const addNext = () => {
+          if (this.modal !== 'display' || !this.store.displayProduct(fixtureUid, productId)) {
+            this.stopDisplayAddHold();
+            return false;
+          }
+          this.audio.play('click');
+          this.refreshDisplayFixture(fixtureUid);
+          if (this.tutorialStep === 4) this.advanceTutorial(5);
+          return true;
+        };
+        if (addNext()) this.displayHoldRepeat = window.setInterval(addNext, 120);
+      }, 340);
+    }, { passive: true });
+    document.addEventListener('pointermove', event => {
+      if (!this.displayHoldStart || (!this.displayHoldDelay && !this.displayHoldRepeat)) return;
+      if (Math.hypot(event.clientX - this.displayHoldStart.x, event.clientY - this.displayHoldStart.y) > 9) this.stopDisplayAddHold();
+    }, { passive: true });
+    document.addEventListener('pointerup', () => this.stopDisplayAddHold(), { passive: true });
+    document.addEventListener('pointercancel', () => this.stopDisplayAddHold(), { passive: true });
+    window.addEventListener('blur', () => this.stopDisplayAddHold());
+    window.addEventListener('resize', () => {
+      if (this.tutorialActive()) this.queueTutorialCue();
+    });
     document.addEventListener('click', event => {
       const clicked = event.target as HTMLElement;
+      if (this.tutorialStep === 3 && this.tutorialActive() && clicked.closest('[data-tutorial-open-rack]')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.openTutorialRack();
+        return;
+      }
       if (this.tutorialStep === 3 && this.tutorialActive() && clicked.closest('#game-canvas')) {
         event.preventDefault();
         this.openTutorialRack();
@@ -325,19 +381,32 @@ export class GameUI {
       event.preventDefault();
       void this.audio.unlock();
       const action = target.dataset.action!;
-      const isMoneyPurchase = MONEY_PURCHASE_ACTIONS.has(action);
+      if (action === 'display-add' && this.suppressDisplayAddClick) {
+        this.suppressDisplayAddClick = false;
+        return;
+      }
+      const isImportPayment = this.tab === 'import' && IMPORT_BALANCE_ACTIONS.has(action);
+      const isFinancePayment = this.modal === 'finance' && FINANCE_BALANCE_ACTIONS.has(action);
+      const isMoneyPurchase = MONEY_PURCHASE_ACTIONS.has(action) || isFinancePayment;
       const moneyBefore = this.store.state.money;
       if (!isMoneyPurchase) this.audio.play('click');
-      this.suppressSuccessToastAudio = isMoneyPurchase;
+      this.suppressSuccessToastAudio = isMoneyPurchase || action === 'online-list' || action === 'place-stored';
+      this.suppressTransactionSuccessToast = isImportPayment || isFinancePayment;
       try {
         this.action(action, target.dataset.id ?? '', target);
       } finally {
         this.suppressSuccessToastAudio = false;
+        this.suppressTransactionSuccessToast = false;
       }
-      if (isMoneyPurchase && this.store.state.money < moneyBefore) this.audio.play('spend');
+      const deducted = moneyBefore - this.store.state.money;
+      if (deducted > 0) {
+        this.audio.play('coin');
+        if (isImportPayment) this.animateMoneyDeduction('import', deducted);
+        if (isFinancePayment) this.animateMoneyDeduction('finance', deducted);
+      }
     });
     document.addEventListener('change', event => {
-      const target = event.target as HTMLSelectElement;
+      const target = event.target as HTMLInputElement | HTMLSelectElement;
       if (target.id === 'music-volume') {
         const volume = Number(target.value) / 100;
         this.store.setMusicVolume(volume);
@@ -350,10 +419,39 @@ export class GameUI {
         if (rawPrice && this.store.setPrice(target.dataset.price, price)) this.renderPanel();
       }
       if (target.id === 'decor-select') this.selectFurniture(target.value || undefined);
+      if (target.matches('.product-import-qty-input')) {
+        const input = target;
+        const productId = input.dataset.product ?? '';
+        const supplier = supplierFor(this.store.state);
+        if (productId) this.productImportQtys[productId] = Math.max(supplier.minOrder, Math.min(30, Math.floor(Number(input.value) || supplier.minOrder)));
+        this.renderPanel();
+      }
+      if (target.matches('.look-qty-input')) {
+        const input = target;
+        const lookId = input.dataset.look ?? '';
+        const supplier = supplierFor(this.store.state);
+        if (lookId) this.lookQtys[lookId] = Math.max(supplier.minOrder, Math.min(30, Math.floor(Number(input.value) || supplier.minOrder)));
+        this.renderPanel();
+      }
       const field = { 'catalog-style': 'style', 'catalog-occasion': 'occasion', 'catalog-availability': 'availability' }[target.id] as 'style' | 'occasion' | 'availability' | undefined;
       if (field) { this.lookFilters[field] = target.value; this.renderPanel(); }
       const importField = { 'import-style': 'style', 'import-occasion': 'occasion' }[target.id] as 'style' | 'occasion' | undefined;
       if (importField) { this.importFilters[importField] = target.value; this.renderPanel(); }
+    });
+    document.addEventListener('compositionstart', event => {
+      const target = event.target as HTMLInputElement;
+      if (target.id === 'catalog-search' || target.id === 'import-search') {
+        this.composingCatalogSearch = true;
+        window.clearTimeout(this.catalogSearchTimer);
+      }
+    });
+    document.addEventListener('compositionend', event => {
+      const target = event.target as HTMLInputElement;
+      if (target.id !== 'catalog-search' && target.id !== 'import-search') return;
+      this.composingCatalogSearch = false;
+      const filters = target.id === 'import-search' ? this.importFilters : this.lookFilters;
+      filters.query = target.value;
+      this.scheduleCatalogSearch(target.id, target.selectionStart);
     });
     document.addEventListener('input', event => {
       const target = event.target as HTMLInputElement;
@@ -387,8 +485,7 @@ export class GameUI {
       if (target.id === 'catalog-search' || target.id === 'import-search') {
         const filters = target.id === 'import-search' ? this.importFilters : this.lookFilters;
         filters.query = target.value;
-        this.renderPanel();
-        document.getElementById(target.id)?.focus({ preventScroll: true });
+        if (!this.composingCatalogSearch) this.scheduleCatalogSearch(target.id, target.selectionStart);
       }
     });
     document.addEventListener('focusout', event => {
@@ -403,20 +500,25 @@ export class GameUI {
     });
     document.addEventListener('keydown', event => {
       const target = event.target as HTMLElement;
+      if (target.matches('.employee-roster-card') && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        this.action('staff-detail', target.dataset.id ?? '', target);
+        return;
+      }
       if (target.matches('.inv-price-input') && event.key === 'Enter') { event.preventDefault(); target.blur(); return; }
       if (target.matches('.fixture-title-edit') && event.key === 'Enter') { event.preventDefault(); target.blur(); return; }
       if (this.tab !== 'decor' || !this.selectedFurniture || this.modal !== 'none' || (event.target as HTMLElement).matches('input,select,textarea')) return;
       const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
       if (moves[event.key]) { event.preventDefault(); this.moveSelected(...moves[event.key]); }
     });
-    this.dialog.addEventListener('cancel', event => { event.preventDefault(); if (this.modal === 'gameover') return; this.modal === 'result' ? this.continueAfterSale() : this.closeModal(); });
+    this.dialog.addEventListener('cancel', event => { event.preventDefault(); if (this.modal === 'gameover') return; this.closeModal(); });
     this.dialog.addEventListener('click', event => {
       if (event.target !== this.dialog || this.modal === 'none' || this.modal === 'gameover') return;
       const bounds = this.dialog.getBoundingClientRect();
       const outside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
       if (!outside) return;
       event.preventDefault();
-      this.modal === 'result' ? this.continueAfterSale() : this.closeModal();
+      this.closeModal();
     });
     window.addEventListener('boutique-display', event => {
       const uid = (event as CustomEvent<string>).detail;
@@ -425,6 +527,16 @@ export class GameUI {
         if (this.tutorialStep === 3) this.advanceTutorial(4);
       }
     });
+  }
+  private stopDisplayAddHold() {
+    window.clearTimeout(this.displayHoldDelay);
+    window.clearInterval(this.displayHoldRepeat);
+    this.displayHoldDelay = 0;
+    this.displayHoldRepeat = 0;
+    this.displayHoldStart = undefined;
+    if (this.suppressDisplayAddClick) {
+      window.setTimeout(() => { this.suppressDisplayAddClick = false; }, 450);
+    }
   }
   private action(action: string, id: string, target?: HTMLElement) {
     switch (action) {
@@ -441,6 +553,10 @@ export class GameUI {
       case 'open': {
         this.navigate('shop');
         this.store.openShop();
+        // Recover from an interrupted pointer/modal interaction before the sale
+        // starts. Without this, the DOM speed button still works while Phaser is
+        // left unable to receive taps or drags.
+        this.syncSceneInteraction();
         break;
       }
       case 'welcome-toggle': {
@@ -450,6 +566,9 @@ export class GameUI {
         break;
       }
       case 'serve-open': this.openServe(); break;
+      case 'sale-visit-open':
+        if (this.store.focusCustomer(id)) this.openServe();
+        break;
       case 'skip': this.closeModal(); this.store.skipCustomer(); break;
       case 'buy': {
         if (this.store.state.phase === 'open') {
@@ -461,6 +580,11 @@ export class GameUI {
         break;
       }
       case 'filter': this.filter = id; this.renderPanel(); break;
+      case 'inventory-filter': this.filter = id; this.renderPanel(); break;
+      case 'inventory-mode':
+        this.inventoryMode = id === 'pending' ? 'pending' : 'stock';
+        this.renderPanel();
+        break;
       case 'quantity': this.quantity = Number(id); this.renderPanel(); break;
       case 'import-mode': {
         this.importMode = id === 'looks' ? 'looks' : 'products';
@@ -484,6 +608,7 @@ export class GameUI {
         break;
       }
       case 'import-filter': this.importFilters.category = id; this.renderPanel(); break;
+      case 'import-look-style': this.lookFilters.style = id; this.renderPanel(); break;
       case 'import-qty':
       case 'product-import-qty': {
         const productId = target?.getAttribute('data-product') ?? target?.dataset.product;
@@ -495,17 +620,24 @@ export class GameUI {
         this.renderPanel();
         break;
       }
+      case 'product-qty-step': {
+        const productId = target?.dataset.product ?? '';
+        const supplier = supplierFor(this.store.state);
+        const current = Math.max(supplier.minOrder, this.productImportQtys[productId] ?? supplier.minOrder);
+        if (productId) this.productImportQtys[productId] = Math.max(supplier.minOrder, Math.min(30, current + Number(id)));
+        this.renderPanel();
+        break;
+      }
       case 'order-import': {
         if (this.store.state.phase === 'open') {
           this.toast('Cửa hàng đang mở cửa đón khách! Không thể nhập hàng trong giờ bán.', 'error');
           return;
         }
-        const qty = this.productImportQtys[id] ?? this.importQty ?? 1;
+        const qty = Math.max(supplierFor(this.store.state).minOrder, this.productImportQtys[id] ?? this.importQty ?? 1);
         const ordered = this.store.orderImport(id, qty);
         if (ordered && this.tutorialStep === 1) this.advanceTutorial(2);
         break;
       }
-      case 'collect-orders': this.store.collectOrders(); break;
       case 'look-qty': {
         const lookId = target?.getAttribute('data-look') ?? target?.dataset.look;
         if (lookId) {
@@ -514,13 +646,21 @@ export class GameUI {
         }
         break;
       }
+      case 'look-qty-step': {
+        const lookId = target?.dataset.look ?? '';
+        const supplier = supplierFor(this.store.state);
+        const current = Math.max(supplier.minOrder, this.lookQtys[lookId] ?? supplier.minOrder);
+        if (lookId) this.lookQtys[lookId] = Math.max(supplier.minOrder, Math.min(30, current + Number(id)));
+        this.renderPanel();
+        break;
+      }
       case 'buy-look': {
         if (this.store.state.phase === 'open') {
           this.toast('Cửa hàng đang mở cửa đón khách! Không thể nhập hàng trong giờ bán.', 'error');
           return;
         }
         const look = looks.find(l => l.id === id);
-        const qty = this.lookQtys[id] ?? 1;
+        const qty = Math.max(supplierFor(this.store.state).minOrder, this.lookQtys[id] ?? 1);
         if (look) this.store.buyOutfit(look.items, qty);
         break;
       }
@@ -532,7 +672,38 @@ export class GameUI {
         this.openModal('quests', questPanel(this.store.state));
         break;
       }
-      case 'staff-open': this.openModal('staff', staffManagementModal(this.store.state)); break;
+      case 'staff-open': this.staffDetailUid = ''; this.openModal('staff', staffManagementModal(this.store.state)); break;
+      case 'staff-detail':
+        this.staffDetailUid = id;
+        this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(this.store.state, id);
+        this.scrollModalToTop();
+        break;
+      case 'staff-detail-close':
+        this.staffDetailUid = '';
+        this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(this.store.state);
+        this.scrollModalToTop();
+        break;
+      case 'campaign-open': this.campaignGuideForced = false; this.openModal('campaign', campaignModal(this.store.state)); break;
+      case 'campaign-guide': this.campaignGuideForced = true; this.openModal('campaign', campaignModal(this.store.state, true)); break;
+      case 'campaign-guide-done': this.campaignGuideForced = false; this.store.acknowledgeCampaignGuide(); if (this.modal === 'campaign') this.dialog.querySelector('.dialog-inner')!.innerHTML = campaignModal(this.store.state); break;
+      case 'campaign-start': this.store.startCampaign(id); break;
+      case 'campaign-claim': this.store.claimCampaign(); break;
+      case 'campaign-abandon': this.store.abandonCampaign(); break;
+      case 'customer-care-open': this.openModal('customer-care', customerCareModal(this.store.state)); break;
+      case 'supplier-select':
+        if (this.store.selectSupplier(id as SupplierId)) {
+          this.importSourceSelected = true;
+          this.renderPanel();
+          this.queueTutorialCue();
+        }
+        break;
+      case 'staff-assignment': this.store.setStaffAssignment(id, target?.dataset.value as StaffAssignment); break;
+      case 'return-resolve': this.store.resolveReturn(id, target?.dataset.value as 'refund' | 'exchange' | 'deny'); break;
+      case 'vip-accept': this.store.acceptVip(id); break;
+      case 'vip-decline': this.store.declineVip(id); break;
+      case 'couture-start': this.store.startCoutureOrder(); break;
+      case 'couture-advance': this.store.advanceCouture(target?.dataset.value as 'safe' | 'premium'); break;
+      case 'couture-deliver': this.store.deliverCouture(); break;
       case 'online-open': this.openModal('online', onlineChannelModal(this.store.state)); break;
       case 'online-list': this.store.listOnlineProduct(id); break;
       case 'online-unlist': this.store.removeOnlineProduct(id); break;
@@ -568,13 +739,33 @@ export class GameUI {
           this.renderPanel();
         }
         break;
+      case 'review-like': {
+        const scrollTop = document.querySelector<HTMLElement>('.social-drawer-content')?.scrollTop ?? 0;
+        if (this.store.toggleShopReviewLike(id)) {
+          const scroller = document.querySelector<HTMLElement>('.social-drawer-content');
+          if (scroller) scroller.scrollTop = scrollTop;
+        }
+        break;
+      }
       case 'recruit-post': {
         const input = document.querySelector<HTMLInputElement>('#staff-salary-input');
         this.store.postRecruitment(Number(input?.value ?? 0));
         break;
       }
       case 'recruit-cancel': this.store.cancelRecruitment(); break;
+      case 'recruit-new': {
+        if (this.store.cancelRecruitment()) this.renderPanel();
+        break;
+      }
       case 'staff-hire': this.store.hireStaff(id); break;
+      case 'inventory-price-save': {
+        const input = document.querySelector<HTMLInputElement>(`#inv-price-${CSS.escape(id)}`);
+        const rawPrice = input?.value.trim() ?? '';
+        const price = Number(rawPrice.replace(/[^0-9]/g, ''));
+        if (!rawPrice || !Number.isFinite(price)) { this.toast('Hãy nhập một mức giá bán hợp lệ.', 'error'); break; }
+        if (this.store.setPrice(id, price)) this.renderPanel();
+        break;
+      }
       case 'staff-fire': this.store.fireStaff(id); break;
       case 'staff-leave-approve': this.store.decideStaffLeave(id, true); break;
       case 'staff-leave-deny': this.store.decideStaffLeave(id, false); break;
@@ -603,8 +794,24 @@ export class GameUI {
       }
       case 'display-upgrade': {
         const uid = target?.dataset.fixture ?? '';
-        this.store.upgradeDisplay(uid);
-        this.refreshDisplayFixture(uid);
+        this.openDisplayUpgradeConfirmation(uid);
+        break;
+      }
+      case 'display-upgrade-confirmed': {
+        const uid = this.pendingDisplayUpgradeUid;
+        if (uid) this.store.upgradeDisplay(uid);
+        this.pendingDisplayUpgradeUid = '';
+        if (uid) this.openDisplayFixture(uid);
+        else this.closeModal();
+        break;
+      }
+      case 'display-upgrade-cancel': {
+        this.pendingDisplayUpgradeUid = '';
+        this.closeModal();
+        this.selectedFurniture = undefined;
+        this.scene?.setMoveMode(false);
+        this.renderMoveToolbar();
+        this.navigate('shop');
         break;
       }
       case 'select-product': {
@@ -655,13 +862,24 @@ export class GameUI {
         document.querySelector<HTMLButtonElement>('[data-action="sale-speed"]')?.focus({ preventScroll: true });
         break;
       }
-      case 'continue': this.continueAfterSale(); break;
       case 'summary': this.openModal('summary', summaryModal(this.store.state)); break;
-      case 'finance-open': this.openModal('finance', financeModal(this.store.state)); break;
+      case 'finance-open': {
+        this.financeSection = this.store.state.employees.some(employee => (employee.unpaidWages ?? 0) > 0)
+          ? 'payroll'
+          : this.store.state.rentDue > 0 ? 'land' : 'loan';
+        this.openModal('finance', financeModal(this.store.state, this.financeSection));
+        break;
+      }
+      case 'finance-section':
+        if (id === 'loan' || id === 'payroll' || id === 'land') {
+          this.financeSection = id;
+          this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
+        }
+        break;
       case 'take-loan': {
         const input = this.dialog.querySelector<HTMLInputElement>('#loan-amount-input');
         this.store.takeLoan(Number(input?.value));
-        if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state);
+        if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
         break;
       }
       case 'pay-loan': {
@@ -670,7 +888,7 @@ export class GameUI {
           this.dialog.querySelector('.dialog-inner')!.innerHTML = summaryModal(this.store.state);
           this.scrollModalToTop();
         }
-        else if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state);
+        else if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
         break;
       }
       case 'pay-rent': {
@@ -679,10 +897,18 @@ export class GameUI {
           this.dialog.querySelector('.dialog-inner')!.innerHTML = summaryModal(this.store.state);
           this.scrollModalToTop();
         }
-        else if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state);
+        else if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
         break;
       }
-      case 'next-day': this.closeModal(); this.store.nextDay(); this.navigate('shop'); break;
+      case 'pay-staff-wages':
+        this.store.payStaffWages(id);
+        if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
+        break;
+      case 'pay-all-staff-wages':
+        this.store.payStaffWages();
+        if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
+        break;
+      case 'next-day': this.closeModal(); this.navigate('shop'); break;
       case 'display-guide-start': {
         this.closeModal();
         this.navigate('shop');
@@ -727,8 +953,13 @@ export class GameUI {
         else this.renderPanel();
         break;
       }
-      case 'expand-land': {
+      case 'expand-land-confirm': {
+        this.openLandExpansionConfirmation();
+        break;
+      }
+      case 'expand-land-confirmed': {
         this.store.expandLand();
+        this.closeModal();
         break;
       }
       case 'move-rotate': {
@@ -742,7 +973,7 @@ export class GameUI {
         if (this.selectedFurniture) {
           this.store.storeFurniture(this.selectedFurniture);
           this.selectedFurniture = undefined;
-          this.scene?.setMoveMode(true, undefined);
+          this.scene?.setMoveMode(false);
           this.renderMoveToolbar();
         }
         break;
@@ -753,11 +984,26 @@ export class GameUI {
         if (uid) { this.scene?.setMoveMode(false); this.openDisplayFixture(uid); }
         break;
       }
+      case 'fixture-info': {
+        const placed = this.store.state.layout.find(item => item.uid === id);
+        const definition = placed && furniture.find(item => item.id === placed.id);
+        if (!placed || !definition) break;
+        const display = definition.display;
+        const currentCapacity = display ? displayCapacity(definition, placed) : 0;
+        const currentLevel = display ? displayLevel(definition, placed) : 0;
+        this.openModal('fixture-info', `<div class="app-info-modal fixture-details-modal">
+          <header class="app-modal-header"><span class="app-header-chip">${icon('decor')} Đang đặt</span><div><small>THÔNG TIN ĐỒ ĐẠC</small><h2>${escapeHtml(placed.customName || definition.name)}</h2></div><button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
+          <section class="fixture-details-hero"><div class="fixture-details-art">${furnitureImage(definition)}</div><div><span class="eyebrow">${escapeHtml(definition.style ?? 'Boutique')}</span><h3>${escapeHtml(placed.customName || definition.name)}</h3><p>${escapeHtml(definition.description ?? 'Một món đồ giúp bạn hoàn thiện không gian boutique.')}</p></div></section>
+          <div class="app-stat-grid fixture-details-stats"><span>${icon('expand')}<small>Kích thước</small><b>${definition.width} × ${definition.height}</b></span><span>${icon('hudAppeal')}<small>Thẩm mỹ</small><b>+${definition.appeal}</b></span>${display ? `<span>${icon('hanger')}<small>Sức chứa</small><b>${currentCapacity}</b></span><span>${icon('trophy')}<small>Cấp kệ</small><b>${currentLevel}</b></span>` : `<span>${icon('shop')}<small>Phân loại</small><b>Trang trí</b></span>`}</div>
+          <footer class="app-modal-actions"><button class="btn btn-primary" data-action="close-modal">${icon('check')} Đã hiểu</button></footer>
+        </div>`);
+        break;
+      }
       case 'move-sell': {
         if (this.selectedFurniture) {
           this.store.sellFurniture(this.selectedFurniture);
           this.selectedFurniture = undefined;
-          this.scene?.setMoveMode(true, undefined);
+          this.scene?.setMoveMode(false);
           this.renderMoveToolbar();
         }
         break;
@@ -802,6 +1048,7 @@ export class GameUI {
       case 'home': {
         if (this.modal !== 'none') this.closeModal();
         this.navigate('shop');
+        this.openModal('profile', boutiqueProfileModal(this.store.state));
         break;
       }
       case 'help': this.showHelp(); break;
@@ -833,12 +1080,27 @@ export class GameUI {
       case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
     }
   }
+  private scheduleCatalogSearch(inputId: 'catalog-search' | 'import-search', caret: number | null) {
+    window.clearTimeout(this.catalogSearchTimer);
+    this.catalogSearchTimer = window.setTimeout(() => {
+      const shouldRestoreFocus = document.activeElement?.id === inputId;
+      this.renderPanel();
+      if (!shouldRestoreFocus) return;
+      const nextInput = document.getElementById(inputId) as HTMLInputElement | null;
+      if (!nextInput) return;
+      nextInput.focus({ preventScroll: true });
+      const position = Math.min(caret ?? nextInput.value.length, nextInput.value.length);
+      nextInput.setSelectionRange(position, position);
+    }, 180);
+  }
   navigate(tab: Tab) {
+    const enteringImport = (tab === 'import' || tab === 'looks') && this.tab !== 'import';
     if (tab === 'looks') {
       this.importMode = 'looks';
       tab = 'import';
     }
     if (tab !== 'shop' && !navItems.some(n => n.id === tab)) return;
+    if (enteringImport) this.importSourceSelected = false;
     if (this.store.state.phase === 'open' && (tab === 'import' || tab === 'decor' || tab === 'social')) {
       tab = 'shop';
     }
@@ -853,13 +1115,8 @@ export class GameUI {
     const showShop = tab === 'shop';
     const panel = document.querySelector<HTMLElement>('#content-panel')!;
     panel.hidden = showShop;
-    const canvasEl = document.querySelector<HTMLElement>('#game-canvas');
-    if (canvasEl) {
-      canvasEl.style.pointerEvents = showShop ? 'auto' : 'none';
-      const innerCanvas = canvasEl.querySelector('canvas');
-      if (innerCanvas) innerCanvas.style.pointerEvents = showShop ? 'auto' : 'none';
-    }
     this.scene?.setTab(tab);
+    this.syncSceneInteraction();
     this.scene?.setEdit(false);
     this.updateDockVisibility();
     this.render();
@@ -878,10 +1135,14 @@ export class GameUI {
     if (staffButton) staffButton.hidden = hiddenFromShop;
     const onlineButton = document.querySelector<HTMLElement>('#online-channel-button');
     if (onlineButton) onlineButton.hidden = hiddenFromShop;
+    const onlineCareCluster = document.querySelector<HTMLElement>('#online-care-cluster');
+    if (onlineCareCluster) onlineCareCluster.hidden = hiddenFromShop;
     const debugButton = document.querySelector<HTMLElement>('#debug-button');
     if (debugButton) debugButton.hidden = hiddenFromShop;
     const landButton = document.querySelector<HTMLElement>('#land-expand-button');
     if (landButton) landButton.hidden = hiddenFromShop || this.store.state.phase === 'open';
+    const financeButton = document.querySelector<HTMLElement>('#finance-hud-button');
+    if (financeButton) financeButton.hidden = hiddenFromShop;
   }
   private updateDockVisibility() {
     const isMainShop = this.tab === 'shop' && this.modal === 'none' && !this.moveMode;
@@ -899,6 +1160,7 @@ export class GameUI {
     const dockNav = document.querySelector<HTMLElement>('.vertical-dock');
     if (!dockNav) return;
     const isOpen = this.store.state.phase === 'open';
+    const staffNotices = this.store.state.staffLeaveRequests.length + this.store.state.staffApplicants.length;
     const availableItems = isOpen
       ? navItems.filter(n => n.id === 'stock' || n.id === 'trend')
       : navItems;
@@ -907,13 +1169,18 @@ export class GameUI {
         <div class="dock-icon-bubble dock-bubble-${n.id}">
           ${icon(n.icon)}
         </div>
+         ${n.id === 'social' && staffNotices > 0 ? `<b class="dock-social-badge" title="${staffNotices} thông báo nhân viên">${staffNotices}</b>` : ''}
         <span class="dock-btn-label">${n.label}</span>
       </button>
     `).join('');
   }
   private render() {
     const s = this.store.state;
+    const crisisWarning = !!s.reputationCrisis || s.loanOverdueDays >= 5 || s.rentOverdueDays >= 5;
+    document.querySelector<HTMLElement>('.game-stage')?.classList.toggle('is-crisis-warning', crisisWarning);
     const isOpen = s.phase === 'open';
+    document.querySelector<HTMLElement>('.game-stage')?.classList.toggle('is-sale-open', isOpen);
+    document.querySelector<HTMLElement>('#toasts')?.classList.toggle('is-sale-open', isOpen);
     if (!isOpen) {
       this.saleSpeed = 1;
       this.saleTickProgress = 0;
@@ -921,8 +1188,17 @@ export class GameUI {
     }
     const showShop = this.tab === 'shop';
 
-    document.querySelector('#day-card')!.innerHTML = `<span class="day-sun-icon">${icon('daySun')}</span><strong class="day-num">${String(s.day).padStart(2, '0')}</strong>`;
-    document.querySelector('#hud')!.innerHTML = `<div class="hud-item wallet"><span class="hud-icon">${icon('coin')}</span><strong data-testid="money">${money(s.money)}</strong></div><div class="hud-item" title="Độ uy tín"><span class="hud-icon reputation-icon">${icon('shield')}</span><strong>${s.reputation.toFixed(1)}</strong></div><div class="hud-item" title="Người theo dõi"><span class="hud-icon heart-icon">${icon('user')}</span><strong>${compact(s.followers)}</strong></div><div class="hud-item hud-appeal" title="Điểm thẩm mỹ"><span class="hud-icon appeal-icon">${icon('decor')}</span><strong>${decorAppealScore(s)}</strong></div>`;
+    const calendarDate = gameCalendarDate(s.day);
+    document.querySelector('#day-card')!.innerHTML = `${icon('daySun')}<span class="day-calendar"><small>NGÀY</small><strong class="day-num">${String(calendarDate.day).padStart(2, '0')}</strong></span><i></i><span class="day-calendar"><small>THÁNG</small><strong class="day-num">${String(calendarDate.month).padStart(2, '0')}</strong></span>`;
+    document.querySelector('#hud')!.innerHTML = `<span class="hud-item wallet"><strong data-testid="money">${compactMoney(s.money)}</strong>${icon('hudMoney')}</span><span class="hud-item" title="Độ uy tín"><strong>${s.reputation.toFixed(1)}</strong>${icon('hudReputation')}</span><span class="hud-item" title="Người theo dõi"><strong>${compact(s.followers)}</strong>${icon('hudFollowers')}</span><span class="hud-item hud-appeal" title="Điểm thẩm mỹ"><strong>${decorAppealScore(s)}</strong>${icon('hudAppeal')}</span>`;
+    const currentProfileLevel = levels[Math.max(0, s.level - 1)];
+    const profileNext = levels[s.level];
+    const levelXp = Math.max(0, s.xp - currentProfileLevel.xp);
+    const levelXpTarget = profileNext ? Math.max(1, profileNext.xp - currentProfileLevel.xp) : 1;
+    const profileName = document.querySelector<HTMLElement>('#shop-hud-name');
+    if (profileName) profileName.textContent = s.shopName;
+    const profileExpBar = document.querySelector<HTMLElement>('#shop-hud-exp-bar');
+    if (profileExpBar) profileExpBar.style.width = `${profileNext ? Math.min(100, levelXp / levelXpTarget * 100) : 100}%`;
     const soundBtn = document.querySelector('#sound-button');
     if (soundBtn) {
       soundBtn.innerHTML = icon(s.sound ? 'volume' : 'mute');
@@ -930,39 +1206,48 @@ export class GameUI {
     }
     const pill = document.querySelector('#shop-level-pill');
     if (pill) {
-      pill.textContent = String(s.level).padStart(2, '0');
+      pill.textContent = String(s.level);
       pill.closest('.level-capsule')?.setAttribute('aria-label', `Cấp boutique ${s.level}`);
     }
 
     const timerVal = s.dayTimer ?? DAY_DURATION;
-    const formatTime = (sec: number) => {
-      const m = Math.floor(sec / 60);
-      const rem = sec % 60;
-      return `${m}:${rem < 10 ? '0' : ''}${rem}`;
-    };
+    const shiftDuration = dayDuration(s);
     const saleControls = document.querySelector<HTMLElement>('#sale-controls')!;
     saleControls.innerHTML = isOpen ? `          <button class="close-shop-button" data-action="close-shop" title="Kết thúc ngày bán và xem tổng kết">
             <span class="sale-btn-icon">${icon('shop')}</span>
-            <span class="sale-btn-text">Đóng cửa sớm</span>
+            <span class="sale-btn-text">Đóng cửa</span>
           </button>
           <button class="sale-speed-button" data-action="sale-speed" aria-label="Tốc độ bán hàng ${this.saleSpeed}x" title="Đổi tốc độ: 1x → 2x → 4x → 1x" data-speed="${this.saleSpeed}">
             <span class="speed-icon-wrap">${icon('arrow')}</span>
             <strong class="speed-val">${this.saleSpeed}x</strong>
           </button>` : '';
     saleControls.hidden = !isOpen || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode;
-    if (isOpen) {
-      const isUrgent = timerVal <= 15;
-      document.querySelector('#shop-status')!.innerHTML = `
-        <span class="status-pill is-open"><i class="status-art">${icon('shopBadge')}</i><span class="status-label">Mở cửa</span></span>
-        <span class="status-countdown-pill ${isUrgent ? 'is-urgent' : ''}" id="day-countdown-box" title="Thời gian bán hàng hôm nay">${icon('clock')} <strong id="day-timer-label">${formatTime(timerVal)}</strong></span>
-      `;
-    } else if (s.phase === 'preparation') {
-      document.querySelector('#shop-status')!.innerHTML = `
-        <span class="status-pill is-prep"><i class="status-art">${icon('shopBadge')}</i><span class="status-label">Chuẩn bị</span></span>
-      `;
-    } else {
-      document.querySelector('#shop-status')!.innerHTML = `<span class="status-pill is-closed"><i class="status-art">${icon('shopBadge')}</i><span class="status-label">Đóng cửa</span></span>`;
-    }
+    const saleTimer = document.querySelector<HTMLOutputElement>('#sale-shift-timer')!;
+    saleTimer.hidden = !isOpen || this.tab !== 'shop';
+    saleTimer.classList.toggle('is-urgent', timerVal <= 15);
+    saleTimer.innerHTML = isOpen ? `<span>GIỜ TRONG NGÀY</span><strong id="day-timer-label">${saleClockLabel(timerVal, shiftDuration)}</strong>` : '';
+
+    const interactionBar = document.querySelector<HTMLElement>('#sale-interaction-bar')!;
+    const adviceVisits = s.activeVisits.filter(visit => visit.mode === 'advice' && !visit.assignedStaffUid);
+    const customerCards = adviceVisits.map(visit => {
+      const customer = customers.find(item => item.id === visit.customerId) ?? lookupCustomer(visit.customerId);
+      if (!customer) return '';
+      const visualCustomer = this.scene?.customerVisualForVisit(customer, visit.uid) ?? customer;
+      return `<span class="sale-card-aura">
+        <button class="sale-character-card is-customer ${visit.uid === s.currentVisitId ? 'is-current' : ''}" data-action="sale-visit-open" data-id="${visit.uid}" aria-label="Tư vấn cho ${escapeHtml(customer.name)}">
+          <strong class="sale-card-name">${escapeHtml(customer.name)}</strong>
+          <span class="sale-character-art">${characterSvg(visualCustomer)}</span>
+          <div class="sale-card-countdown ${visit.patience <= 10 ? 'is-urgent' : ''}" data-visit="${visit.uid}"><span>${visit.patience}</span></div>
+        </button>
+      </span>`;
+    }).join('');
+    const courierCards = s.onlineOrders.map((order, index) => `<button class="sale-character-card is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn online ${index + 1}">
+      <span class="sale-character-art">${courierSvg(order.courierVariant)}</span>
+      <span class="sale-character-copy"><small>SHIPPER ĐANG CHỜ</small><strong>Đơn online #${index + 1}</strong><em>${icon('bag')} Giao hàng</em></span>
+    </button>`).join('');
+    interactionBar.innerHTML = customerCards + courierCards;
+    interactionBar.hidden = !isOpen || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || !interactionBar.childElementCount;
+    document.querySelector('#shop-status')!.innerHTML = '';
 
     // Ẩn/hiện các nút công cụ nhanh trên đỉnh tùy theo giờ bán hàng:
     const questBtn = document.querySelector<HTMLElement>('[data-action="quests"]');
@@ -983,18 +1268,65 @@ export class GameUI {
     }
     const settingsBtn = document.querySelector<HTMLElement>('[data-action="settings"]');
     if (settingsBtn) settingsBtn.style.display = isOpen ? 'none' : '';
+    const campaignBtn = document.querySelector<HTMLElement>('[data-action="campaign-open"]');
+    if (campaignBtn) {
+      campaignBtn.hidden = false;
+      const campaignUnseen = s.level >= 3 && !s.claimed.includes(CAMPAIGN_GUIDE_SEEN);
+      campaignBtn.classList.toggle('is-new-unlock', campaignUnseen);
+      campaignBtn.classList.toggle('has-active-campaign', !!s.activeCampaign);
+      campaignBtn.classList.toggle('is-campaign-ready', s.activeCampaign?.status === 'ready');
+      const badge = campaignBtn.querySelector<HTMLElement>('#campaign-hud-badge');
+      if (badge) {
+        const campaign = s.activeCampaign;
+        badge.hidden = !campaign;
+        badge.textContent = !campaign ? '' : campaign.status === 'ready' ? '!' : campaign.status === 'failed' ? '×' : String(Math.max(0, campaign.deadlineDay - s.day + 1));
+      }
+      campaignBtn.setAttribute('title', s.level < 3
+        ? 'Studio hợp tác · Mở khóa ở cấp 3'
+        : s.activeCampaign ? `${s.activeCampaign.name} · Studio hợp tác` : 'Chọn hợp đồng thương hiệu');
+      const newLabel = campaignBtn.querySelector<HTMLElement>('.campaign-new-label');
+      if (newLabel) newLabel.hidden = !campaignUnseen;
+    }
+    const operationsBtn = document.querySelector<HTMLElement>('[data-action="customer-care-open"]');
+    if (operationsBtn) {
+      const dueReturns = s.returnCases.filter(item => item.availableDay <= s.day).length;
+      const dueVip = s.vipAppointments.filter(item => item.status === 'accepted' && item.scheduledDay <= s.day).length;
+      const notices = dueReturns + dueVip + (s.reputationCrisis ? 1 : 0);
+      const badge = operationsBtn.querySelector<HTMLElement>('#customer-care-hud-badge');
+      if (badge) { badge.hidden = notices === 0; badge.textContent = String(notices); }
+      operationsBtn.classList.toggle('has-operation-alert', notices > 0);
+      operationsBtn.setAttribute('title', notices ? `Chăm sóc đặc biệt · ${notices} việc cần xử lý` : 'Chăm sóc đặc biệt');
+    }
     const staffButton = document.querySelector<HTMLElement>('#staff-manager-button');
     if (staffButton) {
       staffButton.hidden = this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || isOpen;
       const status = staffButton.querySelector<HTMLElement>('#staff-fab-status');
-      if (status) status.textContent = s.employees.length ? `${s.employees.length} nhân viên` : 'Chưa tuyển';
-      const badge = staffButton.querySelector<HTMLElement>('#staff-fab-badge');
-      const notices = s.staffLeaveRequests.length + s.staffApplicants.length;
-      if (badge) { badge.hidden = notices === 0; badge.textContent = String(notices); }
+      if (status) status.textContent = `Nhân viên: ${s.employees.length}`;
+      const leaveBadge = staffButton.querySelector<HTMLElement>('#staff-leave-badge');
+      if (leaveBadge) {
+        const leaveRequests = s.staffLeaveRequests.length;
+        leaveBadge.hidden = leaveRequests === 0;
+        leaveBadge.textContent = leaveRequests ? String(leaveRequests) : '';
+        leaveBadge.title = leaveRequests ? `${leaveRequests} đơn xin nghỉ đang chờ duyệt` : '';
+      }
+    }
+    const financeHudButton = document.querySelector<HTMLElement>('#finance-hud-button');
+    if (financeHudButton) {
+      const payrollDebts = s.employees.filter(employee => (employee.unpaidWages ?? 0) > 0).length;
+      const debtNotices = Number((s.loan?.paymentDue ?? 0) > 0) + Number(s.rentDue > 0) + payrollDebts;
+      const badge = financeHudButton.querySelector<HTMLElement>('#finance-hud-badge');
+      if (badge) {
+        badge.hidden = debtNotices === 0;
+        badge.textContent = debtNotices ? String(debtNotices) : '';
+        badge.title = debtNotices ? `${debtNotices} khoản cần thanh toán` : '';
+      }
+      financeHudButton.classList.toggle('has-finance-alert', debtNotices > 0);
     }
     const onlineButton = document.querySelector<HTMLElement>('#online-channel-button');
     if (onlineButton) {
       onlineButton.hidden = this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || isOpen;
+      const onlineCareCluster = document.querySelector<HTMLElement>('#online-care-cluster');
+      if (onlineCareCluster) onlineCareCluster.hidden = onlineButton.hidden;
       const status = onlineButton.querySelector<HTMLElement>('#online-fab-status');
       if (status) status.textContent = !s.onlineChannelEnabled ? 'Đang tạm đóng' : s.onlineOrders.length ? `${s.onlineOrders.length} shipper đang chờ` : s.onlineListings.length ? `${s.onlineListings.length} mẫu đang bán` : 'Chưa đăng hàng';
       const badge = onlineButton.querySelector<HTMLElement>('#online-fab-badge');
@@ -1042,7 +1374,7 @@ export class GameUI {
     }
     card.hidden = false;
     const s = this.store.state, c = activeCustomer(s);
-    const financeAlert = s.rentDue > 0 || (s.loan?.paymentDue ?? 0) > 0;
+    const financeAlert = s.rentDue > 0 || (s.loan?.paymentDue ?? 0) > 0 || s.employees.some(employee => (employee.unpaidWages ?? 0) > 0);
     let html = '';
     if (s.phase === 'preparation') {
       html = `<div class="welcome-card preparation-welcome ${this.welcomeCollapsed ? 'is-collapsed' : ''}">
@@ -1050,7 +1382,7 @@ export class GameUI {
           ${icon(this.welcomeCollapsed ? 'shop' : 'minus')}<span>${this.welcomeCollapsed ? 'Chuẩn bị bán hàng' : 'Thu gọn'}</span>${this.welcomeCollapsed ? icon('plus') : ''}
         </button>
         <div id="welcome-details" ${this.welcomeCollapsed ? 'hidden' : ''}>
-          <div class="welcome-text"><span class="eyebrow">${s.day === 1 ? 'YOUR STORY STARTS HERE' : 'A FRESH LITTLE START'}</span><h3>${s.day === 1 ? 'Khởi đầu boutique của riêng bạn' : 'Mở cửa đón những điều dễ thương?'}</h3><p>${s.day === 1 ? 'Bạn bắt đầu với 500.000₫ và kho trống. Hãy nhập hàng, trưng sản phẩm rồi mở cửa; có thể vay thêm vốn nếu cần.' : currentEvent(s).description}</p></div><div class="welcome-actions"><button class="btn btn-secondary finance-entry-btn ${financeAlert ? 'has-finance-alert' : ''}" data-action="finance-open">Tài chính</button><button class="btn btn-primary" data-action="open">Mở cửa đón khách ${icon('arrow')}</button></div>
+          <div class="welcome-text"><span class="eyebrow">${s.day === 1 ? 'YOUR STORY STARTS HERE' : 'A FRESH LITTLE START'}</span><h3>${s.day === 1 ? 'Khởi đầu boutique của riêng bạn' : 'Mở cửa đón những điều dễ thương?'}</h3><p>${s.day === 1 ? 'Bạn bắt đầu với 500.000₫ và kho trống. Hãy nhập hàng, trưng sản phẩm rồi mở cửa; có thể vay thêm vốn nếu cần.' : currentEvent(s).description}</p></div><div class="welcome-actions"><button class="btn btn-secondary finance-entry-btn ${financeAlert ? 'has-finance-alert' : ''}" data-action="finance-open">Tài chính</button><button class="btn btn-primary open-shop-hud-button" data-action="open">${icon('hudOpen')}<span>Mở cửa</span></button></div>
         </div>
       </div>`;
     } else if (c) {
@@ -1060,8 +1392,7 @@ export class GameUI {
     } else if (s.phase === 'open') {
       card.hidden = true;
     } else {
-      const isSlowDay = s.stats.sold === 0;
-      html = `<div class="welcome-card closing-card ${isSlowDay ? 'slow-day-card' : ''}"><span class="welcome-illustration">${icon(isSlowDay ? 'cloud' : 'sun')}</span><div><span class="eyebrow">${isSlowDay ? 'A QUIET LITTLE DAY' : 'YOU MADE SOMEONE\'S DAY'}</span><h3>${isSlowDay ? 'Hôm nay tiệm hơi vắng đơn...' : 'Một ngày xinh đã khép lại.'}</h3><p>${isSlowDay ? `Đã đón ${s.stats.served} khách, 0 món tìm được chủ mới.` : `${s.stats.happy} nụ cười, ${s.stats.sold} món đồ tìm được chủ mới.`}</p></div><div class="welcome-actions"><button class="btn btn-secondary finance-entry-btn ${financeAlert ? 'has-finance-alert' : ''}" data-action="finance-open">Tài chính</button><button class="btn btn-primary" data-action="summary">Xem tổng kết ${icon('arrow')}</button></div></div>`;
+      card.hidden = true;
     }
     card.innerHTML = html;
   }
@@ -1078,11 +1409,20 @@ export class GameUI {
   }
   private renderPanel() {
     const panel = document.querySelector<HTMLElement>('#content-panel')!;
+    panel.onscroll = null;
     let contentHtml = '';
     if (this.tab === 'stock') {
-      contentHtml = inventoryPanel(this.store.state);
+      contentHtml = inventoryPanel(this.store.state, this.filter, this.inventoryMode);
     } else if (this.tab === 'import') {
-      contentHtml = importPanel(this.store.state, this.importFilters, this.productImportQtys, this.importMode, this.lookQtys);
+      contentHtml = this.importSourceSelected
+        ? importPanel(
+            this.store.state,
+            this.importMode === 'looks' ? this.lookFilters : this.importFilters,
+            this.productImportQtys,
+            this.importMode,
+            this.lookQtys
+          )
+        : supplierSelectionPanel(this.store.state);
     } else if (this.tab === 'looks') {
       contentHtml = importPanel(this.store.state, this.importFilters, this.productImportQtys, 'looks', this.lookQtys);
     } else if (this.tab === 'trend') {
@@ -1094,9 +1434,41 @@ export class GameUI {
     }
     if (contentHtml) {
       panel.innerHTML = `<div class="game-panel-body${this.tab === 'social' ? ' social-profile-page' : ''}">${contentHtml}</div>`;
+      if (this.tab === 'social' && this.socialSection === 'feed') this.bindReviewSummarySticky(panel);
+      if (this.tab === 'trend') this.bindTrendHeroSticky(panel);
     } else {
       panel.innerHTML = '';
     }
+  }
+  private bindTrendHeroSticky(panel: HTMLElement) {
+    const hero = panel.querySelector<HTMLElement>('.trend-panel-start');
+    if (!hero) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      hero.classList.toggle('is-stuck', panel.scrollTop >= 46);
+    };
+    panel.onscroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    update();
+  }
+  private bindReviewSummarySticky(panel: HTMLElement) {
+    const scroller = panel.querySelector<HTMLElement>('.social-drawer-content');
+    const summary = panel.querySelector<HTMLElement>('.drawer-review-summary');
+    if (!scroller || !summary) return;
+    let frame = 0;
+    let stuck = false;
+    const update = () => {
+      frame = 0;
+      if (!stuck && scroller.scrollTop >= 12) stuck = true;
+      else if (stuck && scroller.scrollTop <= 4) stuck = false;
+      summary.classList.toggle('is-stuck', stuck);
+    };
+    scroller.addEventListener('scroll', () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    }, { passive: true });
+    update();
   }
   private updatePatience() {
     const s = this.store.state, c = activeCustomer(s);
@@ -1104,16 +1476,19 @@ export class GameUI {
     const label = document.querySelector('#patience-label'); if (label) label.textContent = `${s.patience}s`;
     const bar = document.querySelector<HTMLElement>('#patience-bar'); if (bar && c) bar.style.width = `${visit ? visit.patience / visit.maxPatience * 100 : 0}%`;
     const modal = document.querySelector('#modal-patience'); if (modal) modal.innerHTML = `${icon('clock')} ${s.patience}s`;
+    document.querySelectorAll<HTMLElement>('.sale-card-countdown[data-visit]').forEach(countdown => {
+      const visit = s.activeVisits.find(item => item.uid === countdown.dataset.visit);
+      if (!visit) return;
+      const value = countdown.querySelector<HTMLElement>('span');
+      if (value) value.textContent = String(visit.patience);
+      countdown.classList.toggle('is-urgent', visit.patience <= 10);
+    });
 
     if (s.phase === 'open') {
       const timerVal = s.dayTimer ?? DAY_DURATION;
-      const m = Math.floor(timerVal / 60);
-      const rem = timerVal % 60;
-      const timerStr = `${m}:${rem < 10 ? '0' : ''}${rem}`;
       const timerEl = document.querySelector('#day-timer-label');
-      if (timerEl) timerEl.textContent = timerStr;
-      const countdownBox = document.querySelector('#day-countdown-box');
-      if (countdownBox) countdownBox.classList.toggle('is-urgent', timerVal <= 15);
+      if (timerEl) timerEl.textContent = saleClockLabel(timerVal, dayDuration(s));
+      document.querySelector('#sale-shift-timer')?.classList.toggle('is-urgent', timerVal <= 15);
     }
   }
   selectFurniture(uid?: string) { this.selectedFurniture = uid; this.renderMoveToolbar(); }
@@ -1129,7 +1504,11 @@ export class GameUI {
   private renderMoveToolbar() {
     const el = document.querySelector<HTMLElement>('#move-toolbar');
     if (!el) return;
-    if (!this.selectedFurniture || this.tab !== 'shop' || this.modal !== 'none') {
+    const selectionVisible = !!this.selectedFurniture && this.tab === 'shop' && this.modal === 'none';
+    const toasts = document.querySelector<HTMLElement>('#toasts');
+    toasts?.classList.toggle('is-selection-active', selectionVisible);
+    if (selectionVisible) toasts?.replaceChildren();
+    if (!selectionVisible) {
       el.hidden = true;
       el.innerHTML = '';
       el.classList.remove('is-selection-toolbar');
@@ -1139,63 +1518,64 @@ export class GameUI {
     const s = this.store.state;
     const sel = s.layout.find(f => f.uid === this.selectedFurniture);
     const data = sel ? furniture.find(f => f.id === sel.id) : null;
-    if (!this.moveMode) {
-      el.classList.add('is-selection-toolbar');
-      el.innerHTML = `
-        <div class="move-toolbar-pill is-selection">
-          <div class="move-item-meta">
-            <span class="move-item-icon">${icon('decor')}</span>
-            <div class="move-item-texts">
-              <span class="move-item-badge">ĐÃ CHỌN</span>
-              <strong class="move-item-name">${sel?.customName || (data ? data.name : 'Đồ vật')}</strong>
-            </div>
-          </div>
-          <div class="move-toolbar-actions">
-            ${data?.id === 'shop-sign'
-              ? `<button class="move-tool-btn open-btn" data-action="name-shop" title="Đổi tên trên biển hiệu" aria-label="Đổi tên shop"><span class="tool-btn-icon">${icon('edit')}</span><span class="tool-btn-text">Đổi tên</span></button>`
-              : `<button class="move-tool-btn open-btn" data-action="display-open" ${!data?.display ? 'disabled' : ''} title="${data?.display ? 'Mở khu trưng bày' : 'Đồ trang trí này không có kho trưng bày'}" aria-label="Mở"><span class="tool-btn-icon">${icon('hanger')}</span><span class="tool-btn-text">Mở</span></button>`}
-            <button class="move-tool-btn move-btn" data-action="move-start" title="Di chuyển đồ vật này" aria-label="Di chuyển"><span class="tool-btn-icon">${icon('move')}</span><span class="tool-btn-text">Di chuyển</span></button>
-          </div>
-        </div>
-      `;
-      return;
-    }
-    el.classList.remove('is-selection-toolbar');
+    el.classList.add('is-selection-toolbar');
     el.innerHTML = `
-      <div class="move-toolbar-pill">
-        <div class="move-item-meta">
-          <span class="move-item-icon">${icon('decor')}</span>
-          <div class="move-item-texts">
-            <span class="move-item-badge">ĐANG SẮP XẾP</span>
-            <strong class="move-item-name">${sel?.customName || (data ? data.name : 'Chạm đồ vật để chọn')}</strong>
-          </div>
-        </div>
-        <div class="move-toolbar-actions">
-          ${data?.display ? `<button class="move-tool-btn open-btn" data-action="display-open" title="Mở khu trưng bày hàng" aria-label="Mở"><span class="tool-btn-icon">${icon('hanger')}</span><span class="tool-btn-text">Mở</span></button>` : ''}
-          <button class="move-tool-btn rotate-btn" data-action="move-rotate" ${!sel ? 'disabled' : ''} title="${sel && isWallFurnitureId(sel.id) ? 'Xoay để gắn sang tường bên kia' : 'Xoay hướng đồ vật'}" aria-label="${sel && isWallFurnitureId(sel.id) ? 'Xoay sang tường bên kia' : 'Xoay'}">
-            <span class="tool-btn-icon">${icon('rotate')}</span>
-            <span class="tool-btn-text">Xoay</span>
-          </button>
-          <button class="move-tool-btn store-btn" data-action="move-store" ${!sel ? 'disabled' : ''} title="Cất đồ vào kho (giữ nguyên không mất tiền)" aria-label="Cất đồ">
-            <span class="tool-btn-icon">${icon('box')}</span>
-            <span class="tool-btn-text">Cất</span>
-          </button>
-          <button class="move-tool-btn sell-btn" data-action="move-sell" ${!sel ? 'disabled' : ''} title="Thu hồi hoàn 50% tiền" aria-label="Thu hồi">
-            <span class="tool-btn-icon">${icon('trash')}</span>
-            <span class="tool-btn-text">Bán</span>
-          </button>
-          <button class="move-tool-btn done-btn" data-action="move-done" title="Xong sắp xếp" aria-label="Xong">
-            <span class="tool-btn-icon">${icon('check')}</span>
-            <span class="tool-btn-text">Xong</span>
-          </button>
-        </div>
-      </div>
+      ${this.moveMode ? '' : `<button class="selection-move-fab" data-action="move-start" title="Di chuyển đồ vật" aria-label="Di chuyển"><span>${icon('hudMove')}</span><strong>Di chuyển</strong></button>`}
+      <strong class="selection-item-meta move-item-name">
+        ${sel?.customName || (data ? data.name : 'Đồ vật')}
+        ${data?.display?.upgrade ? `<span class="move-item-badge">Cấp ${data && sel ? displayLevel(data, sel) + 1 : 1}</span>` : ''}
+      </strong>
+      <nav class="move-toolbar-actions selection-toolbar-actions" aria-label="Thao tác với đồ vật">
+        ${data?.id === 'shop-sign'
+          ? `<button class="move-tool-btn open-btn" data-action="name-shop" title="Đổi tên trên biển hiệu" aria-label="Đổi tên shop"><span class="tool-btn-icon">${icon('hudFixtureRename')}</span><span class="tool-btn-text">Đổi tên</span></button>`
+          : data?.display
+            ? `<button class="move-tool-btn open-btn" data-action="display-open" title="Mở khu trưng bày" aria-label="Mở"><span class="tool-btn-icon">${icon('hudFixtureOpen')}</span><span class="tool-btn-text">Mở</span></button>`
+            : ''}
+        <button class="move-tool-btn store-btn" data-action="move-store" title="Cất đồ vào kho" aria-label="Cất"><span class="tool-btn-icon">${icon('hudFixtureStore')}</span><span class="tool-btn-text">Cất</span></button>
+        ${data?.display?.upgrade ? `<button class="move-tool-btn upgrade-btn" data-action="display-upgrade" data-fixture="${sel?.uid ?? ''}" title="Nâng cấp khu trưng bày" aria-label="Nâng cấp"><span class="tool-btn-icon">${icon('hudFixtureUpgrade')}</span><span class="tool-btn-text">Nâng cấp</span></button>` : ''}
+        ${this.moveMode
+          ? `<button class="move-tool-btn sell-btn" data-action="move-sell" title="Bán đồ và nhận lại 50% giá mua" aria-label="Bán đồ"><span class="tool-btn-icon">${icon('trash')}</span><span class="tool-btn-text">Bán</span></button><button class="move-tool-btn done-btn" data-action="move-done" title="Hoàn tất sắp xếp" aria-label="Xong"><span class="tool-btn-icon">${icon('check')}</span><span class="tool-btn-text">Xong</span></button>`
+          : `<button class="move-tool-btn info-btn" data-action="fixture-info" data-id="${sel?.uid ?? ''}" title="Xem thông tin đồ vật" aria-label="Thông tin"><span class="tool-btn-icon">${icon('hudFixtureInfo')}</span><span class="tool-btn-text">Thông tin</span></button>`}
+      </nav>
     `;
   }
   private moveSelected(dx: number, dy: number) { const f = this.store.state.layout.find(f => f.uid === this.selectedFurniture); if (f) this.store.moveFurniture(f.uid, f.x + dx, f.y + dy); }
   private openDisplayFixture(uid: string) {
     const html = displayFixtureModal(this.store.state, uid);
-    if (html) this.openModal('display', html);
+    if (html) {
+      this.openModal('display', html);
+    }
+  }
+  private openDisplayUpgradeConfirmation(uid: string) {
+    const placed = this.store.state.layout.find(item => item.uid === uid);
+    const fixture = placed && furniture.find(item => item.id === placed.id);
+    if (!placed || !fixture?.display?.upgrade) return;
+    const cost = displayUpgradeCost(fixture, placed);
+    if (cost === undefined) return;
+    const currentLevel = displayLevel(fixture, placed);
+    const currentCapacity = displayCapacity(fixture, placed);
+    const nextCapacity = currentCapacity + fixture.display.upgrade.slotsPerLevel;
+    this.pendingDisplayUpgradeUid = uid;
+    this.openModal('display-upgrade-confirm', `<div class="app-info-modal display-upgrade-modal">
+      <header class="app-modal-header"><span class="app-header-chip">${icon('coin')} ${money(this.store.state.money)}</span><div><small>NÂNG CẤP TRƯNG BÀY</small><h2>${escapeHtml(placed.customName || fixture.name)}</h2></div><button class="staff-modal-close" data-action="display-upgrade-cancel" aria-label="Quay lại shop">${icon('close')}</button></header>
+      <section class="fixture-details-hero"><div class="fixture-details-art">${furnitureImage(fixture)}</div><div><span class="eyebrow">CẤP ${currentLevel} → ${currentLevel + 1}</span><h3>Mở rộng sức chứa trưng bày</h3><p>Thêm ${fixture.display.upgrade.slotsPerLevel} vị trí để bày nhiều sản phẩm hơn trên cùng thiết bị.</p></div></section>
+      <div class="upgrade-capacity-comparison"><span><small>Hiện tại</small><b>${currentCapacity}</b><em>slot</em></span>${icon('arrow')}<span class="is-next"><small>Sau nâng cấp</small><b>${nextCapacity}</b><em>slot</em></span></div>
+      <div class="app-cost-row"><span><small>Chi phí nâng cấp</small><strong>${money(cost)}</strong></span><em class="${this.store.state.money >= cost ? 'is-ready' : 'is-short'}">${this.store.state.money >= cost ? 'Đủ tiền' : `Thiếu ${money(cost - this.store.state.money)}`}</em></div>
+      <footer class="app-modal-actions is-split"><button class="btn btn-secondary" data-action="display-upgrade-cancel">${icon('arrow')} Quay lại</button><button class="btn btn-primary" data-action="display-upgrade-confirmed" ${this.store.state.money < cost ? 'disabled' : ''}>${icon('check')} Xác nhận nâng cấp</button></footer>
+    </div>`);
+  }
+  private openLandExpansionConfirmation() {
+    const next = nextLandExpansion(this.store.state);
+    if (!next) { this.store.expandLand(); return; }
+    const currentSize = landSize(this.store.state);
+    this.openModal('land-expand-confirm', `<div class="app-info-modal land-upgrade-modal">
+      <header class="app-modal-header"><span class="app-header-chip">${icon('coin')} ${money(this.store.state.money)}</span><div><small>NÂNG CẤP MẶT BẰNG</small><h2>Mở rộng boutique</h2></div><button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
+      <section class="land-upgrade-hero"><span>${icon('expand')}</span><div><small>KHÔNG GIAN MỚI</small><h3>${next.size} × ${next.size} ô</h3><p>Có thêm diện tích bày đồ, trang trí và đón nhiều khách hơn.</p></div></section>
+      <div class="upgrade-capacity-comparison land-size-comparison"><span><small>Hiện tại</small><b>${currentSize} × ${currentSize}</b><em>ô</em></span>${icon('arrow')}<span class="is-next"><small>Sau mở rộng</small><b>${next.size} × ${next.size}</b><em>ô</em></span></div>
+      <div class="app-stat-grid land-upgrade-stats"><span>${icon('users')}<small>Lưu lượng</small><b>+${next.traffic}</b></span><span>${icon('shop')}<small>Thuê mặt bằng</small><b>${compactMoney(next.rent)}/ngày</b></span><span>${icon('expand')}<small>Diện tích tăng</small><b>+${next.size * next.size - currentSize * currentSize}</b></span></div>
+      <div class="app-cost-row"><span><small>Chi phí mở rộng</small><strong>${money(next.cost)}</strong></span><em class="${this.store.state.money >= next.cost ? 'is-ready' : 'is-short'}">${this.store.state.money >= next.cost ? 'Đủ tiền' : `Thiếu ${money(next.cost - this.store.state.money)}`}</em></div>
+      <footer class="app-modal-actions is-split"><button class="btn btn-secondary" data-action="close-modal">Để sau</button><button class="btn btn-primary" data-action="expand-land-confirmed" ${this.store.state.money < next.cost ? 'disabled' : ''}>${icon('check')} Mở rộng mặt bằng</button></footer>
+    </div>`);
   }
   private refreshDisplayFixture(uid: string) {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
@@ -1298,13 +1678,7 @@ export class GameUI {
   private openModal(type: Modal, html: string) {
     if (!this.dialog.open) this.beforeDialogFocus = document.activeElement as HTMLElement;
     this.modal = type;
-    const canvasEl = document.querySelector<HTMLElement>('#game-canvas');
-    if (canvasEl) {
-      canvasEl.style.pointerEvents = 'none';
-      const innerCanvas = canvasEl.querySelector('canvas');
-      if (innerCanvas) innerCanvas.style.pointerEvents = 'none';
-    }
-    if (this.scene) this.scene.input.enabled = false;
+    this.syncSceneInteraction();
     this.dialog.querySelector('.dialog-inner')!.innerHTML = html;
     this.dialog.className = `dialog-${type}`;
     if (!this.dialog.open) this.dialog.showModal();
@@ -1321,7 +1695,18 @@ export class GameUI {
     this.updateDockVisibility();
     this.queueTutorialCue();
   }
+  private ordersArrivedHtml(items: ArrivedOrderSummary[]) {
+    const total = items.reduce((sum, item) => sum + item.quantity, 0);
+    return `<div class="arrivals-modal"><button class="icon-button arrivals-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button><div class="arrivals-heading"><span class="arrivals-truck">${icon('truck')}</span><span class="eyebrow">DELIVERY DAY</span><h2>Hàng mới đã về kho!</h2><p>${total} món trong ${items.length} kiện đã được kiểm nhận và sẵn sàng trưng bày.</p></div><div class="arrivals-list">${items.map(item => {
+      const product = products.find(candidate => candidate.id === item.productId);
+      const supplier = suppliers.find(candidate => candidate.id === item.supplierId);
+      return `<article><div class="arrivals-product-art">${product ? productImage(product) : icon('box')}</div><div><strong>${escapeHtml(item.productName)}</strong><small>${supplier ? escapeHtml(supplier.name) : 'Đơn nhập hàng'}</small></div><b>×${item.quantity}</b></article>`;
+    }).join('')}</div><button class="btn btn-primary arrivals-confirm" data-action="close-modal">Đưa hàng ra trưng bày ${icon('arrow')}</button></div>`;
+  }
   private closeModal() {
+    const advanceAfterSummary = this.modal === 'summary' && this.store.state.phase === 'closed';
+    const returnToSummary = (this.modal === 'debt-warning' || this.modal === 'finance') &&
+      this.store.state.phase === 'closed' && !this.store.state.gameOverReason;
     if (this.modal === 'display-guide' && !this.store.state.claimed.includes(DISPLAY_GUIDE_SEEN)) {
       this.store.state.claimed.push(DISPLAY_GUIDE_SEEN);
       this.store.commit();
@@ -1329,16 +1714,15 @@ export class GameUI {
     const showPreparationRecap = this.modal === 'display' && this.tutorialStep === 5 && this.tutorialActive();
     if (this.modal === 'tutorial-recap') this.finishGuidedTutorial();
     if (this.modal === 'serve') this.serveVisitId = '';
+    if (this.modal === 'staff') this.staffDetailUid = '';
     this.modal = 'none';
     this.dialog.close();
-    const showShop = this.tab === 'shop';
-    const canvasEl = document.querySelector<HTMLElement>('#game-canvas');
-    if (canvasEl) {
-      canvasEl.style.pointerEvents = showShop ? 'auto' : 'none';
-      const innerCanvas = canvasEl.querySelector('canvas');
-      if (innerCanvas) innerCanvas.style.pointerEvents = showShop ? 'auto' : 'none';
-    }
-    if (this.scene) this.scene.input.enabled = (this.tab === 'shop' || this.tab === 'decor');
+    this.syncSceneInteraction();
+    // The waiting-customer rail is hidden while a sale modal is open. A sale
+    // commits its state before this dialog closes, so that earlier render still
+    // sees the modal and leaves every remaining card hidden. Refresh the open
+    // shop immediately after closing to restore the surviving customer cards.
+    if (this.store.state.phase === 'open' && this.tab === 'shop') this.render();
     if (this.beforeDialogFocus?.isConnected) this.beforeDialogFocus.focus({ preventScroll: true });
     this.updateDockVisibility();
     this.queueTutorialCue();
@@ -1348,6 +1732,13 @@ export class GameUI {
       this.showPreparationRecap();
     }
     this.queueDisplayGuide();
+    this.queueCampaignUnlock();
+    if (advanceAfterSummary) {
+      this.store.nextDay();
+      this.navigate('shop');
+    } else if (returnToSummary) {
+      this.openModal('summary', summaryModal(this.store.state));
+    }
   }
 
   private queueDisplayGuide() {
@@ -1358,6 +1749,23 @@ export class GameUI {
         this.openModal('display-guide', displayGuideModal());
       }
     }, 450);
+  }
+
+  private campaignUnlockAvailable() {
+    const s = this.store.state;
+    return s.level >= 3 && s.tutorialDone && !!s.hasNamedShop && s.phase !== 'open' &&
+      !s.gameOverReason && !s.claimed.includes(CAMPAIGN_GUIDE_SEEN);
+  }
+  private queueCampaignUnlock() {
+    window.clearTimeout(this.campaignGuideTimer);
+    if (this.campaignUnlockPrompted || !this.campaignUnlockAvailable()) return;
+    this.campaignGuideTimer = window.setTimeout(() => {
+      if (this.campaignUnlockPrompted || !this.campaignUnlockAvailable() || needsDisplayGuide(this.store.state)) return;
+      if (this.modal !== 'none' || this.tab !== 'shop' || this.moveMode) return;
+      this.campaignUnlockPrompted = true;
+      this.campaignGuideForced = false;
+      this.openModal('campaign', campaignModal(this.store.state));
+    }, 850);
   }
 
   private tutorialActive() {
@@ -1371,14 +1779,17 @@ export class GameUI {
   private renderTutorialCue() {
     document.querySelectorAll('.tutorial-focus').forEach(element => {
       element.classList.remove('tutorial-focus', 'tutorial-cue-left', 'tutorial-cue-below', 'tutorial-cue-below-left', 'tutorial-cue-inside', 'tutorial-cue-badge');
-      element.querySelector(':scope > .tutorial-callout')?.remove();
     });
+    document.querySelectorAll('.tutorial-guide-layer').forEach(element => element.remove());
     document.body.classList.toggle('guided-tutorial-active', this.tutorialActive());
     if (!this.tutorialActive()) return;
     if (this.tutorialStep === 6) return;
+    const choosingTutorialSource = this.tutorialStep === 1 && this.tab === 'import' && !this.importSourceSelected;
     const steps = [
       { selector: '.dock-btn-import', label: 'Bấm Nhập hàng', placement: 'left' },
-      { selector: '.import-btn:not([disabled])', label: 'Bấm để nhập mẫu đầu tiên', placement: 'above' },
+      choosingTutorialSource
+        ? { selector: '.supplier-source-card:not([disabled])', label: 'Chọn nguồn hàng để tiếp tục', placement: 'above' }
+        : { selector: '.import-btn:not([disabled])', label: 'Bấm để nhập mẫu đầu tiên', placement: 'above' },
       { selector: '.panel-close-btn[data-id="shop"]', label: 'Bấm Quay lại shop', placement: 'below' },
       { selector: '#game-canvas', label: 'Bấm vào sào quần áo', placement: 'inside' },
       { selector: '[data-action="display-add"]:not([disabled]) .tutorial-display-add-target', label: 'Bấm + để bày sản phẩm', placement: 'below-left' },
@@ -1389,22 +1800,71 @@ export class GameUI {
     if (this.tutorialStep === 3) this.scene?.focusTutorialFurniture('starter-rack');
     const target = document.querySelector<HTMLElement>(step.selector);
     if (!target) { this.tutorialRetry = window.setTimeout(() => this.renderTutorialCue(), 250); return; }
-    target.classList.add('tutorial-focus');
-    if (step.placement === 'left') target.classList.add('tutorial-cue-left');
-    if (step.placement === 'below') target.classList.add('tutorial-cue-below');
-    if (step.placement === 'below-left') target.classList.add('tutorial-cue-below-left');
-    if (step.placement === 'inside') target.classList.add('tutorial-cue-inside');
-    if (step.placement === 'badge') target.classList.add('tutorial-cue-badge');
-    const callout = document.createElement('span');
-    callout.className = 'tutorial-callout';
-    callout.setAttribute('aria-hidden', 'true');
-    callout.innerHTML = `<b>${this.tutorialStep + 1}/7</b><span>${step.label}</span>`;
-    target.append(callout);
-    // Sticky header controls are already visible; centering their overflowing
-    // callout can shift the entire catalog horizontally.
-    if (!target.closest('.inv-panel-header, .game-panel-header-card')) {
-      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    if (!target.closest('.inv-panel-header, .game-panel-header-card') && this.tutorialStep !== 3) {
+      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
     }
+    target.classList.add('tutorial-focus');
+    const placementClass = `tutorial-cue-${step.placement}`;
+    target.classList.add(placementClass);
+
+    const host = this.dialog.open ? this.dialog : document.body;
+    const layer = document.createElement('div');
+    layer.className = `tutorial-guide-layer ${placementClass}${this.dialog.open ? ' is-dialog-layer' : ''}`;
+    layer.setAttribute('aria-live', 'polite');
+    const spotlight = document.createElement('span');
+    spotlight.className = `tutorial-spotlight${this.tutorialStep === 3 ? ' is-canvas-target' : ''}`;
+    const callout = document.createElement(this.tutorialStep === 3 ? 'button' : 'aside');
+    callout.className = 'tutorial-callout';
+    if (this.tutorialStep === 3) {
+      (callout as HTMLButtonElement).type = 'button';
+      callout.dataset.tutorialOpenRack = 'true';
+    }
+    callout.innerHTML = `<span class="tutorial-step-count">${String(this.tutorialStep + 1).padStart(2, '0')}<small>/07</small></span><span class="tutorial-callout-copy"><small>HƯỚNG DẪN NHANH</small><strong>${step.label}</strong></span><span class="tutorial-progress" aria-hidden="true">${Array.from({ length: 7 }, (_, index) => `<i class="${index <= this.tutorialStep ? 'is-done' : ''}"></i>`).join('')}</span>`;
+    layer.append(spotlight, callout);
+    host.append(layer);
+
+    const hostRect = this.dialog.open
+      ? this.dialog.getBoundingClientRect()
+      : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const targetRect = target.getBoundingClientRect();
+    const relative = {
+      left: targetRect.left - hostRect.left,
+      top: targetRect.top - hostRect.top,
+      width: targetRect.width,
+      height: targetRect.height,
+    };
+    const focusRect = this.tutorialStep === 3
+      ? { left: relative.left + relative.width * .5 - 58, top: relative.top + relative.height * .46 - 48, width: 116, height: 96 }
+      : relative;
+    const focusPad = this.tutorialStep === 3 ? 0 : 6;
+    spotlight.style.left = `${focusRect.left - focusPad}px`;
+    spotlight.style.top = `${focusRect.top - focusPad}px`;
+    spotlight.style.width = `${focusRect.width + focusPad * 2}px`;
+    spotlight.style.height = `${focusRect.height + focusPad * 2}px`;
+
+    const calloutWidth = callout.offsetWidth;
+    const calloutHeight = callout.offsetHeight;
+    let left = relative.left + relative.width / 2 - calloutWidth / 2;
+    let top = relative.top - calloutHeight - 15;
+    if (step.placement === 'left') {
+      left = relative.left - calloutWidth - 16;
+      top = relative.top + relative.height / 2 - calloutHeight / 2;
+    } else if (step.placement === 'below' || step.placement === 'below-left' || step.placement === 'badge') {
+      left = step.placement === 'badge' ? relative.left + relative.width - calloutWidth : left;
+      top = relative.top + relative.height + 15;
+    } else if (step.placement === 'inside') {
+      left = relative.left + relative.width / 2 - calloutWidth / 2;
+      top = relative.top + relative.height * .67 - calloutHeight / 2;
+    }
+    const edge = 10;
+    left = Math.max(edge, Math.min(left, hostRect.width - calloutWidth - edge));
+    top = Math.max(edge, Math.min(top, hostRect.height - calloutHeight - edge));
+    callout.style.left = `${left}px`;
+    callout.style.top = `${top}px`;
+    const arrowX = Math.max(16, Math.min(relative.left + relative.width / 2 - left, calloutWidth - 16));
+    const arrowY = Math.max(16, Math.min(relative.top + relative.height / 2 - top, calloutHeight - 16));
+    callout.style.setProperty('--tutorial-arrow-x', `${arrowX}px`);
+    callout.style.setProperty('--tutorial-arrow-y', `${arrowY}px`);
   }
   private advanceTutorial(step: number) {
     this.tutorialStep = step;
@@ -1419,9 +1879,9 @@ export class GameUI {
   }
   private finishGuidedTutorial() {
     document.body.classList.remove('guided-tutorial-active');
+    document.querySelectorAll('.tutorial-guide-layer').forEach(element => element.remove());
     document.querySelectorAll('.tutorial-focus').forEach(element => {
       element.classList.remove('tutorial-focus', 'tutorial-cue-left', 'tutorial-cue-below', 'tutorial-cue-below-left', 'tutorial-cue-inside', 'tutorial-cue-badge');
-      element.querySelector(':scope > .tutorial-callout')?.remove();
     });
     this.store.settings('tutorialDone', true);
   }
@@ -1429,29 +1889,38 @@ export class GameUI {
     this.openModal('tutorial-recap', `
       <section class="preparation-recap" aria-labelledby="preparation-recap-title">
         <header class="preparation-recap-heading">
-          <span class="eyebrow">BƯỚC 7/7 · CHUẨN BỊ BÁN HÀNG</span>
-          <h2 id="preparation-recap-title">Một lượt chuẩn bị trước khi mở cửa</h2>
-          <p>Mỗi ngày, hãy làm theo quy trình này để tiệm luôn có hàng sẵn sàng đón khách.</p>
+          <span class="preparation-recap-emblem">${icon('shop')}<b>07</b><small>/07</small></span>
+          <div>
+            <span class="eyebrow">SỔ TAY CHỦ TIỆM · BƯỚC 7/7</span>
+            <h2 id="preparation-recap-title">Sẵn sàng cho ngày đầu mở cửa</h2>
+            <p>Năm việc nhỏ để boutique luôn đủ hàng, đúng xu hướng và sẵn sàng đón vị khách đầu tiên.</p>
+          </div>
+          <span class="preparation-ready-badge">${icon('check')} ĐÃ HOÀN THÀNH</span>
         </header>
-        <ol class="preparation-recap-steps">
-          ${[
-            ['trend', 'Xem xu hướng', 'Mở Xu hướng để chọn những mẫu đang được yêu thích.'],
-            ['bag', 'Nhập hàng vào kho', 'Vào Nhập hàng, chọn mẫu và số lượng phù hợp với số tiền đang có.'],
-            ['coin', 'Kiểm tra giá bán', 'Vào Kho hàng để chỉnh giá bán, xem giá vốn và lợi nhuận từng món.'],
-            ['hanger', 'Bày sản phẩm lên sào, kệ', 'Chạm thiết bị trong shop, bấm + để lấy hàng từ kho ra trưng. Chỉ hàng đang trưng mới bán được.'],
-            ['shop', 'Mở cửa và tư vấn khách', 'Bấm Mở cửa đón khách. Chạm khách cần tư vấn, chọn đồ hợp gu và ngân sách rồi chốt đơn.'],
-          ].map(([art, title, description], index) => `<li><span class="preparation-step-number">0${index + 1}</span><div><h3>${icon(art)} ${title}</h3><p>${description}</p></div></li>`).join('')}
-        </ol>
-        <p class="preparation-recap-note">${icon('clock')} Một ngày bán kéo dài ${DAY_DURATION / 60} phút ở tốc độ 1×. Cuối ngày, xem tổng kết và bổ sung hàng cho ngày tiếp theo.</p>
+        <div class="preparation-recap-body">
+          <aside class="preparation-recap-intro">
+            <span class="preparation-intro-art">${icon('sparkle')}${icon('hanger')}</span>
+            <small>CHU TRÌNH MỖI NGÀY</small>
+            <strong>Chuẩn bị kỹ,<br>mở cửa thật vui.</strong>
+            <p>Bạn có thể quay lại các khu vực này bất cứ lúc nào trước khi bắt đầu bán hàng.</p>
+            <span class="preparation-time-chip">${icon('clock')} ${Math.floor(dayDuration(this.store.state) / 60)} phút${dayDuration(this.store.state) % 60 ? ` ${dayDuration(this.store.state) % 60} giây` : ''} · tốc độ 1×</span>
+          </aside>
+          <ol class="preparation-recap-steps">
+            ${[
+              ['trend', 'Xem xu hướng', 'Chọn những mẫu đang được khách yêu thích.'],
+              ['bag', 'Nhập hàng vào kho', 'Chọn mẫu và số lượng hợp với ngân sách.'],
+              ['coin', 'Kiểm tra giá bán', 'Xem giá vốn, lợi nhuận và chỉnh giá bán.'],
+              ['hanger', 'Bày hàng lên sào, kệ', 'Lấy hàng từ kho ra khu trưng bày.'],
+              ['shop', 'Mở cửa và tư vấn', 'Đón khách và chọn outfit đúng gu.'],
+            ].map(([art, title, description], index) => `<li><span class="preparation-step-number">0${index + 1}</span><span class="preparation-step-icon">${icon(art)}</span><div><h3>${title}</h3><p>${description}</p></div>${index < 4 ? '<i></i>' : ''}</li>`).join('')}
+          </ol>
+        </div>
         <footer class="preparation-recap-actions">
-          <button class="btn btn-primary" data-action="close-modal">${icon('check')} Đã hiểu, tiếp tục chuẩn bị</button>
+          <span>${icon('sparkle')} Boutique của bạn đã sẵn sàng viết câu chuyện đầu tiên.</span>
+          <button class="btn btn-primary" data-action="close-modal"><span><small>QUAY LẠI CỬA TIỆM</small><b>Đã hiểu, tiếp tục chuẩn bị</b></span>${icon('arrow')}</button>
         </footer>
       </section>
     `);
-  }
-  private continueAfterSale() {
-    if (this.store.state.phase === 'closed') this.openModal('summary', summaryModal(this.store.state));
-    else this.closeModal();
   }
   private showHelp() {
     this.openModal('help', `<div class="modal-heading"><div><span class="eyebrow">HELLO, LITTLE SHOP OWNER</span><h2>Một giấc mơ, bốn bước nhỏ.</h2></div><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div><div class="help-steps">${[
@@ -1463,53 +1932,86 @@ export class GameUI {
   }
   private showSettings() {
     const s = this.store.state;
-    this.openModal('settings', `<div class="modal-heading"><div><span class="eyebrow">MAKE YOURSELF AT HOME</span><h2>Cài đặt & Tùy chỉnh</h2></div><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div>
-    
-    <div class="ios-pwa-card">
-      <div class="pwa-header-row">
-        <span class="pwa-app-icon">${icon('hanger')}</span>
-        <div>
-          <h3>Cài App trên iOS (iPhone/iPad)</h3>
-          <p>Chơi mượt mà 100% toàn màn hình, không thanh trình duyệt</p>
-        </div>
-      </div>
-      <div class="pwa-steps-list">
-        <div class="pwa-step-item">
-          <span class="step-num">1</span>
-          <div>Mở game trên trình duyệt <strong>Safari</strong>, chạm nút <strong>Chia sẻ (⎋)</strong> ở thanh dưới cùng.</div>
-        </div>
-        <div class="pwa-step-item">
-          <span class="step-num">2</span>
-          <div>Cuộn tìm và chọn mục <strong>"Thêm vào MH chính"</strong> (Add to Home Screen).</div>
-        </div>
-        <div class="pwa-step-item">
-          <span class="step-num">3</span>
-          <div>Chạm <strong>Thêm</strong> ở góc trên bên phải. Icon Boutique sẽ xuất hiện ngay trên màn hình iPhone!</div>
-        </div>
-      </div>
-    </div>
+    const volume = Math.round(s.musicVolume * 100);
+    this.openModal('settings', `<section class="game-settings-modal">
+      <header class="game-settings-header">
+        <span class="game-settings-logo">${icon('settings')}</span>
+        <div><small>GAME OPTIONS</small><h2>Cài đặt</h2></div>
+        <button class="game-settings-close" data-action="close-modal" aria-label="Đóng cài đặt">${icon('close')}</button>
+      </header>
 
-    <div class="setting-row"><div><h3>Tên boutique của bạn</h3><p>${escapeHtml(s.shopName || 'My Little Boutique')}</p></div><button class="btn btn-small btn-primary" data-action="name-shop">${icon('edit')} Đổi tên</button></div>
-    <div class="setting-row"><div><h3>Âm thanh tương tác</h3><p>Tiếng chuông cửa, đồng xu và những niềm vui nhỏ.</p></div><button role="switch" aria-checked="${s.sound}" aria-label="Âm thanh tương tác" data-action="sound" class="toggle ${s.sound ? 'on' : ''}"><span></span></button></div>
-    <div class="setting-row setting-music-row"><div><h3>Nhạc nền boutique</h3><p>Giai điệu pastel pop nhẹ nhàng trong lúc chăm shop.</p></div><button role="switch" aria-checked="${s.music}" aria-label="Nhạc nền" data-action="music" class="toggle ${s.music ? 'on' : ''}"><span></span></button></div>
-    <label class="music-volume-control ${s.music ? '' : 'is-muted'}" for="music-volume">
-      <span><strong>Âm lượng nhạc</strong><small>Kéo để chọn mức âm lượng dịu tai.</small></span>
-      <span class="music-volume-slider">${icon('volume')}<input id="music-volume" type="range" min="0" max="100" step="5" value="${Math.round(s.musicVolume * 100)}" aria-label="Âm lượng nhạc"><output id="music-volume-value" for="music-volume">${Math.round(s.musicVolume * 100)}%</output></span>
-    </label>
-    <div class="setting-row"><div><h3>Tiến trình của bạn</h3><p>${this.store.save.available ? 'Tự động lưu trên trình duyệt này sau mỗi thao tác.' : 'Trình duyệt đang chặn lưu trữ. Tiến trình có thể mất khi đóng trang.'}</p></div>${icon(this.store.save.available ? 'check' : 'help')}</div>
-    <div class="setting-row"><div><h3>Một khởi đầu mới</h3><p>Xóa tiến trình hiện tại và bắt đầu từ ngày đầu tiên.</p></div><button class="btn btn-small btn-white" data-action="reset-confirm">Chơi lại</button></div>
-    <button class="btn btn-secondary full-width" data-action="help">${icon('help')} Xem hướng dẫn chơi</button>`);
+      <div class="game-settings-content">
+        <section class="settings-profile-card">
+          <span class="settings-profile-avatar">${ownerPortrait(50)}</span>
+          <div><small>BOUTIQUE CỦA BẠN</small><strong>${escapeHtml(s.shopName || 'My Little Boutique')}</strong></div>
+          <button data-action="name-shop">${icon('edit')} Đổi tên</button>
+        </section>
+
+        <section class="settings-group" aria-labelledby="settings-audio-title">
+          <h3 id="settings-audio-title">${icon('volume')} Âm thanh</h3>
+          <div class="game-setting-row">
+            <span class="game-setting-icon is-sound">${icon(s.sound ? 'volume' : 'mute')}</span>
+            <div><strong>Hiệu ứng âm thanh</strong><small>Chuông cửa, đồng xu và các thao tác.</small></div>
+            <button role="switch" aria-checked="${s.sound}" aria-label="Âm thanh tương tác" data-action="sound" class="game-settings-toggle ${s.sound ? 'is-on' : ''}"><i></i><b>${s.sound ? 'Bật' : 'Tắt'}</b></button>
+          </div>
+          <div class="game-setting-row">
+            <span class="game-setting-icon is-music">${icon('star')}</span>
+            <div><strong>Nhạc nền</strong><small>Giai điệu nhẹ nhàng khi chăm shop.</small></div>
+            <button role="switch" aria-checked="${s.music}" aria-label="Nhạc nền" data-action="music" class="game-settings-toggle ${s.music ? 'is-on' : ''}"><i></i><b>${s.music ? 'Bật' : 'Tắt'}</b></button>
+          </div>
+          <label class="game-volume-row ${s.music ? '' : 'is-disabled'}" for="music-volume">
+            <span>${icon('volume')}<strong>Âm lượng nhạc</strong></span>
+            <input id="music-volume" type="range" min="0" max="100" step="5" value="${volume}" aria-label="Âm lượng nhạc">
+            <output id="music-volume-value" for="music-volume">${volume}%</output>
+          </label>
+        </section>
+
+        <section class="settings-utility-grid">
+          <article class="settings-save-state ${this.store.save.available ? 'is-safe' : 'is-warning'}">
+            <span>${icon(this.store.save.available ? 'shield' : 'help')}</span>
+            <div><small>TIẾN TRÌNH</small><strong>${this.store.save.available ? 'Đang tự động lưu' : 'Không thể tự động lưu'}</strong><p>${this.store.save.available ? 'Mọi thay đổi được lưu trên thiết bị này.' : 'Hãy kiểm tra quyền lưu trữ của trình duyệt.'}</p></div>
+          </article>
+          <details class="settings-install-guide">
+            <summary><span>${icon('home')}</span><div><small>CHẾ ĐỘ TOÀN MÀN HÌNH</small><strong>Cài game trên iPhone/iPad</strong></div>${icon('plus')}</summary>
+            <ol><li><b>1</b>Mở game bằng Safari và chạm Chia sẻ.</li><li><b>2</b>Chọn “Thêm vào Màn hình chính”.</li><li><b>3</b>Chạm Thêm để hoàn tất.</li></ol>
+          </details>
+        </section>
+      </div>
+
+      <footer class="game-settings-footer">
+        <button class="settings-text-button" data-action="reset-confirm">${icon('rotate')} Chơi lại từ đầu</button>
+        <button class="settings-help-button" data-action="help">${icon('help')} Hướng dẫn chơi</button>
+      </footer>
+    </section>`);
   }
   private toast(message: string, tone = 'success') {
+    const container = document.querySelector<HTMLElement>('#toasts')!;
+    if (container.classList.contains('is-selection-active')) return;
     const duration = Math.min(7000, Math.max(4000, message.length * 40));
-    const el = document.createElement('div'); el.className = `toast toast-${tone}`;
+    const el = document.createElement('span'); el.className = `toast toast-${tone} sale-text-toast`;
     el.style.setProperty('--toast-duration', `${duration}ms`);
-    const ico = document.createElement('span'); ico.innerHTML = icon(tone === 'error' ? 'close' : tone === 'info' ? 'help' : 'check');
-    ico.className = 'toast-icon';
-    ico.setAttribute('aria-hidden', 'true');
-    const text = document.createElement('span'); text.textContent = message; el.append(ico, text);
+    const text = document.createElement('span'); text.textContent = message;
     text.className = 'toast-message';
-    const container = document.querySelector('#toasts')!; if (container.children.length > 2) container.firstElementChild?.remove(); container.append(el);
-    setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 250); }, duration);
+    el.append(text);
+    while (container.children.length >= 3) container.firstElementChild?.remove();
+    container.append(el);
+    setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 320); }, duration);
+  }
+
+  private animateMoneyDeduction(scope: 'import' | 'finance', amount: number) {
+    window.requestAnimationFrame(() => {
+      const balance = document.querySelector<HTMLElement>(`[data-animated-balance="${scope}"]`);
+      if (!balance || amount <= 0) return;
+      balance.classList.remove('is-money-deducted');
+      void balance.offsetWidth;
+      balance.classList.add('is-money-deducted');
+
+      const deduction = document.createElement('span');
+      deduction.className = 'money-deduction-float';
+      deduction.textContent = `−${money(amount)}`;
+      balance.append(deduction);
+      deduction.addEventListener('animationend', () => deduction.remove(), { once: true });
+      window.setTimeout(() => balance.classList.remove('is-money-deducted'), 650);
+    });
   }
 }

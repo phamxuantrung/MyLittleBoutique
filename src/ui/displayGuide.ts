@@ -20,7 +20,7 @@ export function displayGuideModal() {
   ];
   return `<section class="display-guide" aria-labelledby="display-guide-title">
     <header class="display-guide-heading">
-      <span class="eyebrow">NGÀY 02 · MẸO CHUẨN BỊ SHOP</span>
+      <span class="eyebrow">NGÀY 02/01 · MẸO CHUẨN BỊ SHOP</span>
       <h2 id="display-guide-title">Có hàng trong kho chưa đủ để bán!</h2>
       <p>Khách tại shop chỉ mua được <strong>những món đang trưng bày</strong>. Hãy đưa hàng lên đúng sào, kệ hoặc tủ trước khi mở cửa.</p>
     </header>

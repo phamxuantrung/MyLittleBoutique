@@ -35,7 +35,7 @@ export class AudioSystem {
   private selectedTrack = 'boutique-bloom';
   enabled = true;
 
-  constructor() {
+  constructor(private onMusicEnded?: () => void) {
     // Start fetching and decoding while the opening screen is visible. HTML
     // audio remains as a fallback, but decoded Web Audio buffers remove the
     // first-tap delay that Mobile Safari adds to MP3 elements.
@@ -149,15 +149,17 @@ export class AudioSystem {
     if (!this.musicTrack) {
       const selected = MUSIC_TRACKS.find(item => item.id === this.selectedTrack) ?? MUSIC_TRACKS[0];
       this.musicTrack = new Audio(selected.url);
-      this.musicTrack.loop = true;
+      this.musicTrack.loop = false;
       this.musicTrack.preload = 'auto';
       this.musicTrack.volume = this.musicVolume;
       this.musicTrack.preservesPitch = true;
+      this.musicTrack.addEventListener('ended', () => this.onMusicEnded?.());
     }
     if (!enabled) {
       this.musicTrack.pause();
       return;
     }
+    if (this.musicTrack.ended) this.musicTrack.currentTime = 0;
     void this.musicTrack.play().catch(() => { /* Playback resumes after the next user gesture. */ });
   }
 }

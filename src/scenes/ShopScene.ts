@@ -153,6 +153,7 @@ export class ShopScene extends Phaser.Scene {
   private pendingSvgTextures = new Set<string>();
   private renderedLandLevel = -1;
   private renderedDefaultLamp?: boolean;
+  private renderedGridSize = -1;
   private selected?: string;
   private edit = false;
   private departing = false;
@@ -356,7 +357,6 @@ export class ShopScene extends Phaser.Scene {
         this.drawGrid();
         this.refreshFurniture();
         this.refreshOnlineShippers();
-        this.updateOwnerPosition(true);
       }
       if (event.type === 'customer') this.refreshCustomer();
       if (event.type === 'sale') this.animateSale(event.result);
@@ -402,7 +402,11 @@ export class ShopScene extends Phaser.Scene {
       if (!p) return;
       const wallLift = obj.getData('wallLift') ?? 0;
       const wallMounted = isWallFurnitureId(p.id);
-      const cell = wallMounted ? toWallGrid(p, x, y + wallLift) : toFurnitureGrid(p, x, y);
+      const rawCell = wallMounted ? toWallGrid(p, x, y + wallLift) : toFurnitureGrid(p, x, y);
+      const placement = wallMounted
+        ? { cell: rawCell, valid: canPlace(this.store.state.layout, { ...p, ...rawCell }, this.store.state.landLevel) }
+        : this.resolveFloorPlacement(p, rawCell, x, y);
+      const { cell, valid } = placement;
       // Floor furniture follows the pointer every frame. Grid validation and
       // preview drawing below only run when the pointer enters another cell.
       if (!wallMounted) obj.setPosition(x, y);
@@ -418,7 +422,6 @@ export class ShopScene extends Phaser.Scene {
       const previousCell = obj.getData('dragCell') as { x: number; y: number } | undefined;
       if (previousCell?.x === cell.x && previousCell.y === cell.y) return;
       obj.setData('dragCell', cell);
-      const valid = canPlace(this.store.state.layout, { ...p, ...cell }, this.store.state.landLevel);
       this.drawGhost({ ...p, ...cell }, valid);
     });
     this.input.on('dragend', (pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image) => {
@@ -580,9 +583,11 @@ export class ShopScene extends Phaser.Scene {
   }
   private drawGrid() {
     this.drawLandFloor();
+    const size = landSize(this.store.state);
+    if (size === this.renderedGridSize) return;
+    this.renderedGridSize = size;
     this.grid.clear();
     this.grid.lineStyle(1, 0xe8c0e8, .35);
-    const size = landSize(this.store.state);
     for (let i = 0; i <= size; i++) {
       const a = toWorld(i, 0), b = toWorld(i, size), c = toWorld(0, i), d = toWorld(size, i);
       this.grid.lineBetween(a.x, a.y, b.x, b.y); this.grid.lineBetween(c.x, c.y, d.x, d.y);
@@ -756,6 +761,32 @@ export class ShopScene extends Phaser.Scene {
     const points = [toWorld(p.x, p.y), toWorld(p.x + w, p.y), toWorld(p.x + w, p.y + h), toWorld(p.x, p.y + h)];
     this.dragGhost?.clear().fillStyle(valid ? 0x68ddb8 : 0xe870a0, .4).fillPoints(points, true).lineStyle(2, valid ? 0x38b890 : 0xc04878).strokePoints(points, true);
   }
+
+  private resolveFloorPlacement(item: PlacedFurniture, preferred: { x: number; y: number }, pointerX: number, pointerY: number) {
+    const isValid = (cell: { x: number; y: number }) => canPlace(
+      this.store.state.layout,
+      { ...item, ...cell },
+      this.store.state.landLevel,
+    );
+    if (isValid(preferred)) return { cell: preferred, valid: true };
+
+    // A 2x1 fixture can round to the occupied side of a grid boundary even
+    // while most of its visible base is above the free neighbouring cell.
+    // Snap only to genuinely valid immediate neighbours that remain close to
+    // the finger, so collision and the reserved entrance still stay intact.
+    const offsets = [
+      { x: -1, y: 0 }, { x: 1, y: 0 },
+      { x: 0, y: -1 }, { x: 0, y: 1 },
+      { x: -1, y: -1 }, { x: 1, y: 1 },
+    ];
+    const candidate = offsets
+      .map(offset => ({ x: preferred.x + offset.x, y: preferred.y + offset.y }))
+      .filter(isValid)
+      .map(cell => ({ cell, distance: Phaser.Math.Distance.Between(pointerX, pointerY, furnitureAnchor({ ...item, ...cell }).x, furnitureAnchor({ ...item, ...cell }).y) }))
+      .filter(entry => entry.distance <= 76)
+      .sort((a, b) => a.distance - b.distance)[0];
+    return candidate ? { cell: candidate.cell, valid: true } : { cell: preferred, valid: false };
+  }
   private drawSelectionArrows(p: PlacedFurniture) {
     const graphics = this.selectionArrows;
     if (!graphics || !this.edit || this.selected !== p.uid) return;
@@ -803,6 +834,18 @@ export class ShopScene extends Phaser.Scene {
     }
   }
   refresh() { this.refreshFurniture(); this.refreshCustomer(); this.refreshOnlineShippers(); }
+
+  /** Stop tweens on a container and every child before releasing the objects. */
+  private destroyAnimatedContainer(container: Phaser.GameObjects.Container) {
+    const stopTree = (target: Phaser.GameObjects.GameObject) => {
+      this.tweens.killTweensOf(target);
+      if (target instanceof Phaser.GameObjects.Container) {
+        for (const child of [...target.list]) stopTree(child);
+      }
+    };
+    stopTree(container);
+    container.destroy();
+  }
 
   private cameraPanLimits() {
     const expandedCells = Math.max(0, landSize(this.store.state) - landExpansion[0].size);
@@ -1066,8 +1109,7 @@ export class ShopScene extends Phaser.Scene {
     const workingIds = new Set(working.map(employee => employee.uid));
     for (const [uid, avatar] of this.staffAvatars) {
       if (workingIds.has(uid)) continue;
-      this.tweens.killTweensOf(avatar);
-      avatar.destroy();
+      this.destroyAnimatedContainer(avatar);
       this.staffAvatars.delete(uid);
     }
     const stockIds = new Set(stockStaff.map(employee => employee.uid));
@@ -1448,11 +1490,18 @@ export class ShopScene extends Phaser.Scene {
     const focusedUid = this.departing ? this.primaryVisitUid : activeVisit(this.store.state)?.uid;
     const waiting = this.store.state.activeVisits.filter(visit => visit.uid !== focusedUid);
     const activeUids = new Set(waiting.map(visit => visit.uid));
+    const allVisitUids = new Set(this.store.state.activeVisits.map(visit => visit.uid));
     for (const [uid, entry] of this.secondaryCustomers) {
       if (activeUids.has(uid)) continue;
-      this.customerPositions.set(uid, { x: entry.container.x, y: entry.container.y });
-      this.tweens.killTweensOf(entry.container);
-      entry.container.destroy();
+      // Keep the position only while this visit is being promoted to the
+      // focused customer. Completed/walked-out visits must not grow the maps
+      // for the rest of a long sale day.
+      if (allVisitUids.has(uid)) this.customerPositions.set(uid, { x: entry.container.x, y: entry.container.y });
+      else {
+        this.customerPositions.delete(uid);
+        this.customerTextureAssignments.delete(uid);
+      }
+      this.destroyAnimatedContainer(entry.container);
       this.secondaryCustomers.delete(uid);
     }
     const positions = [
@@ -1518,8 +1567,7 @@ export class ShopScene extends Phaser.Scene {
     const activeIds = new Set(orders.map(order => order.id));
     for (const [orderId, container] of this.onlineShippers) {
       if (activeIds.has(orderId)) continue;
-      this.tweens.killTweensOf(container);
-      container.destroy();
+      this.destroyAnimatedContainer(container);
       this.onlineShippers.delete(orderId);
     }
     const spots = [
@@ -1561,11 +1609,11 @@ export class ShopScene extends Phaser.Scene {
     this.customerActionTimer?.remove(false); this.customerActionTimer = undefined;
     this.customerWalkTween?.stop(); this.customerWalkTween = undefined;
     this.departing = false;
-    if (this.avatar) { this.tweens.killTweensOf(this.avatar); this.avatar.destroy(); this.avatar = undefined; }
+    if (this.avatar) { this.destroyAnimatedContainer(this.avatar); this.avatar = undefined; }
     this.primaryVisitUid = '';
     this.customerId = '';
     if (this.store.state.phase !== 'open') {
-      for (const entry of this.secondaryCustomers.values()) entry.container.destroy();
+      for (const entry of this.secondaryCustomers.values()) this.destroyAnimatedContainer(entry.container);
       this.secondaryCustomers.clear();
       this.customerPositions.clear();
       this.customerTextureAssignments.clear();
@@ -1824,7 +1872,7 @@ export class ShopScene extends Phaser.Scene {
             this.customerPositions.delete(this.primaryVisitUid);
             this.customerTextureAssignments.delete(this.primaryVisitUid);
           }
-          avatar.destroy();
+          this.destroyAnimatedContainer(avatar);
           this.avatar = undefined;
           this.customerId = '';
         }
@@ -1848,7 +1896,7 @@ export class ShopScene extends Phaser.Scene {
         this.tweens.add({
           targets: container, x: exit.x, y: exit.y, alpha: 0, duration: 850, ease: 'Sine.inOut', onComplete: () => {
             if (result.visitUid) this.customerTextureAssignments.delete(result.visitUid);
-            container.destroy();
+            this.destroyAnimatedContainer(container);
             this.refreshCustomer();
           }
         });

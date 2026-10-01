@@ -87,7 +87,9 @@ const waitForInitialLandscapeViewport = async () => {
 await waitForInitialLandscapeViewport();
 
 const store = new GameStore();
-const audio = new AudioSystem();
+const audio = new AudioSystem(() => {
+  if (store.state.music) store.settings('music', false);
+});
 audio.enabled = store.state.sound;
 audio.setMusicVolume(store.state.musicVolume);
 audio.setMusicTrack(store.state.musicTrack);

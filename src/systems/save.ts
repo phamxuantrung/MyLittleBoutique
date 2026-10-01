@@ -7,7 +7,7 @@ import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCus
 export const SAVE_KEY = 'little-boutique.save.v1';
 const MOVABLE_DECOR_MIGRATION = 'system:wall-decor-v5';
 const CAMPAIGN_LEVEL3_MIGRATION = 'system:campaign-level3-preview-v1';
-const MUSIC_DEFAULT_ON_MIGRATION = 'system:music-default-on-v1';
+const MUSIC_DEFAULT_OFF_MIGRATION = 'system:music-default-off-v2';
 const MUSIC_PLAYER_STARTER_MIGRATION = 'system:music-player-starter-v1';
 const musicPlayerStarter: PlacedFurniture = { uid: 'starter-music-player', id: 'vinyl-player', x: 6, y: 3, rotation: 0 };
 const movableDecorStarters: PlacedFurniture[] = [
@@ -41,7 +41,7 @@ export function initialState(): GameState {
       { uid: 'starter-counter', id: 'counter', x: 4, y: 4, rotation: 0 },
       { ...musicPlayerStarter },
       ...movableDecorStarters.map(item => ({ ...item })),
-    ], stats: emptyStats(), posts: [], claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_ON_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: true, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
+    ], stats: emptyStats(), posts: [], claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: false, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
     employees: [], staffApplicants: [], recruitmentPost: null, staffLeaveRequests: [],
     shopName: 'My Little Boutique', hasNamedShop: false,
   };
@@ -431,10 +431,10 @@ export function parseSave(raw: string | null): GameState {
       state.claimed.push(MUSIC_PLAYER_STARTER_MIGRATION);
     }
     state.sound = typeof s.sound === 'boolean' ? s.sound : true;
-    state.music = typeof s.music === 'boolean' ? s.music : true;
-    if (!state.claimed.includes(MUSIC_DEFAULT_ON_MIGRATION)) {
-      state.music = true;
-      state.claimed.push(MUSIC_DEFAULT_ON_MIGRATION);
+    state.music = typeof s.music === 'boolean' ? s.music : false;
+    if (!state.claimed.includes(MUSIC_DEFAULT_OFF_MIGRATION)) {
+      state.music = false;
+      state.claimed.push(MUSIC_DEFAULT_OFF_MIGRATION);
     }
     state.musicVolume = finite(s.musicVolume, 0.55, 1);
     state.musicTrack = ['boutique-bloom', 'better-for-you-1', 'die-for-you-remix', 'daffodil-live'].includes(s.musicTrack) ? s.musicTrack : fresh.musicTrack;

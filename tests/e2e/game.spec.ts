@@ -75,12 +75,15 @@ test('a new boutique completes seven tutorial steps and keeps preparing', async 
   await expect(dialog).not.toBeVisible();
   await expect(page.locator('#hud')).toContainText('500.000₫');
   await expect(page.locator('.tutorial-callout')).toContainText('Bấm Nhập hàng');
-  await expect(page.locator('.tutorial-callout')).toContainText('1/7');
+  await expect(page.locator('.tutorial-callout')).toContainText('01/07');
   await page.locator('.tutorial-focus[data-id="import"]').click();
   await expect(page.locator('.tutorial-callout')).toContainText('Chọn nguồn hàng');
   await page.locator('.supplier-source-card.tutorial-focus').click();
   await expect(page.locator('.tutorial-callout')).toContainText('nhập mẫu đầu tiên');
   await page.locator('.import-btn.tutorial-focus').click();
+  await expect(dialog).toHaveClass('dialog-import-quantity');
+  await dialog.locator('[data-action="import-quantity-confirm"]').click();
+  await expect(dialog).not.toBeVisible();
   await page.locator('.panel-close-btn.tutorial-focus').click();
   await expect(page.locator('.tutorial-callout')).toContainText('sào quần áo');
   await page.waitForTimeout(400);

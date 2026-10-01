@@ -619,6 +619,7 @@ export class GameStore {
       color: /^#[0-9a-f]{6}$/i.test(stroke.color) ? stroke.color : '#d4429a',
       width: Math.max(.6, Math.min(8, stroke.width)),
       points: stroke.points.slice(0, 240).map(point => ({ x: Math.max(0, Math.min(120, point.x)), y: Math.max(0, Math.min(140, point.y)) })),
+      tip: (['round', 'marker', 'calligraphy', 'neon', 'eraser'] as string[]).includes(stroke.tip ?? '') ? stroke.tip : 'round',
     })).filter(stroke => stroke.points.length > 0);
     if (designMotif !== undefined) product.designMotif = (['none', 'heart', 'star', 'bow', 'flower', 'stripes'] as ProductDesignMotif[]).includes(designMotif) ? designMotif : 'none';
     if (designAccentColor !== undefined) product.designAccentColor = /^#[0-9a-f]{6}$/i.test(designAccentColor) ? designAccentColor : '#d4429a';
@@ -642,12 +643,19 @@ export class GameStore {
     if (designStrokeWidth !== undefined) product.designStrokeWidth = Math.max(.6, Math.min(4, Number(designStrokeWidth) || 2));
     if (designStickers !== undefined) product.designStickers = designStickers.slice(0, 24).map((sticker, index) => ({
       id: /^[a-z0-9-]{1,50}$/i.test(sticker.id) ? sticker.id : `sticker-${index}`,
-      kind: (['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs'] as ProductDesignSticker['kind'][]).includes(sticker.kind) ? sticker.kind : 'heart',
+      kind: (['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs', 'text'] as ProductDesignSticker['kind'][]).includes(sticker.kind) ? sticker.kind : 'heart',
       x: Math.max(6, Math.min(114, Number(sticker.x) || 60)),
       y: Math.max(7, Math.min(133, Number(sticker.y) || 69)),
       scale: Math.max(.35, Math.min(2.5, Number(sticker.scale) || 1)),
       rotation: Math.max(-180, Math.min(180, Number(sticker.rotation) || 0)),
       color: /^#[0-9a-f]{6}$/i.test(sticker.color) ? sticker.color : '#d4429a',
+      ...(sticker.kind === 'text' ? {
+        text: (sticker.text ?? 'Boutique').trim().slice(0, 18) || 'Boutique',
+        font: (['rounded', 'handwritten', 'serif'] as string[]).includes(sticker.font ?? '') ? sticker.font : 'rounded',
+        fontSize: Math.max(8, Math.min(32, Math.round(Number(sticker.fontSize) || 14))),
+        curve: Math.max(-60, Math.min(60, Math.round(Number(sticker.curve) || 0))),
+        effect: (['none', 'outline', 'shadow', 'glow'] as string[]).includes(sticker.effect ?? '') ? sticker.effect : 'none',
+      } : {}),
     }));
     this.commit();
     this.toast(`Đã lưu phiên bản mới của ${cleanName}.`);

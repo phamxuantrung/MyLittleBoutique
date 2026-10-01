@@ -187,7 +187,7 @@
 .profile-statistics > div { display: flex; align-items: baseline; gap: 6px; }
 .profile-statistics dt { color: #977a8c; font-size: 11px; }
 .profile-statistics dd { order: -1; margin: 0; color: #553047; font-size: 18px; font-weight: 850; font-variant-numeric: tabular-nums; }
-.profile-statistics dd small { color: #977a8c; font-size: 10px; font-weight: 500; }
+.profile-statistics dd small { color: #977a8c; font-size: 10px; font-weight: 700; }
 .profile-shop-rating dd { color: #b8812b; }
 .profile-shop-rating dt small { white-space: nowrap; }
 .social-profile-page .profile-rating-note { margin: -8px 0 16px; color: #a08799; font-size: 10px !important; line-height: 1.5; }
@@ -264,7 +264,7 @@
   box-shadow: none;
   color: #c55591;
   font-size: 9px;
-  font-weight: 650;
+  font-weight: 700;
   animation: none;
 }
 .social-profile-page .post-viral-badge .icon { width: 12px; height: 12px; }

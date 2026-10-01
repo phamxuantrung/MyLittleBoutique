@@ -2,10 +2,10 @@ import { customers, furniture, levels, products } from '../data/catalog';
 import { looks } from '../data/fashion';
 import type { GameStore } from '../systems/store';
 import type { AudioSystem } from '../systems/audio';
-import { activeCustomer, activeVisit, currentEvent, currentTrend, DAY_DURATION, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, landSize, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
+import { activeCustomer, activeVisit, buyPrice, currentEvent, currentTrend, DAY_DURATION, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, landSize, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
 import { defaultFilters } from '../systems/catalog';
 import { icon } from './icons';
-import { characterSvg, courierSvg, ownerPortrait } from '../art/svg';
+import { characterSvg, courierSvg, ownerPortrait, productSvg } from '../art/svg';
 import { isWallFurnitureId } from '../systems/rules';
 import { compact, compactMoney, escapeHtml, furnitureImage, money, productImage } from './format';
 import { boutiqueProfileModal, campaignModal, debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, nameShopModal, onlineChannelModal, onlineOrderModal, questPanel, serveModal, socialPanel, staffManagementModal, summaryModal, supplierSelectionPanel, trendPanel, upgradeModal } from './panels';
@@ -13,18 +13,20 @@ import type { ShopScene } from '../scenes/ShopScene';
 import { DISPLAY_GUIDE_SEEN, displayGuideModal, needsDisplayGuide } from './displayGuide';
 import { CAMPAIGN_GUIDE_SEEN } from '../systems/campaigns';
 import { customerCareModal } from './operationsPanel';
-import type { ArrivedOrderSummary, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, StaffAssignment, Style, SupplierId } from '../types';
+import type { ArrivedOrderSummary, ProductDesignBrushTip, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, StaffAssignment, Style, SupplierId } from '../types';
 import { supplierFor, suppliers } from '../systems/operations';
 import { gameCalendarDate } from '../systems/calendar';
 import { lookupCustomer } from '../systems/customerGen';
 import { atelierCustomizeModal, atelierPanel, atelierSampleModal, type AtelierSection } from './atelierPanel';
 import { ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipes } from '../data/atelier';
 import { atelierMaterialIllustration, atelierProductPoints } from '../art/atelierArt';
+import Panzoom, { type PanzoomEventDetail, type PanzoomObject } from '@panzoom/panzoom';
+import type Moveable from 'moveable';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
-type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-customize' | 'atelier-delete-confirm';
-const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'atelier-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
-const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material']);
+type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
+const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
+const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
 const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
   const duration = Math.max(1, totalSeconds);
@@ -66,6 +68,7 @@ export class GameUI {
   private productImportQtys: Record<string, number> = {};
   private lookQtys: Record<string, number> = {};
   private materialQtys: Record<string, number> = {};
+  private expandedImportPurchase = '';
   private atelierSection: AtelierSection = 'design';
   private atelierSelection: Record<string, number> = {};
   private atelierStyle: Style = atelierRecipes[0].style;
@@ -86,27 +89,25 @@ export class GameUI {
   private atelierDesignMotifOpacity = 1;
   private atelierDesignMotifRepeat: 1 | 3 | 5 = 1;
   private atelierShapePoints: ProductDesignPoint[] = [];
+  private atelierShapeSelected = true;
   private atelierSelectedNode = -1;
   private atelierShapeSmooth = true;
   private atelierShapeStrokeColor = '#795267';
   private atelierShapeStrokeWidth = 2;
   private atelierShapeDragPointer = -1;
+  private atelierCanvasZoom = 1;
+  private atelierCanvasPanX = 0;
+  private atelierCanvasPanY = 0;
+  private atelierPanzoom?: PanzoomObject;
+  private atelierPanzoomCanvas?: HTMLElement;
+  private atelierPanzoomWheel?: (event: WheelEvent) => void;
+  private atelierStickerMoveable?: Moveable;
   private atelierDesignStickers: ProductDesignSticker[] = [];
   private atelierSelectedStickerId = '';
-  private atelierStickerGesture?: {
-    pointerId: number;
-    mode: 'move' | 'resize';
-    start: ProductDesignPoint;
-    originX: number;
-    originY: number;
-    originScale: number;
-    startDistance: number;
-    bounds: DOMRect;
-    stickerElement?: SVGGElement;
-    selectionElement?: SVGGElement;
-  };
   private atelierBrushColor = '#d4429a';
-  private atelierBrushWidth = 3;
+  private atelierBrushWidth = 4;
+  private atelierBrushTip: ProductDesignBrushTip = 'round';
+  private atelierDrawingEnabled = false;
   private atelierDrawingStroke?: ProductDesignStroke;
   private atelierDrawingPointer = -1;
   private pendingBlueprintDeleteId = '';
@@ -370,9 +371,15 @@ export class GameUI {
     this.updateDockVisibility();
   }
   private bind() {
-    document.addEventListener('pointerdown', event => {
-      if ((event.target as HTMLElement).closest('#move-toolbar')) this.scene?.preserveSelectionForUiAction();
-    });
+    const protectCanvasFromUiPointer = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('#game-canvas')) return;
+      if (target.closest('button, [data-action], input, select, textarea, a, dialog, #content-panel, #move-toolbar')) {
+        this.scene?.preserveSelectionForUiAction();
+      }
+    };
+    document.addEventListener('pointerdown', protectCanvasFromUiPointer, true);
+    document.addEventListener('pointerup', protectCanvasFromUiPointer, true);
     document.querySelector<HTMLElement>('#game-canvas')?.addEventListener('pointerup', event => {
       if (this.tutorialStep !== 3 || !this.tutorialActive()) return;
       event.preventDefault();
@@ -411,11 +418,12 @@ export class GameUI {
     window.addEventListener('blur', () => this.stopDisplayAddHold());
     document.addEventListener('pointerdown', event => {
       const canvas = (event.target as HTMLElement).closest<HTMLElement>('[data-design-canvas]');
-      if (!canvas || this.modal !== 'atelier-customize' || event.button !== 0) return;
+      if (!canvas || this.modal !== 'atelier-customize' || !this.atelierDrawingEnabled || event.button !== 0 || (event.target as Element).closest('[data-design-sticker], [data-shape-node]')) return;
       event.preventDefault();
+      event.stopPropagation();
       const point = this.atelierCanvasPoint(canvas, event);
       this.atelierDrawingPointer = event.pointerId;
-      this.atelierDrawingStroke = { color: this.atelierBrushColor, width: this.atelierBrushWidth, points: [point] };
+      this.atelierDrawingStroke = { color: this.atelierBrushColor, width: this.atelierBrushWidth, tip: this.atelierBrushTip, points: [point] };
       canvas.setPointerCapture?.(event.pointerId);
       const svg = canvas.querySelector('svg');
       if (svg) {
@@ -425,11 +433,23 @@ export class GameUI {
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke', this.atelierBrushColor);
         path.setAttribute('stroke-width', String(this.atelierBrushWidth));
-        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linecap', this.atelierBrushTip === 'marker' || this.atelierBrushTip === 'calligraphy' ? 'square' : 'round');
         path.setAttribute('stroke-linejoin', 'round');
+        if (this.atelierBrushTip === 'marker') path.setAttribute('opacity', '.55');
+        if (this.atelierBrushTip === 'calligraphy') path.setAttribute('stroke-width', String(this.atelierBrushWidth * 1.35));
+        if (this.atelierBrushTip === 'neon') {
+          path.setAttribute('stroke', '#fff');
+          path.setAttribute('style', `filter:drop-shadow(0 0 2px ${this.atelierBrushColor}) drop-shadow(0 0 4px ${this.atelierBrushColor})`);
+        }
+        if (this.atelierBrushTip === 'eraser') {
+          path.setAttribute('stroke', '#fff');
+          path.setAttribute('stroke-width', String(this.atelierBrushWidth * 2));
+          path.setAttribute('stroke-dasharray', '2 2');
+          path.setAttribute('opacity', '.85');
+        }
         svg.append(path);
       }
-    });
+    }, { capture: true });
     document.addEventListener('pointermove', event => {
       if (!this.atelierDrawingStroke || event.pointerId !== this.atelierDrawingPointer || this.modal !== 'atelier-customize') return;
       const canvas = document.querySelector<HTMLElement>('[data-design-canvas]');
@@ -451,7 +471,10 @@ export class GameUI {
       this.atelierDesignStrokes.push(this.atelierDrawingStroke);
       this.atelierDrawingStroke = undefined;
       this.atelierDrawingPointer = -1;
-      this.refreshAtelierCustomizer();
+      const canvas = this.dialog.querySelector<HTMLElement>('[data-design-canvas]');
+      if (canvas) this.syncAtelierDrawingLayer(canvas);
+      const undoButton = this.dialog.querySelector<HTMLButtonElement>('[data-action="atelier-customize-undo"]');
+      if (undoButton) undoButton.disabled = false;
     };
     document.addEventListener('pointerup', finishAtelierStroke);
     document.addEventListener('pointercancel', finishAtelierStroke);
@@ -463,10 +486,13 @@ export class GameUI {
       event.preventDefault();
       const index = Number(node.dataset.shapeNode);
       if (!Number.isInteger(index) || !this.atelierShapePoints[index]) return;
+      this.atelierShapeSelected = true;
       this.atelierSelectedNode = index;
       this.atelierShapeDragPointer = event.pointerId;
       canvas.setPointerCapture?.(event.pointerId);
       canvas.querySelectorAll('[data-shape-node]').forEach(item => item.classList.toggle('active', item === node));
+      const status = this.dialog.querySelector<HTMLElement>('.customizer-vector-tools header em');
+      if (status) status.textContent = `Điểm ${index + 1}`;
     });
     document.addEventListener('pointermove', event => {
       if (this.modal !== 'atelier-customize' || event.pointerId !== this.atelierShapeDragPointer || this.atelierSelectedNode < 0) return;
@@ -487,77 +513,44 @@ export class GameUI {
     const finishShapeDrag = (event: PointerEvent) => {
       if (event.pointerId !== this.atelierShapeDragPointer) return;
       this.atelierShapeDragPointer = -1;
-      this.refreshAtelierCustomizer();
     };
     document.addEventListener('pointerup', finishShapeDrag);
     document.addEventListener('pointercancel', finishShapeDrag);
-    document.addEventListener('pointerdown', event => {
-      if (this.modal !== 'atelier-customize' || event.button !== 0) return;
-      const canvas = (event.target as Element).closest<HTMLElement>('[data-shape-canvas]');
-      if (!canvas) return;
-      const resizeHandle = (event.target as Element).closest<SVGCircleElement>('[data-sticker-resize]');
-      const moveHandle = (event.target as Element).closest<SVGRectElement>('[data-sticker-move]');
-      const stickerNode = (event.target as Element).closest<SVGGElement>('[data-design-sticker]');
-      const stickerId = resizeHandle?.dataset.stickerResize ?? moveHandle?.dataset.stickerMove ?? stickerNode?.dataset.designSticker ?? '';
-      const sticker = this.atelierDesignStickers.find(item => item.id === stickerId);
-      if (!sticker) {
-        if (this.atelierSelectedStickerId && !(event.target as Element).closest('[data-shape-node]')) {
-          event.preventDefault();
-          this.atelierSelectedStickerId = '';
-          this.refreshAtelierCustomizer();
-        }
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      this.atelierSelectedStickerId = sticker.id;
-      this.atelierSelectedNode = -1;
-      const bounds = canvas.getBoundingClientRect();
-      const start = this.atelierCanvasPointFromBounds(bounds, event);
-      this.atelierStickerGesture = {
-        pointerId: event.pointerId,
-        mode: resizeHandle ? 'resize' : 'move',
-        start,
-        originX: sticker.x,
-        originY: sticker.y,
-        originScale: sticker.scale,
-        startDistance: Math.max(4, Math.hypot(start.x - sticker.x, start.y - sticker.y)),
-        bounds,
-        stickerElement: canvas.querySelector<SVGGElement>(`[data-design-sticker="${sticker.id}"]`) ?? undefined,
-        selectionElement: canvas.querySelector<SVGGElement>('.customizer-sticker-selection') ?? undefined,
-      };
-      canvas.setPointerCapture?.(event.pointerId);
-    });
-    document.addEventListener('pointermove', event => {
-      const gesture = this.atelierStickerGesture;
-      if (!gesture || event.pointerId !== gesture.pointerId || this.modal !== 'atelier-customize') return;
-      const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
-      if (!sticker) return;
-      event.preventDefault();
-      const point = this.atelierCanvasPointFromBounds(gesture.bounds, event);
-      if (gesture.mode === 'move') {
-        sticker.x = Math.max(6, Math.min(114, gesture.originX + point.x - gesture.start.x));
-        sticker.y = Math.max(7, Math.min(133, gesture.originY + point.y - gesture.start.y));
-      } else {
-        const distance = Math.hypot(point.x - sticker.x, point.y - sticker.y);
-        sticker.scale = Math.max(.35, Math.min(2.5, gesture.originScale * distance / gesture.startDistance));
-      }
-      const transform = `translate(${sticker.x.toFixed(2)} ${sticker.y.toFixed(2)}) rotate(${sticker.rotation}) scale(${sticker.scale.toFixed(3)})`;
-      gesture.stickerElement?.setAttribute('transform', transform);
-      gesture.selectionElement?.setAttribute('transform', transform);
-    }, { passive: false });
-    const finishStickerGesture = (event: PointerEvent) => {
-      if (!this.atelierStickerGesture || event.pointerId !== this.atelierStickerGesture.pointerId) return;
-      this.atelierStickerGesture = undefined;
-      this.refreshAtelierCustomizer();
-    };
-    document.addEventListener('pointerup', finishStickerGesture);
-    document.addEventListener('pointercancel', finishStickerGesture);
     window.addEventListener('resize', () => {
       if (this.tutorialActive()) this.queueTutorialCue();
     });
     document.addEventListener('click', event => {
       const clicked = event.target as HTMLElement;
+      const clickedSticker = clicked.closest<SVGGElement>('[data-design-sticker]');
+      if (this.modal === 'atelier-customize' && clickedSticker) {
+        const stickerId = clickedSticker.dataset.designSticker ?? '';
+        if (stickerId && stickerId !== this.atelierSelectedStickerId) {
+          this.atelierSelectedStickerId = stickerId;
+          this.atelierShapeSelected = false;
+          this.atelierSelectedNode = -1;
+          this.refreshAtelierCustomizer();
+        }
+        return;
+      }
+      const shapeCanvas = this.modal === 'atelier-customize' ? clicked.closest<HTMLElement>('[data-shape-canvas]') : null;
+      if (shapeCanvas && this.atelierDrawingEnabled) return;
+      if (shapeCanvas && !clicked.closest('[data-shape-node], [data-design-sticker], [data-sticker-move], [data-sticker-resize]')) {
+        const clickedShape = clicked.closest('.atelier-editable-shape');
+        if (clickedShape) {
+          if (!this.atelierShapeSelected || this.atelierSelectedStickerId) {
+            this.atelierShapeSelected = true;
+            this.atelierSelectedStickerId = '';
+            this.atelierSelectedNode = -1;
+            this.refreshAtelierCustomizer();
+          }
+        } else if (this.atelierShapeSelected || this.atelierSelectedNode >= 0 || this.atelierSelectedStickerId) {
+          this.atelierShapeSelected = false;
+          this.atelierSelectedNode = -1;
+          this.atelierSelectedStickerId = '';
+          this.refreshAtelierCustomizer();
+        }
+        return;
+      }
       if (this.tutorialStep === 3 && this.tutorialActive() && clicked.closest('[data-tutorial-open-rack]')) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -632,6 +625,12 @@ export class GameUI {
         if (materialId) this.materialQtys[materialId] = Math.max(supplier.minOrder, Math.min(30, Math.floor(Number(target.value) || supplier.minOrder)));
         this.renderPanel();
       }
+      if (target.matches('.import-modal-qty-input')) {
+        const supplier = supplierFor(this.store.state);
+        const quantity = Math.max(supplier.minOrder, Math.min(30, Math.floor(Number(target.value) || supplier.minOrder)));
+        this.setImportModalQuantity(quantity);
+        this.refreshImportQuantityModal();
+      }
       if (target.matches('.production-name-input')) {
         const productId = target.dataset.customProduct ?? '';
         if (productId) this.store.renameCustomProduct(productId, target.value);
@@ -652,6 +651,21 @@ export class GameUI {
       if (target.id === 'customizer-sticker-color' && /^#[0-9a-f]{6}$/i.test(target.value)) {
         const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
         if (sticker) sticker.color = target.value;
+        this.refreshAtelierCustomizer();
+      }
+      if (target.id === 'customizer-text-font') {
+        const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
+        if (sticker?.kind === 'text' && (['rounded', 'handwritten', 'serif'] as string[]).includes(target.value)) sticker.font = target.value as ProductDesignSticker['font'];
+        this.refreshAtelierCustomizer();
+      }
+      if (target.id === 'customizer-text-effect') {
+        const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
+        if (sticker?.kind === 'text' && (['none', 'outline', 'shadow', 'glow'] as string[]).includes(target.value)) sticker.effect = target.value as ProductDesignSticker['effect'];
+        this.refreshAtelierCustomizer();
+      }
+      if (target.id === 'customizer-text-curve') {
+        const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
+        if (sticker?.kind === 'text') sticker.curve = Math.max(-60, Math.min(60, Math.round(Number(target.value) || 0)));
         this.refreshAtelierCustomizer();
       }
       if (target.id === 'customizer-brush-color' && /^#[0-9a-f]{6}$/i.test(target.value)) {
@@ -702,6 +716,26 @@ export class GameUI {
         if (output) output.value = `${Math.round(volume * 100)}%`;
       }
       if (target.id === 'customizer-product-name') this.atelierCustomizeName = target.value.slice(0, 32);
+      if (target.id === 'customizer-text-content') {
+        const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
+        if (sticker?.kind === 'text') {
+          sticker.text = target.value.slice(0, 18);
+          this.dialog.querySelectorAll<SVGTextElement>(`[data-design-sticker="${CSS.escape(sticker.id)}"] .custom-product-text-value`).forEach(text => {
+            const textPath = text.querySelector<SVGTextPathElement>('textPath');
+            if (textPath) textPath.textContent = sticker.text || ' ';
+            else text.textContent = sticker.text || ' ';
+          });
+          this.atelierStickerMoveable?.updateRect();
+        }
+      }
+      if (target.id === 'customizer-text-size') {
+        const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
+        if (sticker?.kind === 'text') {
+          sticker.fontSize = Math.max(8, Math.min(32, Math.round(Number(target.value) || 14)));
+          this.dialog.querySelectorAll<SVGTextElement>(`[data-design-sticker="${CSS.escape(sticker.id)}"] .custom-product-text-value`).forEach(text => text.setAttribute('font-size', String(sticker.fontSize)));
+          this.atelierStickerMoveable?.updateRect();
+        }
+      }
       if (target.matches('.fixture-title-edit') && (target.textContent?.length ?? 0) > 28) {
         target.textContent = target.textContent!.slice(0, 28);
         const range = document.createRange(); range.selectNodeContents(target); range.collapse(false);
@@ -902,15 +936,22 @@ export class GameUI {
         this.atelierDesignMotifOpacity = product.designMotifOpacity ?? 1;
         this.atelierDesignMotifRepeat = product.designMotifRepeat ?? 1;
         this.atelierShapePoints = (product.designShapePoints ?? atelierProductPoints(product.art) ?? []).map(point => ({ ...point }));
+        this.atelierShapeSelected = true;
         this.atelierSelectedNode = -1;
         this.atelierShapeSmooth = product.designShapeSmooth !== false;
         this.atelierShapeStrokeColor = product.designStrokeColor ?? '#795267';
         this.atelierShapeStrokeWidth = product.designStrokeWidth ?? 2;
+        this.atelierCanvasZoom = 1;
+        this.atelierCanvasPanX = 0;
+        this.atelierCanvasPanY = 0;
         this.atelierDesignStickers = (product.designStickers ?? []).map(sticker => ({ ...sticker }));
         this.atelierSelectedStickerId = '';
         this.atelierBrushColor = '#d4429a';
-        this.atelierBrushWidth = 3;
+        this.atelierBrushWidth = 4;
+        this.atelierBrushTip = 'round';
+        this.atelierDrawingEnabled = false;
         this.openModal('atelier-customize', atelierCustomizeModal(product, this.atelierCustomizerState()));
+        requestAnimationFrame(() => this.initAtelierPanzoom(true));
         break;
       }
       case 'atelier-customize-base':
@@ -991,6 +1032,30 @@ export class GameUI {
       case 'atelier-customizer-jump':
         this.dialog.querySelector<HTMLElement>(`[data-customizer-section="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         break;
+      case 'atelier-brush-toggle':
+        this.atelierDrawingEnabled = !this.atelierDrawingEnabled;
+        this.atelierSelectedStickerId = '';
+        this.atelierShapeSelected = false;
+        this.atelierSelectedNode = -1;
+        this.refreshAtelierCustomizer();
+        break;
+      case 'atelier-brush-tip':
+        if ((['round', 'marker', 'calligraphy', 'neon', 'eraser'] as string[]).includes(id)) this.atelierBrushTip = id as ProductDesignBrushTip;
+        this.refreshAtelierCustomizer();
+        break;
+      case 'atelier-brush-width':
+        this.atelierBrushWidth = Math.max(2, Math.min(7, Number(id) || 4));
+        this.refreshAtelierCustomizer();
+        break;
+      case 'atelier-canvas-zoom':
+        {
+          const amount = Number(id) || 0;
+          this.atelierPanzoom?.zoom(Math.max(.25, Math.min(4, this.atelierCanvasZoom + amount)), { animate: false });
+        }
+        break;
+      case 'atelier-canvas-view-reset':
+        this.fitAtelierCanvas();
+        break;
       case 'atelier-shape-add': {
         if (this.atelierShapePoints.length >= 48) break;
         let longestIndex = 0;
@@ -1046,7 +1111,7 @@ export class GameUI {
         this.refreshAtelierCustomizer();
         break;
       case 'atelier-sticker-add': {
-        const stickerKinds: ProductDesignSticker['kind'][] = ['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs'];
+        const stickerKinds: ProductDesignSticker['kind'][] = ['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs', 'text'];
         if (this.atelierDesignStickers.length >= 24 || !stickerKinds.includes(id as ProductDesignSticker['kind'])) break;
         const placement: Partial<Record<ProductDesignSticker['kind'], { x: number; y: number; scale: number }>> = {
           'round-collar': { x: 60, y: 40, scale: .8 },
@@ -1069,9 +1134,11 @@ export class GameUI {
           scale: initial.scale,
           rotation: 0,
           color: '#d4429a',
+          ...(id === 'text' ? { text: 'Boutique', font: 'rounded' as const, fontSize: 14, curve: 0, effect: 'none' as const } : {}),
         };
         this.atelierDesignStickers.push(sticker);
         this.atelierSelectedStickerId = sticker.id;
+        this.atelierShapeSelected = false;
         this.atelierSelectedNode = -1;
         this.refreshAtelierCustomizer();
         break;
@@ -1110,7 +1177,7 @@ export class GameUI {
         const nameInput = this.dialog.querySelector<HTMLInputElement>('#customizer-product-name');
         this.atelierCustomizeName = nameInput?.value ?? this.atelierCustomizeName;
         if (!this.atelierCustomizeName.trim()) { this.toast('Tên thiết kế không được để trống.', 'error'); return; }
-        if (this.store.customizeCustomProduct(this.atelierCustomizeProductId, this.atelierCustomizeName, this.atelierDesignColor, [], 'none', this.atelierDesignAccentColor, 1, 60, 69, 1, 1, 0, 1, 1, this.atelierShapePoints, this.atelierShapeSmooth, this.atelierShapeStrokeColor, this.atelierShapeStrokeWidth, this.atelierDesignStickers)) {
+        if (this.store.customizeCustomProduct(this.atelierCustomizeProductId, this.atelierCustomizeName, this.atelierDesignColor, this.atelierDesignStrokes, 'none', this.atelierDesignAccentColor, 1, 60, 69, 1, 1, 0, 1, 1, this.atelierShapePoints, this.atelierShapeSmooth, this.atelierShapeStrokeColor, this.atelierShapeStrokeWidth, this.atelierDesignStickers)) {
           this.closeModal();
           this.renderPanel();
         }
@@ -1136,7 +1203,36 @@ export class GameUI {
       case 'import-mode': {
         if (id === 'materials' && this.store.state.level < 8) return;
         this.importMode = id === 'looks' ? 'looks' : id === 'materials' ? 'materials' : 'products';
+        this.expandedImportPurchase = '';
         this.renderPanel();
+        break;
+      }
+      case 'import-purchase-open':
+        this.expandedImportPurchase = id;
+        this.openModal('import-quantity', this.importQuantityModal());
+        break;
+      case 'import-modal-qty-step': {
+        const supplier = supplierFor(this.store.state);
+        const next = Math.max(supplier.minOrder, Math.min(30, this.getImportModalQuantity() + Number(id)));
+        this.setImportModalQuantity(next);
+        this.refreshImportQuantityModal();
+        break;
+      }
+      case 'import-quantity-confirm': {
+        const [kind, itemId] = this.expandedImportPurchase.split(':');
+        const quantity = this.getImportModalQuantity();
+        let imported = false;
+        if (kind === 'product') imported = this.store.orderImport(itemId, quantity);
+        else if (kind === 'material') imported = this.store.buyAtelierMaterial(itemId, quantity);
+        else if (kind === 'look') {
+          const look = looks.find(item => item.id === itemId);
+          if (look) imported = this.store.buyOutfit(look.items, quantity);
+        }
+        if (imported) {
+          this.expandedImportPurchase = '';
+          if (this.tutorialStep === 1) this.advanceTutorial(2);
+          this.closeModal();
+        }
         break;
       }
       case 'catalog-mode': {
@@ -1194,7 +1290,10 @@ export class GameUI {
           return;
         }
         const qty = Math.max(supplierFor(this.store.state).minOrder, this.materialQtys[id] ?? 1);
-        this.store.buyAtelierMaterial(id, qty);
+        if (this.store.buyAtelierMaterial(id, qty)) {
+          this.expandedImportPurchase = '';
+          this.renderPanel();
+        }
         break;
       }
       case 'order-import': {
@@ -1204,6 +1303,10 @@ export class GameUI {
         }
         const qty = Math.max(supplierFor(this.store.state).minOrder, this.productImportQtys[id] ?? this.importQty ?? 1);
         const ordered = this.store.orderImport(id, qty);
+        if (ordered) {
+          this.expandedImportPurchase = '';
+          this.renderPanel();
+        }
         if (ordered && this.tutorialStep === 1) this.advanceTutorial(2);
         break;
       }
@@ -1230,7 +1333,10 @@ export class GameUI {
         }
         const look = looks.find(l => l.id === id);
         const qty = Math.max(supplierFor(this.store.state).minOrder, this.lookQtys[id] ?? 1);
-        if (look) this.store.buyOutfit(look.items, qty);
+        if (look && this.store.buyOutfit(look.items, qty)) {
+          this.expandedImportPurchase = '';
+          this.renderPanel();
+        }
         break;
       }
       case 'quests': {
@@ -1327,14 +1433,6 @@ export class GameUI {
         break;
       }
       case 'staff-hire': this.store.hireStaff(id); break;
-      case 'inventory-price-save': {
-        const input = document.querySelector<HTMLInputElement>(`#inv-price-${CSS.escape(id)}`);
-        const rawPrice = input?.value.trim() ?? '';
-        const price = Number(rawPrice.replace(/[^0-9]/g, ''));
-        if (!rawPrice || !Number.isFinite(price)) { this.toast('Hãy nhập một mức giá bán hợp lệ.', 'error'); break; }
-        if (this.store.setPrice(id, price)) this.renderPanel();
-        break;
-      }
       case 'staff-fire': this.store.fireStaff(id); break;
       case 'staff-leave-approve': this.store.decideStaffLeave(id, true); break;
       case 'staff-leave-deny': this.store.decideStaffLeave(id, false); break;
@@ -1646,7 +1744,7 @@ export class GameUI {
       case 'tutorial-done': this.store.settings('tutorialDone', true); this.closeModal(); break;
       case 'rescue': this.store.rescue(); break;
       case 'reset-confirm': this.openModal('reset', `<div class="modal-heading"><h2>Bắt đầu một boutique mới?</h2><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div><p>Tiền, hàng hóa, ngày chơi và toàn bộ tiến trình hiện tại sẽ bị xóa khỏi trình duyệt này. Thao tác này không thể hoàn tác.</p><div class="reset-actions"><button class="btn btn-secondary" data-action="settings">Giữ boutique của mình</button><button class="btn btn-danger" data-action="reset">Xóa và chơi lại</button></div>`); break;
-      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.materialQtys = {}; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
+      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.materialQtys = {}; this.expandedImportPurchase = ''; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
     }
   }
   private scheduleCatalogSearch(inputId: 'catalog-search' | 'import-search', caret: number | null) {
@@ -1674,7 +1772,10 @@ export class GameUI {
       tab = 'import';
     }
     if (tab !== 'shop' && !navItems.some(n => n.id === tab)) return;
-    if (enteringImport) this.importSourceSelected = false;
+    if (enteringImport) {
+      this.importSourceSelected = false;
+      this.expandedImportPurchase = '';
+    }
     if (this.store.state.phase === 'open' && (tab === 'import' || tab === 'decor' || tab === 'social' || tab === 'atelier')) {
       tab = 'shop';
     }
@@ -1984,6 +2085,8 @@ export class GameUI {
   }
   private renderPanel() {
     const panel = document.querySelector<HTMLElement>('#content-panel')!;
+    const panelScrollTop = panel.scrollTop;
+    const importRailScrollLeft = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid')?.scrollLeft ?? 0;
     panel.onscroll = null;
     let contentHtml = '';
     if (this.tab === 'stock') {
@@ -2012,24 +2115,17 @@ export class GameUI {
     }
     if (contentHtml) {
       panel.innerHTML = `<div class="game-panel-body${this.tab === 'social' ? ' social-profile-page' : ''}">${contentHtml}</div>`;
+      const restorePanelScroll = () => {
+        panel.scrollTop = panelScrollTop;
+        const importRail = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid');
+        if (importRail) importRail.scrollLeft = importRailScrollLeft;
+      };
+      restorePanelScroll();
+      requestAnimationFrame(restorePanelScroll);
       if (this.tab === 'social' && this.socialSection === 'feed') this.bindReviewSummarySticky(panel);
-      if (this.tab === 'trend') this.bindTrendHeroSticky(panel);
     } else {
       panel.innerHTML = '';
     }
-  }
-  private bindTrendHeroSticky(panel: HTMLElement) {
-    const hero = panel.querySelector<HTMLElement>('.trend-panel-start');
-    if (!hero) return;
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      hero.classList.toggle('is-stuck', panel.scrollTop >= 46);
-    };
-    panel.onscroll = () => {
-      if (!frame) frame = window.requestAnimationFrame(update);
-    };
-    update();
   }
   private bindReviewSummarySticky(panel: HTMLElement) {
     const scroller = panel.querySelector<HTMLElement>('.social-drawer-content');
@@ -2209,13 +2305,167 @@ export class GameUI {
     requestAnimationFrame(restoreScroll);
   }
   private atelierCanvasPoint(canvas: HTMLElement, event: PointerEvent) {
-    return this.atelierCanvasPointFromBounds(canvas.getBoundingClientRect(), event);
+    return this.atelierCanvasClientPoint(canvas, event.clientX, event.clientY);
   }
-  private atelierCanvasPointFromBounds(bounds: DOMRect, event: PointerEvent) {
+  private atelierCanvasClientPoint(canvas: HTMLElement, clientX: number, clientY: number) {
+    const svg = canvas?.querySelector<SVGSVGElement>('svg');
+    const matrix = svg?.getScreenCTM();
+    if (matrix) {
+      const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse());
+      return {
+        x: Math.max(0, Math.min(120, point.x)),
+        y: Math.max(0, Math.min(140, point.y)),
+      };
+    }
+    const bounds = canvas.getBoundingClientRect();
     return {
-      x: Math.max(0, Math.min(120, (event.clientX - bounds.left) / Math.max(1, bounds.width) * 120)),
-      y: Math.max(0, Math.min(140, (event.clientY - bounds.top) / Math.max(1, bounds.height) * 140)),
+      x: Math.max(0, Math.min(120, (clientX - bounds.left) / Math.max(1, bounds.width) * 120)),
+      y: Math.max(0, Math.min(140, (clientY - bounds.top) / Math.max(1, bounds.height) * 140)),
     };
+  }
+  private initAtelierPanzoom(fitOnOpen = false) {
+    this.destroyAtelierPanzoom();
+    if (this.modal !== 'atelier-customize') return;
+    const canvas = this.dialog.querySelector<HTMLElement>('[data-shape-canvas]');
+    const svg = canvas?.querySelector<SVGSVGElement>('svg');
+    if (!canvas || !svg) return;
+    const excluded = Array.from(svg.querySelectorAll<SVGElement>('[data-shape-node], [data-design-sticker], [data-sticker-move], [data-sticker-resize]'));
+    const panzoom = Panzoom(svg, {
+      canvas: true,
+      minScale: .25,
+      maxScale: 4,
+      step: .16,
+      startScale: this.atelierCanvasZoom,
+      startX: this.atelierCanvasPanX,
+      startY: this.atelierCanvasPanY,
+      exclude: excluded,
+      excludeClass: 'moveable-control',
+      touchAction: 'none',
+      cursor: 'grab',
+      animate: false,
+      disablePan: this.atelierDrawingEnabled,
+    });
+    const syncViewport = (event: Event) => {
+      const detail = (event as CustomEvent<PanzoomEventDetail>).detail;
+      if (!detail) return;
+      this.atelierCanvasZoom = detail.scale;
+      this.atelierCanvasPanX = detail.x;
+      this.atelierCanvasPanY = detail.y;
+      const output = this.dialog.querySelector<HTMLOutputElement>('.customizer-viewport-tools output');
+      if (output) output.value = `${Math.round(detail.scale * 100)}%`;
+      this.atelierStickerMoveable?.updateRect();
+    };
+    svg.addEventListener('panzoomchange', syncViewport);
+    svg.addEventListener('panzoomstart', () => canvas.classList.add('is-panning'));
+    svg.addEventListener('panzoomend', () => canvas.classList.remove('is-panning'));
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      panzoom.zoomWithWheel(event);
+    };
+    canvas.addEventListener('wheel', wheel, { passive: false });
+    this.atelierPanzoom = panzoom;
+    this.atelierPanzoomCanvas = canvas;
+    this.atelierPanzoomWheel = wheel;
+    void this.initAtelierStickerMoveable(canvas, svg);
+    if (fitOnOpen) requestAnimationFrame(() => this.fitAtelierCanvas());
+  }
+  private async initAtelierStickerMoveable(canvas: HTMLElement, svg: SVGSVGElement) {
+    this.atelierStickerMoveable?.destroy();
+    this.atelierStickerMoveable = undefined;
+    const sticker = this.atelierDesignStickers.find(item => item.id === this.atelierSelectedStickerId);
+    const target = sticker ? svg.querySelector<SVGGElement>(`[data-design-sticker="${CSS.escape(sticker.id)}"]`) : null;
+    if (!sticker || !target) return;
+    const { default: Moveable } = await import('moveable');
+    if (this.modal !== 'atelier-customize' || !canvas.isConnected || this.atelierSelectedStickerId !== sticker.id) return;
+    const moveable = new Moveable(canvas, {
+      target,
+      draggable: true,
+      scalable: true,
+      rotatable: true,
+      pinchable: true,
+      keepRatio: true,
+      origin: false,
+      throttleDrag: 0,
+      throttleScale: 0,
+      throttleRotate: 1,
+      renderDirections: ['nw', 'ne', 'sw', 'se'],
+      rotationPosition: 'top',
+    });
+    let dragStart: ProductDesignPoint | undefined;
+    let originX = sticker.x;
+    let originY = sticker.y;
+    const clientPoint = (input: PointerEvent | TouchEvent | MouseEvent) => {
+      if ('touches' in input && input.touches.length) return input.touches[0];
+      if ('changedTouches' in input && input.changedTouches.length) return input.changedTouches[0];
+      return input as PointerEvent | MouseEvent;
+    };
+    const updateTarget = () => {
+      target.setAttribute('transform', `translate(${sticker.x.toFixed(2)} ${sticker.y.toFixed(2)}) rotate(${sticker.rotation.toFixed(1)}) scale(${sticker.scale.toFixed(3)})`);
+      moveable.updateRect();
+    };
+    moveable.on('dragStart', event => {
+      const pointer = clientPoint(event.inputEvent);
+      dragStart = this.atelierCanvasClientPoint(canvas, pointer.clientX, pointer.clientY);
+      originX = sticker.x;
+      originY = sticker.y;
+    });
+    moveable.on('drag', event => {
+      if (!dragStart) return;
+      const pointer = clientPoint(event.inputEvent);
+      const point = this.atelierCanvasClientPoint(canvas, pointer.clientX, pointer.clientY);
+      sticker.x = Math.max(6, Math.min(114, originX + point.x - dragStart.x));
+      sticker.y = Math.max(7, Math.min(133, originY + point.y - dragStart.y));
+      updateTarget();
+    });
+    moveable.on('scaleStart', event => event.set([sticker.scale, sticker.scale]));
+    moveable.on('scale', event => {
+      sticker.scale = Math.max(.35, Math.min(2.5, Math.abs(event.scale[0])));
+      updateTarget();
+    });
+    moveable.on('rotateStart', event => event.set(sticker.rotation));
+    moveable.on('rotate', event => {
+      sticker.rotation = Math.max(-180, Math.min(180, event.beforeRotation));
+      updateTarget();
+    });
+    this.atelierStickerMoveable = moveable;
+  }
+  private fitAtelierCanvas() {
+    const panzoom = this.atelierPanzoom;
+    const canvas = this.atelierPanzoomCanvas;
+    const svg = canvas?.querySelector<SVGSVGElement>('svg');
+    const artwork = svg?.querySelector<SVGGraphicsElement>('.atelier-editable-shape');
+    if (!panzoom || !canvas || !svg || !artwork) return;
+    panzoom.zoom(1, { animate: false });
+    panzoom.pan(0, 0, { animate: false, force: true });
+    requestAnimationFrame(() => {
+      const canvasRect = canvas.getBoundingClientRect();
+      const artworkRect = artwork.getBoundingClientRect();
+      if (!canvasRect.width || !canvasRect.height || !artworkRect.width || !artworkRect.height) return;
+      const padding = Math.max(20, Math.min(canvasRect.width, canvasRect.height) * .08);
+      const fitScale = Math.max(.25, Math.min(1,
+        (canvasRect.width - padding * 2) / artworkRect.width,
+        (canvasRect.height - padding * 2) / artworkRect.height,
+      ));
+      panzoom.zoom(fitScale, { animate: false });
+      requestAnimationFrame(() => {
+        const fittedCanvas = canvas.getBoundingClientRect();
+        const fittedArtwork = artwork.getBoundingClientRect();
+        const deltaX = fittedCanvas.left + fittedCanvas.width / 2 - fittedArtwork.left - fittedArtwork.width / 2;
+        const deltaY = fittedCanvas.top + fittedCanvas.height / 2 - fittedArtwork.top - fittedArtwork.height / 2;
+        panzoom.pan(deltaX, deltaY, { relative: true, animate: false, force: true });
+      });
+    });
+  }
+  private destroyAtelierPanzoom() {
+    this.atelierStickerMoveable?.destroy();
+    this.atelierStickerMoveable = undefined;
+    if (this.atelierPanzoomCanvas && this.atelierPanzoomWheel) {
+      this.atelierPanzoomCanvas.removeEventListener('wheel', this.atelierPanzoomWheel);
+    }
+    this.atelierPanzoom?.destroy();
+    this.atelierPanzoom = undefined;
+    this.atelierPanzoomCanvas = undefined;
+    this.atelierPanzoomWheel = undefined;
   }
   private atelierShapePathData() {
     const points = this.atelierShapePoints;
@@ -2228,6 +2478,35 @@ export class GameUI {
       return `Q${point.x.toFixed(1)} ${point.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
     }).join('')}Z`;
   }
+  private syncAtelierDrawingLayer(canvas: HTMLElement) {
+    const product = this.store.state.customProducts.find(item => item.id === this.atelierCustomizeProductId);
+    const svg = canvas.querySelector<SVGSVGElement>('svg');
+    if (!product || !svg) return;
+    const rendered = productSvg({
+      ...product,
+      designColor: this.atelierDesignColor,
+      designStrokes: this.atelierDesignStrokes,
+      designMotif: 'none',
+      designFormWidth: 1,
+      designFormLength: 1,
+      designShapePoints: this.atelierShapePoints,
+      designShapeSmooth: this.atelierShapeSmooth,
+      designStrokeColor: this.atelierShapeStrokeColor,
+      designStrokeWidth: this.atelierShapeStrokeWidth,
+      designStickers: this.atelierDesignStickers,
+    });
+    const renderedSvg = new DOMParser().parseFromString(rendered, 'image/svg+xml').documentElement;
+    const nextLayer = renderedSvg.querySelector<SVGGElement>('.custom-product-drawing');
+    const currentLayer = svg.querySelector<SVGGElement>('.custom-product-drawing');
+    if (nextLayer) {
+      const importedLayer = document.importNode(nextLayer, true);
+      if (currentLayer) currentLayer.replaceWith(importedLayer);
+      else svg.querySelector<SVGPathElement>('.atelier-editable-shape')?.parentElement?.parentElement?.append(importedLayer);
+    } else {
+      currentLayer?.remove();
+    }
+    svg.querySelector('.customizer-live-stroke')?.remove();
+  }
   private refreshAtelierCustomizer() {
     if (this.modal !== 'atelier-customize') return;
     const product = this.store.state.customProducts.find(item => item.id === this.atelierCustomizeProductId);
@@ -2237,6 +2516,7 @@ export class GameUI {
     const controlsScrollTop = inner.querySelector<HTMLElement>('.customizer-controls')?.scrollTop ?? 0;
     const nameInput = inner.querySelector<HTMLInputElement>('#customizer-product-name');
     if (nameInput) this.atelierCustomizeName = nameInput.value.slice(0, 32);
+    this.destroyAtelierPanzoom();
     inner.innerHTML = atelierCustomizeModal(product, this.atelierCustomizerState());
     const restoredName = inner.querySelector<HTMLInputElement>('#customizer-product-name');
     if (restoredName) restoredName.value = this.atelierCustomizeName;
@@ -2246,7 +2526,10 @@ export class GameUI {
       if (controls) controls.scrollTop = controlsScrollTop;
     };
     restoreScroll();
-    requestAnimationFrame(restoreScroll);
+    requestAnimationFrame(() => {
+      restoreScroll();
+      this.initAtelierPanzoom();
+    });
   }
   private atelierCustomizerState() {
     return {
@@ -2263,12 +2546,20 @@ export class GameUI {
       motifOpacity: this.atelierDesignMotifOpacity,
       motifRepeat: this.atelierDesignMotifRepeat,
       shapePoints: this.atelierShapePoints,
+      shapeSelected: this.atelierShapeSelected,
       selectedNode: this.atelierSelectedNode,
       shapeSmooth: this.atelierShapeSmooth,
       strokeColor: this.atelierShapeStrokeColor,
       strokeWidth: this.atelierShapeStrokeWidth,
+      brushEnabled: this.atelierDrawingEnabled,
+      brushColor: this.atelierBrushColor,
+      brushWidth: this.atelierBrushWidth,
+      brushTip: this.atelierBrushTip,
       stickers: this.atelierDesignStickers,
       selectedStickerId: this.atelierSelectedStickerId,
+      canvasZoom: this.atelierCanvasZoom,
+      canvasPanX: this.atelierCanvasPanX,
+      canvasPanY: this.atelierCanvasPanY,
     };
   }
   private refreshOnlineOrder() {
@@ -2336,15 +2627,120 @@ export class GameUI {
     this.updateDockVisibility();
     this.queueTutorialCue();
   }
+
+  private getImportModalQuantity() {
+    const [kind, id] = this.expandedImportPurchase.split(':');
+    const minimum = supplierFor(this.store.state).minOrder;
+    if (kind === 'look') return Math.max(minimum, this.lookQtys[id] ?? minimum);
+    if (kind === 'material') return Math.max(minimum, this.materialQtys[id] ?? minimum);
+    return Math.max(minimum, this.productImportQtys[id] ?? minimum);
+  }
+
+  private setImportModalQuantity(quantity: number) {
+    const [kind, id] = this.expandedImportPurchase.split(':');
+    if (!id) return;
+    if (kind === 'look') this.lookQtys[id] = quantity;
+    else if (kind === 'material') this.materialQtys[id] = quantity;
+    else this.productImportQtys[id] = quantity;
+  }
+
+  private refreshImportQuantityModal() {
+    if (this.modal !== 'import-quantity') return;
+    const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+    if (inner) inner.innerHTML = this.importQuantityModal();
+  }
+
+  private importQuantityModal() {
+    const [kind, id] = this.expandedImportPurchase.split(':');
+    const supplier = supplierFor(this.store.state);
+    const quantity = this.getImportModalQuantity();
+    let name = '';
+    let subtitle = '';
+    let artwork = '';
+    let unitPrice = 0;
+    let stockAfter = 0;
+
+    if (kind === 'product') {
+      const product = products.find(item => item.id === id);
+      if (!product) return '';
+      name = product.name;
+      subtitle = `${product.style} · Sản phẩm`;
+      artwork = productImage(product, `import-quantity-product import-art-${product.art}`);
+      unitPrice = buyPrice(this.store.state, product);
+      stockAfter = (this.store.state.inventory[id] ?? 0) + quantity;
+    } else if (kind === 'look') {
+      const look = looks.find(item => item.id === id);
+      if (!look) return '';
+      const items = look.items.map(itemId => products.find(product => product.id === itemId)!).filter(Boolean);
+      name = look.name;
+      subtitle = `${look.style} · ${items.length} món/bộ`;
+      artwork = `<div class="import-quantity-look">${items.map(item => productImage(item, `import-quantity-product import-art-${item.art}`)).join('')}</div>`;
+      unitPrice = items.reduce((sum, item) => sum + buyPrice(this.store.state, item), 0);
+      stockAfter = quantity;
+    } else {
+      const material = atelierMaterials.find(item => item.id === id);
+      if (!material) return '';
+      name = material.name;
+      subtitle = 'Vật liệu xưởng may';
+      artwork = `<div class="import-quantity-material" style="--material:${material.color}">${atelierMaterialIllustration(material.id)}</div>`;
+      unitPrice = Math.round(material.price * currentEvent(this.store.state).discount * supplier.priceFactor);
+      stockAfter = (this.store.state.materialInventory[id] ?? 0) + quantity;
+    }
+
+    const total = unitPrice * quantity;
+    const canConfirm = total <= this.store.state.money;
+    const deliveryDays = supplier.deliveryDays + (kind === 'product' && (products.find(item => item.id === id)?.level ?? 0) >= 4 ? 3 : 0);
+    return `<section class="import-quantity-modal">
+      <header class="app-modal-header import-quantity-header">
+        <span class="app-header-chip">${icon('box')} Nhập hàng</span>
+        <div><small>${escapeHtml(subtitle)}</small><h2>${escapeHtml(name)}</h2></div>
+        <button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
+      </header>
+      <div class="import-quantity-body">
+        <div class="import-quantity-art">${artwork}</div>
+        <div class="import-quantity-summary">
+          <span><small>Đơn giá</small><b>${money(unitPrice)}</b></span>
+          <span><small>${deliveryDays ? 'Thời gian giao' : 'Nhận hàng'}</small><b>${deliveryDays ? `${deliveryDays}–${deliveryDays + (supplier.reliability < 1 ? 1 : 0)} ngày` : 'Ngay lập tức'}</b></span>
+          <span><small>${kind === 'look' ? 'Số bộ nhập' : 'Kho sau khi nhập'}</small><b>${stockAfter}</b></span>
+        </div>
+      </div>
+      <div class="import-quantity-picker">
+        <span>Số lượng</span>
+        <div class="traditional-qty-control">
+          <button type="button" data-action="import-modal-qty-step" data-id="-1" aria-label="Giảm số lượng" ${quantity <= supplier.minOrder ? 'disabled' : ''}>${icon('minus')}</button>
+          <input class="import-modal-qty-input" type="number" inputmode="numeric" min="${supplier.minOrder}" max="30" step="1" value="${quantity}" aria-label="Số lượng nhập" />
+          <button type="button" data-action="import-modal-qty-step" data-id="1" aria-label="Tăng số lượng" ${quantity >= 30 ? 'disabled' : ''}>${icon('plus')}</button>
+        </div>
+      </div>
+      <footer class="import-quantity-actions">
+        <div><small>Tổng thanh toán</small><strong>${money(total)}</strong></div>
+        <button class="btn btn-primary" data-action="import-quantity-confirm" ${canConfirm ? '' : 'disabled'}>${icon(deliveryDays ? 'truck' : 'box')} Xác nhận nhập</button>
+      </footer>
+    </section>`;
+  }
   private ordersArrivedHtml(items: ArrivedOrderSummary[]) {
     const total = items.reduce((sum, item) => sum + item.quantity, 0);
     const materialsOnly = items.every(item => item.kind === 'material');
-    return `<div class="arrivals-modal"><button class="icon-button arrivals-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button><div class="arrivals-heading"><span class="arrivals-truck">${icon('truck')}</span><span class="eyebrow">DELIVERY DAY</span><h2>Hàng mới đã về kho!</h2><p>${total} ${materialsOnly ? 'đơn vị nguyên liệu' : 'món hàng'} trong ${items.length} kiện đã được kiểm nhận.</p></div><div class="arrivals-list">${items.map(item => {
+    const quantityLabel = materialsOnly ? 'đơn vị vật liệu' : 'món hàng';
+    return `<section class="arrivals-modal">
+      <header class="arrivals-header">
+        <span class="arrivals-truck">${icon('truck')}</span>
+        <div class="arrivals-heading"><small>GIAO HÀNG HOÀN TẤT</small><h2>Hàng mới đã về kho!</h2></div>
+        <button class="staff-modal-close arrivals-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
+      </header>
+      <div class="arrivals-summary">
+        <div><small>Đã nhận</small><strong>${total}</strong><span>${quantityLabel}</span></div>
+        <div><small>Số kiện</small><strong>${items.length}</strong><span>đã kiểm nhận</span></div>
+        <p>${icon('check')} Toàn bộ hàng đã được tự động cộng vào kho.</p>
+      </div>
+      <div class="arrivals-list" aria-label="Danh sách hàng vừa nhận">${items.map(item => {
       const product = products.find(candidate => candidate.id === item.productId);
       const material = item.kind === 'material' ? atelierMaterials.find(candidate => candidate.id === item.productId) : undefined;
       const supplier = suppliers.find(candidate => candidate.id === item.supplierId);
-      return `<article class="${material ? 'is-material-arrival' : ''}"><div class="arrivals-product-art">${material ? atelierMaterialIllustration(material.id) : product ? productImage(product) : icon('box')}</div><div><strong>${escapeHtml(item.productName)}</strong><small>${material ? 'Nguyên vật liệu · ' : ''}${supplier ? escapeHtml(supplier.name) : 'Đơn nhập hàng'}</small></div><b>×${item.quantity}</b></article>`;
-    }).join('')}</div><button class="btn btn-primary arrivals-confirm" data-action="close-modal">${materialsOnly ? 'Hoàn tất kiểm nhận' : 'Đưa hàng ra trưng bày'} ${icon('arrow')}</button></div>`;
+      return `<article class="${material ? 'is-material-arrival' : ''}"><div class="arrivals-product-art">${material ? atelierMaterialIllustration(material.id) : product ? productImage(product) : icon('box')}</div><div class="arrivals-item-info"><strong>${escapeHtml(item.productName)}</strong><small>${material ? 'Vật liệu' : 'Sản phẩm'} · ${supplier ? escapeHtml(supplier.name) : 'Đơn nhập hàng'}</small></div><b class="arrivals-item-quantity"><small>Số lượng</small>×${item.quantity}</b></article>`;
+    }).join('')}</div>
+      <footer class="arrivals-footer"><span>${icon('box')} Sẵn sàng sử dụng trong kho</span><button class="btn btn-primary arrivals-confirm" data-action="close-modal">Đã hiểu ${icon('check')}</button></footer>
+    </section>`;
   }
   private closeModal() {
     const closingModal = this.modal;
@@ -2362,8 +2758,10 @@ export class GameUI {
     if (closingModal === 'atelier-customize') {
       this.atelierDrawingStroke = undefined;
       this.atelierDrawingPointer = -1;
+      this.destroyAtelierPanzoom();
     }
     if (closingModal === 'atelier-delete-confirm') this.pendingBlueprintDeleteId = '';
+    if (closingModal === 'import-quantity') this.expandedImportPurchase = '';
     this.modal = 'none';
     this.dialog.close();
     this.syncSceneInteraction();
@@ -2434,9 +2832,12 @@ export class GameUI {
     if (!this.tutorialActive()) return;
     if (this.tutorialStep === 6) return;
     const choosingTutorialSource = this.tutorialStep === 1 && this.tab === 'import' && !this.importSourceSelected;
+    const confirmingTutorialImport = this.tutorialStep === 1 && this.modal === 'import-quantity';
     const steps = [
       { selector: '.dock-btn-import', label: 'Bấm Nhập hàng', placement: 'left' },
-      choosingTutorialSource
+      confirmingTutorialImport
+        ? { selector: '[data-action="import-quantity-confirm"]', label: 'Xác nhận số lượng nhập', placement: 'above' }
+        : choosingTutorialSource
         ? { selector: '.supplier-source-card:not([disabled])', label: 'Chọn nguồn hàng để tiếp tục', placement: 'above' }
         : { selector: '.import-btn:not([disabled])', label: 'Bấm để nhập mẫu đầu tiên', placement: 'above' },
       { selector: '.panel-close-btn[data-id="shop"]', label: 'Bấm Quay lại shop', placement: 'below' },
@@ -2615,16 +3016,6 @@ export class GameUI {
           </label>
         </section>
 
-        <section class="settings-utility-grid">
-          <article class="settings-save-state ${this.store.save.available ? 'is-safe' : 'is-warning'}">
-            <span>${icon(this.store.save.available ? 'shield' : 'help')}</span>
-            <div><small>TIẾN TRÌNH</small><strong>${this.store.save.available ? 'Đang tự động lưu' : 'Không thể tự động lưu'}</strong><p>${this.store.save.available ? 'Mọi thay đổi được lưu trên thiết bị này.' : 'Hãy kiểm tra quyền lưu trữ của trình duyệt.'}</p></div>
-          </article>
-          <details class="settings-install-guide">
-            <summary><span>${icon('home')}</span><div><small>CHẾ ĐỘ TOÀN MÀN HÌNH</small><strong>Cài game trên iPhone/iPad</strong></div>${icon('plus')}</summary>
-            <ol><li><b>1</b>Mở game bằng Safari và chạm Chia sẻ.</li><li><b>2</b>Chọn “Thêm vào Màn hình chính”.</li><li><b>3</b>Chạm Thêm để hoàn tất.</li></ol>
-          </details>
-        </section>
       </div>
 
       <footer class="game-settings-footer">

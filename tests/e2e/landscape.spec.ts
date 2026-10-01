@@ -22,7 +22,17 @@ test.describe('manual landscape on phones', () => {
     await expect(page.locator('#landscape-hint')).toBeHidden();
     await page.locator('[data-action="nav"][data-id="import"]').tap();
     const panel = page.locator('#content-panel');
-    await panel.locator('.import-btn').first().tap();
+    const source = panel.locator('.supplier-source-card:not([disabled])').first();
+    if (await source.isVisible()) await source.tap();
+    const importRail = panel.locator('.import-horizontal-rail');
+    await importRail.evaluate(element => { element.scrollLeft = 120; });
+    const importScrollBefore = await importRail.evaluate(element => element.scrollLeft);
+    await importRail.locator('.import-btn').nth(1).tap();
+    const importDialog = page.getByRole('dialog');
+    await expect(importDialog).toHaveClass('dialog-import-quantity');
+    await importDialog.locator('[data-action="import-quantity-confirm"]').tap();
+    await expect(importDialog).not.toBeVisible();
+    await expect.poll(() => importRail.evaluate(element => element.scrollLeft)).toBe(importScrollBefore);
     const money = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).money, SAVE_KEY);
     expect(money).toBeLessThan(state.money);
 

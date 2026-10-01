@@ -10,20 +10,35 @@ const wrap = (body: string, w: number, h: number) => `<svg xmlns="http://www.w3.
 export const svgUrl = (svg: string) => `data:image/svg+xml;base64,${btoa(Array.from(new TextEncoder().encode(svg), byte => String.fromCharCode(byte)).join(''))}`;
 const shadow = '<ellipse cx="90" cy="201" rx="67" ry="14" fill="#8850a8" opacity=".10"/>';
 const bow = (color: string) => `<path d="M58 42Q36 22 35 43Q35 58 57 48Q81 23 83 42Q87 62 62 49L71 67L59 62L49 67L56 48" fill="${color}" stroke="#4a2d5a" stroke-width="1.5"/><circle cx="60" cy="46" r="5" fill="${color}"/>`;
+const escapeSvgText = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[character]!));
 
 export function productSvg(product: Pick<Product, 'art' | 'color' | 'designColor' | 'designStrokes' | 'designMotif' | 'designAccentColor' | 'designMotifScale' | 'designMotifX' | 'designMotifY' | 'designFormWidth' | 'designFormLength' | 'designMotifRotation' | 'designMotifOpacity' | 'designMotifRepeat' | 'designShapePoints' | 'designShapeSmooth' | 'designStrokeColor' | 'designStrokeWidth' | 'designStickers'>, hanger = false) {
   const c = fabricColor(product.designColor ?? product.color);
   const shapes = fashionShapes(c);
   const atelierBody = atelierProductBody(product.art, c, product.designShapePoints, product.designShapeSmooth !== false, product.designStrokeColor, product.designStrokeWidth);
   const body = atelierBody ?? shapes[product.art] ?? shapes.tee;
-  const customDrawing = (product.designStrokes ?? []).slice(0, 80).map(stroke => {
+  let customDrawing = '';
+  (product.designStrokes ?? []).slice(0, 80).forEach((stroke, strokeIndex) => {
     const color = /^#[0-9a-f]{6}$/i.test(stroke.color) ? stroke.color : '#d4429a';
     const width = Math.max(.6, Math.min(8, Number(stroke.width) || 2));
     const points = stroke.points.slice(0, 240).map(point => ({ x: Math.max(0, Math.min(120, Number(point.x) || 0)), y: Math.max(0, Math.min(140, Number(point.y) || 0)) }));
-    if (!points.length) return '';
+    if (!points.length) return;
     const path = points.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
-    return `<path d="${path}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
-  }).join('');
+    const tip = (['round', 'marker', 'calligraphy', 'neon', 'eraser'] as string[]).includes(stroke.tip ?? '') ? stroke.tip : 'round';
+    if (tip === 'eraser') {
+      if (!customDrawing) return;
+      const maskId = `custom-drawing-mask-${strokeIndex}`;
+      customDrawing = `<defs><mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="120" height="140"><rect width="120" height="140" fill="#fff"/><path d="${path}" fill="none" stroke="#000" stroke-width="${width * 2}" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><g mask="url(#${maskId})">${customDrawing}</g>`;
+    } else if (tip === 'marker') {
+      customDrawing += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${width * 1.6}" stroke-linecap="square" stroke-linejoin="round" opacity=".55"/>`;
+    } else if (tip === 'calligraphy') {
+      customDrawing += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${width * 1.35}" stroke-linecap="square" stroke-linejoin="bevel"/>`;
+    } else if (tip === 'neon') {
+      customDrawing += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${width * 2.5}" stroke-linecap="round" stroke-linejoin="round" opacity=".32"/><path d="${path}" fill="none" stroke="#fff" stroke-width="${Math.max(1, width * .55)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    } else {
+      customDrawing += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+  });
   const customLayer = customDrawing ? `<g class="custom-product-drawing">${customDrawing}</g>` : '';
   const motif = product.designMotif ?? 'none';
   const accent = /^#[0-9a-f]{6}$/i.test(product.designAccentColor ?? '') ? product.designAccentColor! : '#d4429a';
@@ -61,15 +76,30 @@ export function productSvg(product: Pick<Product, 'art' | 'color' | 'designColor
     : motifRepeat === 3 ? [[-18, 0], [0, 0], [18, 0]] : [[0, 0]];
   const motifLayer = motifBody ? `<g class="custom-product-motif" opacity="${motifOpacity}">${motifOffsets.map(([offsetX, offsetY]) => `<g transform="translate(${motifX + offsetX} ${motifY + offsetY}) rotate(${motifRotation}) scale(${motifScale})">${motifBody}</g>`).join('')}</g>` : '';
   const stickerLayer = (product.designStickers ?? []).slice(0, 24).map((sticker, index) => {
-    const kind = Object.hasOwn(detailShapes, sticker.kind) ? sticker.kind : 'heart';
+    const kind = sticker.kind === 'text' || Object.hasOwn(detailShapes, sticker.kind) ? sticker.kind : 'heart';
     const color = /^#[0-9a-f]{6}$/i.test(sticker.color) ? sticker.color : '#d4429a';
     const x = Math.max(6, Math.min(114, Number(sticker.x) || 60));
     const y = Math.max(7, Math.min(133, Number(sticker.y) || 69));
     const scale = Math.max(.35, Math.min(2.5, Number(sticker.scale) || 1));
     const rotation = Math.max(-180, Math.min(180, Number(sticker.rotation) || 0));
     const id = /^[a-z0-9-]{1,50}$/i.test(sticker.id) ? sticker.id : `sticker-${index}`;
-    const stickerBody = (detailShapes[kind] ?? detailShapes.heart).split(accent).join(color);
-    return `<g class="custom-product-sticker" data-design-sticker="${id}" transform="translate(${x} ${y}) rotate(${rotation}) scale(${scale})"><rect class="custom-product-sticker-hit" x="-21" y="-21" width="42" height="42" rx="3"/>${stickerBody}</g>`;
+    let stickerBody = (detailShapes[kind] ?? detailShapes.heart).split(accent).join(color);
+    let hitWidth = 42;
+    if (kind === 'text') {
+      const text = escapeSvgText((sticker.text?.trim() || 'Boutique').slice(0, 18));
+      const fontSize = Math.max(8, Math.min(32, Math.round(Number(sticker.fontSize) || 14)));
+      const curve = Math.max(-60, Math.min(60, Math.round(Number(sticker.curve) || 0)));
+      const font = sticker.font === 'handwritten' ? "'Atelier Mali','Segoe Print',cursive" : sticker.font === 'serif' ? "Georgia,'Times New Roman',serif" : "'Arial Rounded MT Bold','Trebuchet MS',sans-serif";
+      const effect = (['none', 'outline', 'shadow', 'glow'] as string[]).includes(sticker.effect ?? '') ? sticker.effect : 'none';
+      hitWidth = Math.max(42, Math.min(112, text.length * fontSize * .58 + 12));
+      const curveId = `text-curve-${id}`;
+      const curvePath = curve ? `<path id="${curveId}" d="M${(-hitWidth / 2 + 4).toFixed(1)} 0Q0 ${(-curve * .4).toFixed(1)} ${(hitWidth / 2 - 4).toFixed(1)} 0" fill="none"/>` : '';
+      const content = curve ? `<textPath href="#${curveId}" startOffset="50%">${text}</textPath>` : text;
+      const attrs = `class="custom-product-text-value" text-anchor="middle" dominant-baseline="middle" font-family="${font}" font-size="${fontSize}" font-weight="800"`;
+      const main = `<text ${attrs} x="0" y="0" fill="${color}"${effect === 'outline' ? ' stroke="#fff" stroke-width="2.2" paint-order="stroke fill"' : ''}>${content}</text>`;
+      stickerBody = `<style>@font-face{font-family:'Atelier Mali';src:url('${maliVietnameseFont}') format('woff2');font-weight:700}</style>${curvePath}${effect === 'shadow' ? `<text ${attrs} x="0" y="0" transform="translate(1.8 2)" fill="#512d45" opacity=".45">${content}</text>` : ''}${effect === 'glow' ? `<text ${attrs} x="0" y="0" fill="none" stroke="${color}" stroke-width="5" opacity=".3">${content}</text>` : ''}${main}`;
+    }
+    return `<g class="custom-product-sticker" data-design-sticker="${id}" transform="translate(${x} ${y}) rotate(${rotation}) scale(${scale})"><rect class="custom-product-sticker-hit" x="${-hitWidth / 2}" y="-21" width="${hitWidth}" height="42" rx="3" fill="transparent" stroke="none"/>${stickerBody}</g>`;
   }).join('');
   const formTransform = `translate(60 26) scale(${formWidth} ${formLength}) translate(-60 -26)`;
   const hangerPath = hanger

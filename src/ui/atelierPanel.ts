@@ -7,6 +7,7 @@ import { atelierMaterialIllustration } from '../art/atelierArt';
 import { productSvg, svgUrl } from '../art/svg';
 
 export type AtelierSection = 'design' | 'production';
+export const ATELIER_CANVAS_VIEW = { x: -6, y: -7, width: 132, height: 154 } as const;
 
 const materialFormula = (materials: Record<string, number>) => Object.entries(materials).map(([id, quantity]) => {
   const material = atelierMaterials.find(item => item.id === id);
@@ -116,12 +117,20 @@ export interface AtelierCustomizerState {
   motifOpacity: number;
   motifRepeat: 1 | 3 | 5;
   shapePoints: ProductDesignStroke['points'];
+  shapeSelected: boolean;
   selectedNode: number;
   shapeSmooth: boolean;
   strokeColor: string;
   strokeWidth: number;
+  brushEnabled: boolean;
+  brushColor: string;
+  brushWidth: number;
+  brushTip: NonNullable<ProductDesignStroke['tip']>;
   stickers: ProductDesignSticker[];
   selectedStickerId: string;
+  canvasZoom: number;
+  canvasPanX: number;
+  canvasPanY: number;
 }
 
 const motifOptions: Array<{ id: ProductDesignMotif; label: string; preview: string }> = [
@@ -143,7 +152,7 @@ export function atelierCustomizeModal(product: CustomProduct, design: AtelierCus
   const preview = productSvg({
     ...product,
     designColor: design.baseColor,
-    designStrokes: [],
+    designStrokes: design.strokes,
     designMotif: 'none',
     designAccentColor: design.accentColor,
     designMotifScale: design.motifScale,
@@ -161,26 +170,32 @@ export function atelierCustomizeModal(product: CustomProduct, design: AtelierCus
     designStickers: design.stickers,
   });
   const selectedSticker = design.stickers.find(sticker => sticker.id === design.selectedStickerId);
-  const nodeOverlay = selectedSticker ? '' : `<g class="customizer-node-overlay"><polygon points="${design.shapePoints.map(point => `${point.x},${point.y}`).join(' ')}"/><g>${design.shapePoints.map((point, index) => `<circle data-shape-node="${index}" class="${design.selectedNode === index ? 'active' : ''}" cx="${point.x}" cy="${point.y}" r="${design.selectedNode === index ? 4.2 : 3.2}"/>`).join('')}</g></g>`;
-  const stickerSelection = selectedSticker ? `<g class="customizer-sticker-selection" transform="translate(${selectedSticker.x} ${selectedSticker.y}) rotate(${selectedSticker.rotation}) scale(${selectedSticker.scale})"><rect data-sticker-move="${selectedSticker.id}" x="-20" y="-20" width="40" height="40" rx="3"/><circle data-sticker-resize="${selectedSticker.id}" cx="20" cy="20" r="5"/><path d="M15 20h10M20 15v10"/></g>` : '';
-  const editablePreview = preview.replace('</svg>', `${nodeOverlay}${stickerSelection}</svg>`);
+  const canvasZoom = Math.max(.25, Math.min(4, design.canvasZoom));
+  const nodeOverlay = !selectedSticker && design.shapeSelected ? `<g class="customizer-node-overlay"><polygon points="${design.shapePoints.map(point => `${point.x},${point.y}`).join(' ')}"/><g>${design.shapePoints.map((point, index) => `<circle data-shape-node="${index}" class="${design.selectedNode === index ? 'active' : ''}" cx="${point.x}" cy="${point.y}" r="${design.selectedNode === index ? 4.2 : 3.2}"/>`).join('')}</g></g>` : '';
+  const editablePreview = preview
+    .replace(/viewBox="[^"]*"/, `viewBox="${ATELIER_CANVAS_VIEW.x} ${ATELIER_CANVAS_VIEW.y} ${ATELIER_CANVAS_VIEW.width} ${ATELIER_CANVAS_VIEW.height}"`)
+    .replace('<svg ', '<svg preserveAspectRatio="xMidYMid meet" ')
+    .replace('</svg>', `${nodeOverlay}</svg>`);
+  const textEditor = selectedSticker?.kind === 'text' ? `<div class="customizer-text-editor"><label><span>Nội dung</span><input id="customizer-text-content" maxlength="18" value="${escapeHtml(selectedSticker.text ?? 'Boutique')}" aria-label="Nội dung chữ" /></label><label><span>Font chữ</span><select id="customizer-text-font"><option value="rounded" ${selectedSticker.font === 'rounded' || !selectedSticker.font ? 'selected' : ''}>Bo tròn</option><option value="handwritten" ${selectedSticker.font === 'handwritten' ? 'selected' : ''}>Viết tay</option><option value="serif" ${selectedSticker.font === 'serif' ? 'selected' : ''}>Thanh lịch</option></select></label><label><span>Cỡ chữ</span><input id="customizer-text-size" type="number" inputmode="numeric" min="8" max="32" step="1" value="${Math.round(selectedSticker.fontSize ?? 14)}" aria-label="Cỡ chữ" /></label><label><span>Độ cong</span><input id="customizer-text-curve" type="number" inputmode="numeric" min="-60" max="60" step="5" value="${Math.round(selectedSticker.curve ?? 0)}" aria-label="Độ cong của chữ" /></label><label><span>Hiệu ứng</span><select id="customizer-text-effect"><option value="none" ${selectedSticker.effect === 'none' || !selectedSticker.effect ? 'selected' : ''}>Không</option><option value="outline" ${selectedSticker.effect === 'outline' ? 'selected' : ''}>Viền sáng</option><option value="shadow" ${selectedSticker.effect === 'shadow' ? 'selected' : ''}>Đổ bóng</option><option value="glow" ${selectedSticker.effect === 'glow' ? 'selected' : ''}>Phát sáng</option></select></label></div>` : '';
   const stickerCanvasTools = selectedSticker ? `<div class="customizer-canvas-toolbar"><label title="Màu chi tiết"><span>Màu</span><input id="customizer-sticker-color" type="color" value="${selectedSticker.color}" aria-label="Màu chi tiết đang chọn" /></label><button data-action="atelier-sticker-rotate" data-id="-15" aria-label="Xoay trái 15 độ">↶ <span>Xoay trái</span></button><button data-action="atelier-sticker-rotate" data-id="15" aria-label="Xoay phải 15 độ"><span>Xoay phải</span> ↷</button><button data-action="atelier-sticker-duplicate">${icon('plus')} <span>Nhân bản</span></button><button class="is-danger" data-action="atelier-sticker-delete">${icon('trash')} <span>Xóa</span></button></div>` : '';
   return `<section class="atelier-customizer-modal">
     <header class="customizer-header"><div><small>VECTOR DESIGN LAB</small><h2>Studio dựng phom</h2><p>Kéo điểm neo để bẻ đường nét và tạo silhouette riêng cho sản phẩm.</p></div><button class="customizer-close" data-action="close-modal" aria-label="Đóng Studio chỉnh mẫu">${icon('close')}</button></header>
     <div class="customizer-workspace">
       <section class="customizer-canvas-panel">
-        <div class="customizer-canvas-heading"><span><b>01</b><strong>Biên dạng sản phẩm</strong></span><em>${design.shapePoints.length} điểm neo</em></div>
-        <div class="customizer-canvas customizer-preview customizer-shape-canvas" data-shape-canvas>${editablePreview}</div>
+        <div class="customizer-canvas-heading"><span><b>01</b><strong>Biên dạng sản phẩm</strong></span><div class="customizer-viewport-tools"><em>${design.shapePoints.length} điểm neo</em><button data-action="atelier-canvas-zoom" data-id="-0.25" aria-label="Thu nhỏ không gian">−</button><output>${Math.round(canvasZoom * 100)}%</output><button data-action="atelier-canvas-zoom" data-id="0.25" aria-label="Phóng to không gian">+</button><button data-action="atelier-canvas-view-reset">Vừa khung</button></div></div>
+        <div class="customizer-canvas customizer-preview customizer-shape-canvas ${design.brushEnabled ? 'is-drawing' : ''}" data-shape-canvas data-design-canvas>${editablePreview}</div>
         ${stickerCanvasTools}
-        <p class="customizer-canvas-hint">Chạm một điểm rồi kéo để thay đổi đường viền · các đường nối là khung dựng phom.</p>
+        <p class="customizer-canvas-hint">Kéo nền để di chuyển không gian · cuộn hoặc dùng −/+ để thu phóng · kéo điểm neo để chỉnh phom.</p>
       </section>
       <aside class="customizer-controls">
         <label class="customizer-name-field"><span>TÊN THIẾT KẾ</span><input id="customizer-product-name" maxlength="32" value="${escapeHtml(product.name)}" /></label>
-        <nav class="customizer-mobile-nav" aria-label="Chuyển nhanh công cụ"><button data-action="atelier-customizer-jump" data-id="shape">Phom</button><button data-action="atelier-customizer-jump" data-id="color">Màu</button><button data-action="atelier-customizer-jump" data-id="line">Nét</button><button data-action="atelier-customizer-jump" data-id="details">Chi tiết</button></nav>
+        <nav class="customizer-mobile-nav" aria-label="Chuyển nhanh công cụ"><button data-action="atelier-customizer-jump" data-id="shape">Phom</button><button data-action="atelier-customizer-jump" data-id="color">Màu</button><button data-action="atelier-customizer-jump" data-id="line">Nét</button><button data-action="atelier-customizer-jump" data-id="draw">Vẽ</button><button data-action="atelier-customizer-jump" data-id="text">Chữ</button><button data-action="atelier-customizer-jump" data-id="details">Sticker</button></nav>
         <div class="customizer-control-block customizer-vector-tools ${selectedSticker ? 'is-hidden-for-sticker' : ''}" data-customizer-section="shape"><header><span><b>02</b><strong>Công cụ điểm neo</strong></span><em>${design.selectedNode >= 0 ? `Điểm ${design.selectedNode + 1}` : 'Chưa chọn điểm'}</em></header><div class="customizer-node-actions"><button data-action="atelier-shape-add">${icon('plus')} Thêm điểm</button><button data-action="atelier-shape-delete" ${design.selectedNode < 0 || design.shapePoints.length <= 6 ? 'disabled' : ''}>${icon('trash')} Xóa điểm</button><button data-action="atelier-shape-mirror">${icon('move')} Đối xứng</button><button data-action="atelier-shape-reset">${icon('rotate')} Phom gốc</button></div><div class="customizer-node-nudge" aria-label="Tinh chỉnh điểm neo"><button data-action="atelier-shape-nudge" data-id="-1,0" ${design.selectedNode < 0 ? 'disabled' : ''}>←</button><button data-action="atelier-shape-nudge" data-id="0,-1" ${design.selectedNode < 0 ? 'disabled' : ''}>↑</button><button data-action="atelier-shape-nudge" data-id="0,1" ${design.selectedNode < 0 ? 'disabled' : ''}>↓</button><button data-action="atelier-shape-nudge" data-id="1,0" ${design.selectedNode < 0 ? 'disabled' : ''}>→</button></div></div>
         <div class="customizer-control-block" data-customizer-section="color"><header><span><b>03</b><strong>Màu vải</strong></span><input id="customizer-base-color" type="color" value="${design.baseColor}" aria-label="Màu nền vải" /></header><div class="customizer-fabric-swatches">${designerPalette.slice(1, 7).map(color => `<button data-action="atelier-customize-base" data-id="${color}" style="--swatch:${color}" class="${color.toLowerCase() === design.baseColor.toLowerCase() ? 'active' : ''}" aria-label="Chọn màu nền ${color}"></button>`).join('')}</div></div>
         <div class="customizer-control-block customizer-line-tools" data-customizer-section="line"><header><span><b>04</b><strong>Đường nét</strong></span><input id="customizer-stroke-color" type="color" value="${design.strokeColor}" aria-label="Màu đường viền" /></header><div class="customizer-line-options"><div>${[[1, 'Mảnh'], [2, 'Vừa'], [3.2, 'Đậm']].map(([width, label]) => `<button data-action="atelier-shape-stroke" data-id="${width}" class="${design.strokeWidth === width ? 'active' : ''}"><i style="--line:${width}px"></i>${label}</button>`).join('')}</div><div><button data-action="atelier-shape-smooth" data-id="smooth" class="${design.shapeSmooth ? 'active' : ''}">Bo cong</button><button data-action="atelier-shape-smooth" data-id="sharp" class="${!design.shapeSmooth ? 'active' : ''}">Góc cạnh</button></div></div></div>
-        <div class="customizer-control-block customizer-sticker-tools" data-customizer-section="details"><header><span><b>05</b><strong>Chi tiết & Sticker</strong></span><em>${design.stickers.length}/24 lớp</em></header><div class="customizer-detail-library">${designDetailGroups.map(group => `<section><small>${group.label}</small><div class="customizer-sticker-library">${group.items.map(([kind, symbol, label]) => `<button data-action="atelier-sticker-add" data-id="${kind}"><i>${symbol}</i><span>${label}</span></button>`).join('')}</div></section>`).join('')}</div><p class="customizer-sticker-empty">${selectedSticker ? 'Đang chọn một chi tiết · công cụ chỉnh sửa nằm dưới khung sản phẩm bên trái.' : 'Thêm hoặc chạm vào chi tiết trên sản phẩm để chỉnh sửa.'}</p></div>
+        <div class="customizer-control-block customizer-brush-tools" data-customizer-section="draw"><header><span><b>05</b><strong>Bút vẽ</strong></span><button class="customizer-brush-toggle ${design.brushEnabled ? 'active' : ''}" data-action="atelier-brush-toggle">${design.brushEnabled ? 'Đang vẽ' : 'Bật bút'}</button></header><div class="customizer-brush-settings"><label><span>Màu cọ</span><input id="customizer-brush-color" type="color" value="${design.brushColor}" ${design.brushTip === 'eraser' ? 'disabled' : ''}/></label><div class="customizer-brush-tips">${[['round', '●', 'Cọ tròn'], ['marker', '▬', 'Marker'], ['calligraphy', '◆', 'Thư pháp'], ['neon', '✦', 'Neon'], ['eraser', '⌫', 'Tẩy']].map(([tip, symbol, label]) => `<button data-action="atelier-brush-tip" data-id="${tip}" class="${design.brushTip === tip ? 'active' : ''}"><i>${symbol}</i><span>${label}</span></button>`).join('')}</div><div class="customizer-brush-widths"><span>${design.brushTip === 'eraser' ? 'Cỡ tẩy' : 'Độ dày'}</span>${[[2, 'Mảnh'], [4, 'Vừa'], [7, 'Đậm']].map(([width, label]) => `<button data-action="atelier-brush-width" data-id="${width}" class="${design.brushWidth === width ? 'active' : ''}">${label}</button>`).join('')}</div></div><small class="customizer-brush-help">Bật bút rồi kéo trực tiếp trên sản phẩm. Đầu tẩy chỉ xóa các nét vẽ, không làm mất phom áo.</small></div>
+        <div class="customizer-control-block customizer-text-tools" data-customizer-section="text"><header><span><b>06</b><strong>Văn bản</strong></span><button class="customizer-add-text" data-action="atelier-sticker-add" data-id="text">${icon('plus')} Thêm chữ</button></header>${textEditor || '<p class="customizer-text-empty">Thêm chữ rồi chạm vào chữ trên sản phẩm để chỉnh nội dung, font và hiệu ứng.</p>'}</div>
+        <div class="customizer-control-block customizer-sticker-tools" data-customizer-section="details"><header><span><b>07</b><strong>Chi tiết & Sticker</strong></span><em>${design.stickers.filter(item => item.kind !== 'text').length} sticker</em></header><div class="customizer-detail-library">${designDetailGroups.map(group => `<section><small>${group.label}</small><div class="customizer-sticker-library">${group.items.map(([kind, symbol, label]) => `<button data-action="atelier-sticker-add" data-id="${kind}"><i>${symbol}</i><span>${label}</span></button>`).join('')}</div></section>`).join('')}</div><p class="customizer-sticker-empty">${selectedSticker?.kind !== 'text' ? 'Thêm hoặc chạm vào sticker trên sản phẩm để chỉnh sửa.' : 'Văn bản được chỉnh trong phần Văn bản phía trên.'}</p></div>
         <div class="customizer-edit-actions"><button data-action="atelier-customize-undo" ${design.strokes.length ? '' : 'disabled'}>${icon('arrow')} Hoàn tác cũ</button><button data-action="atelier-shape-reset">${icon('rotate')} Khôi phục phom</button></div>
       </aside>
     </div>

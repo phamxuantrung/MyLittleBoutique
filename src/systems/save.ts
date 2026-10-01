@@ -129,22 +129,29 @@ export function parseSave(raw: string | null): GameState {
       const designStrokeWidth = typeof value.designStrokeWidth === 'number' && Number.isFinite(value.designStrokeWidth) ? Math.max(.6, Math.min(4, value.designStrokeWidth)) : undefined;
       const designStickers = Array.isArray(value.designStickers) ? value.designStickers.slice(0, 24).flatMap((rawSticker, index) => {
         if (!rawSticker || typeof rawSticker !== 'object') return [];
-        const sticker = rawSticker as { id?: unknown; kind?: unknown; x?: unknown; y?: unknown; scale?: unknown; rotation?: unknown; color?: unknown };
-        if (typeof sticker.kind !== 'string' || !['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs'].includes(sticker.kind)) return [];
+        const sticker = rawSticker as { id?: unknown; kind?: unknown; x?: unknown; y?: unknown; scale?: unknown; rotation?: unknown; color?: unknown; text?: unknown; font?: unknown; fontSize?: unknown; curve?: unknown; effect?: unknown };
+        if (typeof sticker.kind !== 'string' || !['heart', 'star', 'bow', 'flower', 'round-collar', 'vest-collar', 'polo-collar', 'pleats', 'buttons', 'pocket', 'zipper', 'belt', 'seam', 'cuffs', 'text'].includes(sticker.kind)) return [];
         if (typeof sticker.x !== 'number' || typeof sticker.y !== 'number' || !Number.isFinite(sticker.x) || !Number.isFinite(sticker.y)) return [];
         return [{
           id: typeof sticker.id === 'string' && /^[a-z0-9-]{1,50}$/i.test(sticker.id) ? sticker.id : `sticker-${index}`,
-          kind: sticker.kind as 'heart' | 'star' | 'bow' | 'flower' | 'round-collar' | 'vest-collar' | 'polo-collar' | 'pleats' | 'buttons' | 'pocket' | 'zipper' | 'belt' | 'seam' | 'cuffs',
+          kind: sticker.kind as 'heart' | 'star' | 'bow' | 'flower' | 'round-collar' | 'vest-collar' | 'polo-collar' | 'pleats' | 'buttons' | 'pocket' | 'zipper' | 'belt' | 'seam' | 'cuffs' | 'text',
           x: Math.max(6, Math.min(114, sticker.x)),
           y: Math.max(7, Math.min(133, sticker.y)),
           scale: typeof sticker.scale === 'number' && Number.isFinite(sticker.scale) ? Math.max(.35, Math.min(2.5, sticker.scale)) : 1,
           rotation: typeof sticker.rotation === 'number' && Number.isFinite(sticker.rotation) ? Math.max(-180, Math.min(180, sticker.rotation)) : 0,
           color: typeof sticker.color === 'string' && /^#[0-9a-f]{6}$/i.test(sticker.color) ? sticker.color : '#d4429a',
+          ...(sticker.kind === 'text' ? {
+            text: typeof sticker.text === 'string' ? sticker.text.trim().slice(0, 18) || 'Boutique' : 'Boutique',
+            font: typeof sticker.font === 'string' && ['rounded', 'handwritten', 'serif'].includes(sticker.font) ? sticker.font as 'rounded' | 'handwritten' | 'serif' : 'rounded' as const,
+            fontSize: typeof sticker.fontSize === 'number' && Number.isFinite(sticker.fontSize) ? Math.max(8, Math.min(32, Math.round(sticker.fontSize))) : 14,
+            curve: typeof sticker.curve === 'number' && Number.isFinite(sticker.curve) ? Math.max(-60, Math.min(60, Math.round(sticker.curve))) : 0,
+            effect: typeof sticker.effect === 'string' && ['none', 'outline', 'shadow', 'glow'].includes(sticker.effect) ? sticker.effect as 'none' | 'outline' | 'shadow' | 'glow' : 'none' as const,
+          } : {}),
         }];
       }) : undefined;
       const designStrokes = Array.isArray(value.designStrokes) ? value.designStrokes.slice(0, 80).flatMap(rawStroke => {
         if (!rawStroke || typeof rawStroke !== 'object') return [];
-        const stroke = rawStroke as { color?: unknown; width?: unknown; points?: unknown };
+        const stroke = rawStroke as { color?: unknown; width?: unknown; points?: unknown; tip?: unknown };
         if (typeof stroke.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(stroke.color) || !Array.isArray(stroke.points)) return [];
         const points = stroke.points.slice(0, 240).flatMap(rawPoint => {
           if (!rawPoint || typeof rawPoint !== 'object') return [];
@@ -152,7 +159,7 @@ export function parseSave(raw: string | null): GameState {
           if (typeof point.x !== 'number' || typeof point.y !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return [];
           return [{ x: Math.max(0, Math.min(120, point.x)), y: Math.max(0, Math.min(140, point.y)) }];
         });
-        return points.length ? [{ color: stroke.color, width: Math.max(.6, finite(stroke.width, .6, 8)), points }] : [];
+        return points.length ? [{ color: stroke.color, width: Math.max(.6, finite(stroke.width, .6, 8)), points, tip: typeof stroke.tip === 'string' && ['round', 'marker', 'calligraphy', 'neon', 'eraser'].includes(stroke.tip) ? stroke.tip as 'round' | 'marker' | 'calligraphy' | 'neon' | 'eraser' : 'round' as const }] : [];
       }) : undefined;
       return {
         id: value.id.slice(0, 100),

@@ -25,12 +25,15 @@ export interface Product {
   designStickers?: ProductDesignSticker[];
 }
 export interface ProductDesignPoint { x: number; y: number; }
-export interface ProductDesignStroke { color: string; width: number; points: ProductDesignPoint[]; }
+export type ProductDesignBrushTip = 'round' | 'marker' | 'calligraphy' | 'neon' | 'eraser';
+export interface ProductDesignStroke { color: string; width: number; points: ProductDesignPoint[]; tip?: ProductDesignBrushTip; }
 export type ProductDesignMotif = 'none' | 'heart' | 'star' | 'bow' | 'flower' | 'stripes';
 export type ProductDesignMotifRepeat = 1 | 3 | 5;
 export type ProductDesignStickerKind = 'heart' | 'star' | 'bow' | 'flower'
   | 'round-collar' | 'vest-collar' | 'polo-collar'
-  | 'pleats' | 'buttons' | 'pocket' | 'zipper' | 'belt' | 'seam' | 'cuffs';
+  | 'pleats' | 'buttons' | 'pocket' | 'zipper' | 'belt' | 'seam' | 'cuffs' | 'text';
+export type ProductDesignTextFont = 'rounded' | 'handwritten' | 'serif';
+export type ProductDesignTextEffect = 'none' | 'outline' | 'shadow' | 'glow';
 export interface ProductDesignSticker {
   id: string;
   kind: ProductDesignStickerKind;
@@ -39,6 +42,11 @@ export interface ProductDesignSticker {
   scale: number;
   rotation: number;
   color: string;
+  text?: string;
+  font?: ProductDesignTextFont;
+  fontSize?: number;
+  curve?: number;
+  effect?: ProductDesignTextEffect;
 }
 export interface CustomProduct extends Product {
   custom: true;

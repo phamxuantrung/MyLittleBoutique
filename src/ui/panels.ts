@@ -229,9 +229,6 @@ export function trendPanel(s: GameState, _section: 'hot' | 'out' = 'hot') {
               <strong class="trend-card-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</strong>
               <div class="trend-card-meta">
                 <span class="trend-card-price">${money(sellPrice(s, p))}</span>
-                <span class="trend-card-stock ${inStock > 0 ? 'is-instock' : 'is-empty'}">
-                  ${inStock > 0 ? `Còn ${inStock} món` : 'Hết hàng'}
-                </span>
               </div>
               <button class="btn ${inStock > 0 ? 'btn-secondary' : 'btn-primary'} btn-small trend-card-action" data-action="nav" data-id="${inStock > 0 ? 'stock' : 'import'}">
                 ${icon(inStock > 0 ? 'hanger' : 'plus')} <span>${inStock > 0 ? 'Xem tủ đồ' : 'Nhập hàng'}</span>
@@ -271,10 +268,9 @@ export function trendPanel(s: GameState, _section: 'hot' | 'out' = 'hot') {
                 <strong class="trend-card-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</strong>
                 <div class="trend-card-meta">
                   <span class="trend-card-price">${money(sellPrice(s, p))}</span>
-                  <span class="trend-card-stock is-instock">Còn ${s.inventory[p.id] ?? 0} món</span>
                 </div>
                 <button class="btn btn-secondary btn-small trend-card-action" data-action="nav" data-id="stock">
-                  ${icon('tag')} <span>Điều chỉnh giá</span>
+                  ${icon('tag')} <span>Sửa giá</span>
                 </button>
               </div>
             </div>
@@ -373,7 +369,6 @@ export function decorCatalog(s: GameState, currentCategory = 'all') {
     <section class="decor-catalog-page">
     <div class="game-panel-header-card decor-panel-header">
       <div class="panel-header-left">
-        <span class="panel-header-icon decor-header-icon">${icon('hudDecor')}</span>
         <div class="panel-header-texts">
           <span class="panel-eyebrow">MAKE YOURSELF AT HOME</span>
           <h2>BÀY TRÍ SHOP</h2>
@@ -852,7 +847,7 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
           <div class="drawer-review-overview">
             <strong>Đánh giá khách hàng</strong>
             <span class="drawer-stars-meter" aria-label="${reviewCount ? `${reviewAverage.toFixed(1)} trên 5 sao` : 'Chưa có đánh giá'}"><i>★★★★★</i><i style="width:${reviewFill}%">★★★★★</i></span>
-            <small>${reviewCount.toLocaleString('vi-VN')} lượt · tại shop và online</small>
+            <small>${reviewCount.toLocaleString('vi-VN')} lượt</small>
           </div>
         </div>
         <div class="drawer-review-list">
@@ -1718,7 +1713,7 @@ export function debtWarningModal(s: GameState, staff: StaffFinancialNotice = { p
     <div class="debt-warning-modal finance-report-modal ${finalDay ? 'is-final' : ''} ${hasDeparture ? 'has-departure' : ''}">
       <header class="finance-report-header">
         <span class="import-balance finance-report-balance">${icon('importMoney')} ${money(s.money)}</span>
-        <div><span class="eyebrow">BÁO CÁO CUỐI NGÀY</span><h2>Tài chính</h2></div>
+        <div><h2>Tài chính</h2></div>
         <button class="staff-modal-close" data-action="summary" aria-label="Đóng báo cáo">${icon('close')}</button>
       </header>
       <section class="finance-report-hero">
@@ -1791,7 +1786,7 @@ export function upgradeModal(s: GameState) {
         </ul>
       </section>
       <aside class="upgrade-checklist">
-        <header><small>ĐIỀU KIỆN · CẤP ${s.level + 1}</small><h3>${canUpgrade ? 'Đã sẵn sàng nâng cấp' : 'Hoàn thành hai mục tiêu'}</h3><b class="upgrade-readiness ${canUpgrade ? 'is-ready' : ''}">${icon(canUpgrade ? 'check' : 'clock')} ${canUpgrade ? 'Sẵn sàng' : 'Đang tích lũy'}</b></header>
+        <header><small>ĐIỀU KIỆN · CẤP ${s.level + 1}</small><h3>${canUpgrade ? 'Đã sẵn sàng nâng cấp' : 'Hoàn thành hai mục tiêu'}</h3>${canUpgrade ? `<b class="upgrade-readiness is-ready">${icon('check')} Sẵn sàng</b>` : ''}</header>
         <article class="${hasXp ? 'is-met' : ''}"><span>${icon('star')}</span><p><small>Kinh nghiệm</small><strong>${s.xp.toLocaleString('vi-VN')} / ${next.xp.toLocaleString('vi-VN')} XP</strong></p><b>${hasXp ? `${icon('check')} Đã đạt` : `Thiếu ${(next.xp - s.xp).toLocaleString('vi-VN')} XP`}</b><progress max="100" value="${xpPercent}">${xpPercent}%</progress></article>
         <article class="${canAfford ? 'is-met' : ''}"><span>${icon('coin')}</span><p><small>Chi phí nâng cấp</small><strong>${money(next.cost)}</strong><em>Đang có ${money(s.money)}</em></p><b>${canAfford ? `${icon('check')} Đủ tiền` : `Thiếu ${money(next.cost - s.money)}`}</b></article>
         <button class="btn btn-primary upgrade-submit" data-action="upgrade" ${!canUpgrade ? 'disabled' : ''}>${icon('trophy')} Nâng cấp lên Cấp ${s.level + 1} ${icon('arrow')}</button>

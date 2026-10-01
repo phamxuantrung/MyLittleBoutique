@@ -71,7 +71,7 @@ function productCard(s: GameState, p: Product, quantity: number) {
   </article>`;
 }
 
-export function lookbook(s: GameState, f: CatalogFilters, lookQtys: Record<string, number> = {}) {
+export function lookbook(s: GameState, f: CatalogFilters, lookQtys: Record<string, number> = {}, expandedPurchase = '') {
   const supplier = supplierFor(s);
   const list = looks.filter(look => {
     const items = look.items.map(id => products.find(p => p.id === id)!);
@@ -102,6 +102,7 @@ export function lookbook(s: GameState, f: CatalogFilters, lookQtys: Record<strin
         const internationalDays = items.some(item => item.level >= 4 || item.buyPrice >= 200000) ? 3 : 0;
         const deliveryMinDays = internationalDays + supplier.deliveryDays;
         const deliveryMaxDays = deliveryMinDays + (supplier.deliveryDays && supplier.reliability < 1 ? 1 : 0);
+        const purchaseOpen = expandedPurchase === `look:${look.id}`;
 
         return `<article class="import-card look-card ${locked ? 'locked' : ''}" data-look-id="${look.id}">
           <div class="import-visual look-visual" style="--item-color:${fashionStyles[look.style].color}22">
@@ -151,8 +152,7 @@ export function lookbook(s: GameState, f: CatalogFilters, lookQtys: Record<strin
               </div>
             </div>
 
-            <!-- Bộ chọn số lượng và nút nhập nằm chung một hàng -->
-            <div class="import-purchase-row">
+            ${purchaseOpen ? `<div class="import-purchase-row is-open">
               <div class="import-qty-section">
                 <div class="qty-header-row">
                   <span class="qty-label">Số lượng bộ outfit:</span>
@@ -167,11 +167,15 @@ export function lookbook(s: GameState, f: CatalogFilters, lookQtys: Record<strin
               <button class="btn ${locked ? 'btn-muted' : 'btn-primary'} import-btn" data-action="buy-look" data-id="${look.id}" ${locked || qty < supplier.minOrder || totalCost > s.money || isMaxed ? 'disabled' : ''}>
                 ${icon(locked ? 'lock' : deliveryMinDays ? 'truck' : 'bag')}
                 <span class="import-btn-copy">
-                  <b>${locked ? `Mở đủ ở cấp ${level}` : deliveryMinDays ? `Đặt ×${qty} bộ` : qty > 1 ? `Nhập ×${qty} bộ` : 'Nhập trọn bộ'}</b>
+                  <b>Xác nhận nhập</b>
                   ${!locked && qty >= supplier.minOrder ? `<small>${money(totalCost)}</small>` : ''}
                 </span>
               </button>
-            </div>
+            </div>` : `<div class="import-purchase-collapsed">
+              <button class="btn ${locked ? 'btn-muted' : 'btn-primary'} import-btn import-purchase-trigger" data-action="import-purchase-open" data-id="look:${look.id}" ${locked ? 'disabled' : ''}>
+                ${icon(locked ? 'lock' : 'bag')}<span class="import-btn-copy"><b>${locked ? `Mở đủ ở cấp ${level}` : 'Nhập hàng'}</b></span>
+              </button>
+            </div>`}
           </div>
         </article>`;
       }).join('')}
@@ -440,8 +444,7 @@ export function inventoryPanel(s: GameState, category = 'all', mode: 'stock' | '
                 <div class="inv-sell-control">
                   <label for="inv-price-${p.id}">Giá bán ra</label>
                   <div class="inv-select-wrapper">
-                    <div class="inv-price-field"><input id="inv-price-${p.id}" class="inv-price-input" data-price="${p.id}" inputmode="numeric" enterkeyhint="done" autocomplete="off" value="${sell.toLocaleString('vi-VN')}" aria-describedby="price-hint-${p.id}" aria-label="Giá bán ${escapeHtml(p.name)}"><span class="inv-price-currency">₫</span></div>
-                    <button class="inv-price-save" data-action="inventory-price-save" data-id="${p.id}">Lưu</button>
+                    <div class="inv-price-field"><input id="inv-price-${p.id}" class="inv-price-input" data-price="${p.id}" inputmode="numeric" enterkeyhint="done" autocomplete="off" value="${sell.toLocaleString('vi-VN')}" aria-describedby="price-hint-${p.id}" aria-label="Giá bán ${escapeHtml(p.name)}, tự động lưu khi nhập xong"><span class="inv-price-currency">₫</span></div>
                   </div>
                 </div>
                 <div id="price-hint-${p.id}" class="inv-price-hint ${priceTone}">${priceHint}</div>
@@ -466,7 +469,7 @@ export function inventoryPanel(s: GameState, category = 'all', mode: 'stock' | '
    NHẬP HÀNG - importPanel: Nhập hàng với giảm giá bulk + order quốc tế
    ============================================================================== */
 
-function importProductCard(s: GameState, p: Product, qty: number) {
+function importProductCard(s: GameState, p: Product, qty: number, purchaseOpen: boolean) {
   const locked = p.level > s.level;
   const basePrice = buyPrice(s, p);
   const unitPrice = basePrice;
@@ -515,7 +518,7 @@ function importProductCard(s: GameState, p: Product, qty: number) {
         ` : ''}
       </div>
 
-      <div class="import-purchase-row">
+      ${purchaseOpen ? `<div class="import-purchase-row is-open">
         <div class="import-qty-section">
           <div class="qty-header-row">
             <span class="qty-label">Chọn số lượng:</span>
@@ -532,16 +535,20 @@ function importProductCard(s: GameState, p: Product, qty: number) {
           ${locked || qty < supplier.minOrder || totalCost > s.money || currentStock + pendingQty + qty > 999 ? 'disabled' : ''}>
           ${icon(locked ? 'lock' : supplierDelivery ? 'truck' : 'box')}
           <span class="import-btn-copy">
-            <b>${locked ? `Mở ở cấp ${p.level}` : qty < supplier.minOrder ? `Tối thiểu ${supplier.minOrder} món` : supplierDelivery ? 'Đặt hàng' : 'Nhập vào kho'}</b>
+            <b>Xác nhận nhập</b>
             ${!locked && qty >= supplier.minOrder ? `<small>${money(totalCost)}</small>` : ''}
           </span>
         </button>
-      </div>
+      </div>` : `<div class="import-purchase-collapsed">
+        <button class="btn ${locked ? 'btn-muted' : 'btn-primary'} import-btn import-purchase-trigger" data-action="import-purchase-open" data-id="product:${p.id}" ${locked ? 'disabled' : ''}>
+          ${icon(locked ? 'lock' : 'box')}<span class="import-btn-copy"><b>${locked ? `Mở ở cấp ${p.level}` : 'Nhập hàng'}</b></span>
+        </button>
+      </div>`}
     </div>
   </article>`;
 }
 
-function importMaterialCard(s: GameState, material: typeof atelierMaterials[number], qty: number) {
+function importMaterialCard(s: GameState, material: typeof atelierMaterials[number], qty: number, purchaseOpen: boolean) {
   const supplier = supplierFor(s);
   const locked = s.level < material.level;
   const unitPrice = Math.round(material.price * currentEvent(s).discount * supplier.priceFactor);
@@ -563,16 +570,20 @@ function importMaterialCard(s: GameState, material: typeof atelierMaterials[numb
         <div class="import-cost-summary"><span class="total-label">${icon('coin')} Tổng (${qty} đơn vị):</span><strong class="total-amount">${money(totalCost)}</strong></div>
         ${supplier.deliveryDays ? `<div class="ship-lead-time">${icon('truck')} Vận chuyển: <strong>${supplier.deliveryDays}–${deliveryMax} ngày</strong> về kho</div>` : '<div class="ship-lead-time is-instant">✓ Nhận ngay vào kho nguyên liệu</div>'}
       </div>
-      <div class="import-purchase-row">
+      ${purchaseOpen ? `<div class="import-purchase-row is-open">
         <div class="import-qty-section"><div class="qty-header-row"><span class="qty-label">Số lượng:</span></div><div class="traditional-qty-control">
           <button type="button" data-action="material-qty-step" data-material="${material.id}" data-id="-1" aria-label="Giảm số lượng" ${qty <= supplier.minOrder ? 'disabled' : ''}>${icon('minus')}</button>
           <input class="material-import-qty-input" data-material="${material.id}" type="number" inputmode="numeric" min="${supplier.minOrder}" max="30" value="${qty}" aria-label="Số lượng ${escapeHtml(material.name)}" />
           <button type="button" data-action="material-qty-step" data-material="${material.id}" data-id="1" aria-label="Tăng số lượng" ${qty >= 30 ? 'disabled' : ''}>${icon('plus')}</button>
         </div></div>
         <button class="btn ${locked ? 'btn-muted' : 'btn-primary'} import-btn" data-action="order-material" data-id="${material.id}" ${locked || totalCost > s.money || currentStock + pendingQty + qty > 9999 ? 'disabled' : ''}>
-          ${icon(locked ? 'lock' : supplier.deliveryDays ? 'truck' : 'box')}<span class="import-btn-copy"><b>${locked ? `Mở ở cấp ${material.level}` : supplier.deliveryDays ? 'Đặt nguyên liệu' : 'Nhập vào kho'}</b>${!locked ? `<small>${money(totalCost)}</small>` : ''}</span>
+          ${icon(locked ? 'lock' : supplier.deliveryDays ? 'truck' : 'box')}<span class="import-btn-copy"><b>Xác nhận nhập</b>${!locked ? `<small>${money(totalCost)}</small>` : ''}</span>
         </button>
-      </div>
+      </div>` : `<div class="import-purchase-collapsed">
+        <button class="btn ${locked ? 'btn-muted' : 'btn-primary'} import-btn import-purchase-trigger" data-action="import-purchase-open" data-id="material:${material.id}" ${locked ? 'disabled' : ''}>
+          ${icon(locked ? 'lock' : 'box')}<span class="import-btn-copy"><b>${locked ? `Mở ở cấp ${material.level}` : 'Nhập hàng'}</b></span>
+        </button>
+      </div>`}
     </div>
   </article>`;
 }
@@ -606,7 +617,8 @@ export function importPanel(
   quantityOrMap: number | Record<string, number> = {},
   mode: 'products' | 'looks' | 'materials' = 'products',
   lookQtys: Record<string, number> = {},
-  materialQtys: Record<string, number> = {}
+  materialQtys: Record<string, number> = {},
+  expandedPurchase = ''
 ) {
   const f: CatalogFilters = typeof filterArg === 'string' ? { ...defaultFilters(), category: filterArg } : filterArg;
   const activeSupplier = supplierFor(s);
@@ -641,10 +653,10 @@ export function importPanel(
           `<button class="filter cat-chip ${id === f.style ? 'active' : ''}" data-action="import-look-style" data-id="${id}" aria-pressed="${id === f.style}">${label}</button>`
         ).join('')}
       </div>
-      ${lookbook(s, f, lookQtys)}
+      ${lookbook(s, f, lookQtys, expandedPurchase)}
     ` : mode === 'materials' ? `
       <div class="import-grid import-horizontal-rail material-import-grid" aria-label="Danh sách vật liệu">
-        ${atelierMaterials.map(material => importMaterialCard(s, material, getMaterialQty(material.id))).join('')}
+        ${atelierMaterials.map(material => importMaterialCard(s, material, getMaterialQty(material.id), expandedPurchase === `material:${material.id}`)).join('')}
       </div>
     ` : `
       <div class="inventory-toolbar import-filter-toolbar">
@@ -663,7 +675,7 @@ export function importPanel(
       </div>
 
       <div class="import-grid import-horizontal-rail product-import-grid" aria-label="Danh sách sản phẩm, vuốt ngang để xem thêm">
-        ${list.map(p => importProductCard(s, p, getQty(p.id))).join('')}
+        ${list.map(p => importProductCard(s, p, getQty(p.id), expandedPurchase === `product:${p.id}`)).join('')}
       </div>
 
       ${list.length === 0 ? `

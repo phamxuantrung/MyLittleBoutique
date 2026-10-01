@@ -317,7 +317,7 @@
   text-shadow: -1px -1px 0 #633452, 1px -1px 0 #633452, -1px 1px 0 #633452, 1px 1px 0 #633452;
 }
 .sale-shift-timer strong {
-  font-family: 'Mali', var(--font-main);
+  font-family: var(--font-main);
   font-size: clamp(22px, 3.4vw, 30px);
   font-weight: 900;
   line-height: 1.05;
@@ -1518,13 +1518,13 @@ dialog.dialog-serve {
 
 .item-stock-badge {
   color: #64748b;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .dialog-serve .item-stock-badge {
   color: #64748b;
   font-size: 7.5px;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1650,7 +1650,7 @@ dialog.dialog-serve {
 .lbl-budget-comp {
   font-size: 11px;
   color: #94a3b8;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .checkout-match-block {
@@ -2223,7 +2223,7 @@ dialog.dialog-result {
   content: '|';
   margin-right: 8px;
   color: #bda3b3;
-  font-weight: 400;
+  font-weight: 700;
 }
 .dialog-serve .budget-row { border-top-style: solid; padding-top: 7px; }
 
@@ -2241,7 +2241,7 @@ dialog.dialog-result {
 
 .dialog-serve .studio-stock-count {
   color: #967b8d;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .dialog-serve .studio-categories { gap: 12px; padding: 0; }

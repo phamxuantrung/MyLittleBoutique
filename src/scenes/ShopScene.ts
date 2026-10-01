@@ -170,6 +170,13 @@ export class ShopScene extends Phaser.Scene {
   private isDraggingPiece = false;
   private selectionClearBlockedUntil = 0;
   private currentTab = 'shop';
+  private pointerIsCoveredByUi(pointer: Phaser.Input.Pointer) {
+    const nativeEvent = pointer.event as PointerEvent | undefined;
+    if (!nativeEvent || typeof nativeEvent.clientX !== 'number' || typeof nativeEvent.clientY !== 'number') return false;
+    const topElement = document.elementFromPoint(nativeEvent.clientX, nativeEvent.clientY);
+    const canvas = this.game.canvas;
+    return !!topElement && topElement !== canvas && !canvas.contains(topElement);
+  }
   private furniturePixelHitTest = (_hitArea: unknown, x: number, y: number, gameObject: Phaser.GameObjects.GameObject) => {
     const image = gameObject as Phaser.GameObjects.Image;
     const centerX = Math.round(x);
@@ -763,7 +770,7 @@ export class ShopScene extends Phaser.Scene {
         let longPressPointer: Phaser.Input.Pointer | undefined;
 
         img.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-          if (this.currentTab !== 'shop') return;
+          if (this.currentTab !== 'shop' || this.pointerIsCoveredByUi(pointer)) return;
           downX = pointer.x; downY = pointer.y; downTime = Date.now();
 
           if (this.edit) {
@@ -799,7 +806,7 @@ export class ShopScene extends Phaser.Scene {
           longPressTimer?.remove(false);
           longPressTimer = undefined;
           longPressPointer = undefined;
-          if (Date.now() < this.selectionClearBlockedUntil) return;
+          if (Date.now() < this.selectionClearBlockedUntil || this.pointerIsCoveredByUi(pointer)) return;
           const isDialogOpen = document.querySelector<HTMLDialogElement>('#game-dialog')?.open;
           if (this.currentTab !== 'shop' || this.edit || isDialogOpen) return;
           const dist = Phaser.Math.Distance.Between(downX, downY, pointer.x, pointer.y);

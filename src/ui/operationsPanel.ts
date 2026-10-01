@@ -1,6 +1,6 @@
-import { products } from '../data/catalog';
+import { customers, products } from '../data/catalog';
 import type { GameState } from '../types';
-import { escapeHtml, money } from './format';
+import { avatarImage, escapeHtml, money } from './format';
 import { icon } from './icons';
 import { gameDate } from '../systems/calendar';
 import { RETURN_EXCHANGE_SHIPPING_FEE } from '../systems/operations';
@@ -8,12 +8,19 @@ import { RETURN_EXCHANGE_SHIPPING_FEE } from '../systems/operations';
 const categoryLabels: Record<string, string> = { tops: 'Áo', bottoms: 'Quần & chân váy', dresses: 'Đầm', sets: 'Set phối', outerwear: 'Áo khoác', shoes: 'Giày', bags: 'Túi', accessories: 'Phụ kiện' };
 const locked = (level: number, text: string) => `<div class="operations-locked">${icon('lock')}<span>Mở ở cấp ${level}</span><small>${text}</small></div>`;
 
+const careCustomerAvatar = (name: string) => {
+  const exactCustomer = customers.find(customer => customer.name.toLocaleLowerCase('vi') === name.toLocaleLowerCase('vi'));
+  const seed = [...name].reduce((total, character) => total + character.codePointAt(0)!, 0);
+  const appearance = exactCustomer ?? customers[seed % customers.length];
+  return avatarImage({ ...appearance, id: `care-${seed}`, name });
+};
+
 export function customerCareModal(s: GameState) {
   const activeClaims = s.returnCases.filter(item => item.availableDay <= s.day);
   const returnsHtml = s.level < 3 ? locked(3, 'Khách có thể yêu cầu đổi trả sau khi mua.') : activeClaims.length ? activeClaims.map(claim => {
     const product = products.find(item => item.id === claim.productId);
     return `<article class="case-row return-case-row">
-      <span class="case-customer-mark">${icon('user')}</span>
+      <span class="case-customer-mark">${careCustomerAvatar(claim.customerName)}</span>
       <div class="return-case-info">
         <div class="return-case-title"><strong>${escapeHtml(claim.customerName)}</strong><span>${escapeHtml(product?.name ?? 'Sản phẩm')}</span></div>
         <p>${escapeHtml(claim.reason)}</p>
@@ -28,7 +35,7 @@ export function customerCareModal(s: GameState) {
   }).join('') : `<p class="operations-empty">${s.returnCases.length ? `${s.returnCases.length} yêu cầu sẽ xuất hiện vào ngày tới.` : 'Hiện không có yêu cầu đổi trả.'}</p>`;
 
   const vipHtml = s.level < 4 ? locked(4, 'Chuẩn bị đúng gu, phân loại và ngân sách cho đơn đặt trước.') : s.vipAppointments.length ? s.vipAppointments.map(appointment => `<article class="case-row vip-row">
-    <span class="case-customer-mark is-vip">${icon('star')}</span>
+    <span class="case-customer-mark is-vip">${careCustomerAvatar(appointment.customerName)}</span>
     <div class="vip-customer-info"><strong>${escapeHtml(appointment.customerName)}</strong><div class="vip-meta"><span>${appointment.style}</span><span>${categoryLabels[appointment.category]}</span><span>${appointment.minItems} món</span></div><small>Ngân sách <b>${money(appointment.budget)}</b> · thưởng <b>${money(appointment.reward)}</b></small></div>
     <div class="vip-row-actions">${appointment.status === 'offered' ? `<button class="primary-small" data-action="vip-accept" data-id="${appointment.id}">Nhận đơn</button><button class="danger-link" data-action="vip-decline" data-id="${appointment.id}">Từ chối</button>` : appointment.scheduledDay <= s.day ? '<b class="status-wait is-ready">Sẽ tới lấy khi mở cửa</b>' : `<b class="status-wait">Đã đặt trước · ${gameDate(appointment.scheduledDay)}</b>`}</div>
   </article>`).join('') : '<p class="operations-empty">Chưa có đơn đặt trước VIP. Lời mời mới thường xuất hiện mỗi 3 ngày.</p>';

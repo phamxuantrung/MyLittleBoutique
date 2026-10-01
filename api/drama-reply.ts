@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { evaluateDramaReply } from './_dramaCore';
+import { evaluateDramaReply } from './_dramaCore.js';
 
 type VercelRequest = IncomingMessage & { body?: unknown };
 

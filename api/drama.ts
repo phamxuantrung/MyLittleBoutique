@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { generateDrama } from './_dramaCore';
+import { generateDrama } from './_dramaCore.js';
 
 type VercelRequest = IncomingMessage & { body?: unknown };
 

@@ -1,1 +1,1 @@
-export { evaluateDramaReply, generateDrama } from '../api/_dramaCore';
+export { evaluateDramaReply, generateDrama } from '../api/_dramaCore.js';

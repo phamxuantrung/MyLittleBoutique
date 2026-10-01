@@ -1,4 +1,20 @@
-import type { DramaRequest } from '../src/systems/drama';
+interface DramaRequest {
+  day: number;
+  shopName: string;
+  customerName: string;
+  customerHandle: string;
+  personality: string;
+  products: string[];
+  total: number;
+  budget: number;
+  score: number;
+  success: boolean;
+  viral: boolean;
+  reason: string;
+  heat: number;
+  trust: number;
+  recentDramas?: string[];
+}
 
 const schema = {
   type: 'object', additionalProperties: false,

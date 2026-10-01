@@ -139,14 +139,8 @@ export class GameUI {
   private displayHoldRepeat = 0;
   private displayHoldStart?: { x: number; y: number };
   private suppressDisplayAddClick = false;
-  private musicAuraLastUpdate = 0;
-  private musicAuraElement?: HTMLElement;
-  private musicWaveBars: HTMLElement[] = [];
-  private musicAuraWasEnabled = false;
-
   constructor(private store: GameStore, private audio: AudioSystem) {
     this.shell(); this.render(); this.bind();
-    this.animateMusicAura();
     this.queueDisplayGuide();
     this.queueCampaignUnlock();
     if (this.store.state.gameOverReason) {
@@ -365,9 +359,7 @@ export class GameUI {
 
           <!-- In-Game Full View Window for Sub-Panels (Stock, Trend, Social) -->
           <div id="content-panel" class="game-content-panel" hidden></div>
-          <div id="music-edge-aura" class="music-edge-aura" aria-hidden="true">
-            <div class="music-edge-wave">${Array.from({ length: 48 }, () => '<i></i>').join('')}</div>
-          </div>
+          <div id="music-edge-aura" class="music-edge-aura" aria-hidden="true"></div>
         </div>
       </div>
 
@@ -379,47 +371,6 @@ export class GameUI {
       <div id="announcer" class="sr-only" aria-live="polite"></div>`;
     this.dialog = document.querySelector('#game-dialog')!;
     this.updateDockVisibility();
-  }
-  private animateMusicAura(time = 0) {
-    // 25 fps is enough for a soft light pulse and keeps the canvas drag loop light on mobile.
-    if (time - this.musicAuraLastUpdate >= 40) {
-      this.musicAuraLastUpdate = time;
-      const aura = this.musicAuraElement ?? document.querySelector<HTMLElement>('#music-edge-aura') ?? undefined;
-      this.musicAuraElement = aura;
-      const enabled = this.store.state.music && this.store.state.musicTrack !== 'boutique-bloom';
-      if (aura) {
-        aura.classList.toggle('is-active', enabled);
-        const pulse = enabled ? this.audio.musicPulse() : 0;
-        aura.style.setProperty('--music-aura-opacity', enabled ? String(.3 + pulse * .7) : '0');
-        aura.style.setProperty('--music-aura-spread', `${24 + pulse * 38}px`);
-        aura.style.setProperty('--music-aura-brightness', String(1 + pulse * .9));
-        aura.style.setProperty('--music-wave-glow', `${6 + pulse * 13}px`);
-        if (!this.musicWaveBars.length) this.musicWaveBars = Array.from(aura.querySelectorAll<HTMLElement>('.music-edge-wave i'));
-        if (enabled) this.musicWaveBars.forEach((bar, index) => {
-          const x = index / Math.max(1, this.musicWaveBars.length - 1);
-          const peak = (center: number, width: number, strength: number) => Math.exp(-Math.pow((x - center) / width, 2)) * strength;
-          // Các cụm phổ lớn, vừa và nhỏ giống waveform tham chiếu; dao động nhỏ
-          // trong từng cụm khiến mỗi thanh co lên xuống thay vì cả dải phóng to.
-          const envelope = Math.min(1,
-            peak(.11, .055, 1) +
-            peak(.32, .09, .58) +
-            peak(.62, .065, .38) +
-            peak(.86, .08, .22)
-          );
-          const flicker = .42 + Math.abs(Math.sin(time * .011 + index * .79)) * .4
-            + Math.abs(Math.sin(time * .006 - index * .31)) * .18;
-          const height = .045 + envelope * flicker * (.72 + pulse * .38);
-          bar.style.transform = `scaleY(${height.toFixed(3)})`;
-          bar.style.opacity = String(.46 + Math.min(1, height) * .54);
-        });
-        else if (this.musicAuraWasEnabled) this.musicWaveBars.forEach(bar => {
-            bar.style.transform = 'scaleY(.18)';
-            bar.style.opacity = '.45';
-        });
-        this.musicAuraWasEnabled = enabled;
-      }
-    }
-    requestAnimationFrame(nextTime => this.animateMusicAura(nextTime));
   }
   private bind() {
     const protectCanvasFromUiPointer = (event: PointerEvent) => {
@@ -1954,6 +1905,7 @@ export class GameUI {
     const s = this.store.state;
     const crisisWarning = !!s.reputationCrisis || s.loanOverdueDays >= 5 || s.rentOverdueDays >= 5;
     document.querySelector<HTMLElement>('.game-stage')?.classList.toggle('is-crisis-warning', crisisWarning);
+    document.querySelector<HTMLElement>('#music-edge-aura')?.classList.toggle('is-active', s.music && s.musicTrack !== 'boutique-bloom');
     const isOpen = s.phase === 'open';
     document.querySelector<HTMLElement>('.game-stage')?.classList.toggle('is-sale-open', isOpen);
     document.querySelector<HTMLElement>('#toasts')?.classList.toggle('is-sale-open', isOpen);

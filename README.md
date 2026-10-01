@@ -20,7 +20,13 @@ npm run test         # Kiểm thử luật chơi, kinh tế, lưu trữ
 npm run test:e2e     # Kiểm thử Chrome, cần Google Chrome đã cài
 ```
 
-Để chơi từ điện thoại cùng mạng Wi-Fi, chạy `npm run dev -- --host 0.0.0.0`, rồi mở địa chỉ Network do Vite hiển thị. Máy tính cần cho phép kết nối qua firewall. Khi phát hành, đưa thư mục `dist/` lên dịch vụ static hosting có HTTPS; không cần backend.
+Để chơi từ điện thoại cùng mạng Wi-Fi, chạy `npm run dev -- --host 0.0.0.0`, rồi mở địa chỉ Network do Vite hiển thị. Máy tính cần cho phép kết nối qua firewall.
+
+## Boutique Buzz AI
+
+Game luôn có kho drama dự phòng và vẫn chơi đầy đủ khi không có mạng. Để bật nội dung AI khi chạy local, sao chép `.env.example` thành `.env`, điền `OPENAI_API_KEY`, rồi chạy lại `npm run dev`. API key chỉ được đọc bởi middleware phía server và không được đưa vào bundle trình duyệt.
+
+Khi phát hành dạng static từ thư mục `dist/`, game tự dùng drama dự phòng. Muốn bật AI trên production, hãy triển khai kèm serverless function `api/drama.ts` và đặt `OPENAI_API_KEY` trong biến môi trường của dịch vụ hosting.
 
 ## Chơi như thế nào
 

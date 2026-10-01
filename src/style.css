@@ -39055,3 +39055,1259 @@ dialog.dialog-serve[open].is-patience-urgent {
     animation-duration: 2.4s;
   }
 }
+
+
+/* Boutique Buzz: compact social drama cards. */
+.boutique-buzz {
+  display: grid;
+  gap: 9px;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid #f0d5e5;
+  background: linear-gradient(155deg, #fff8fc 0%, #fff 58%, #fff3f7 100%);
+}
+.boutique-buzz-header,
+.boutique-buzz-header > div,
+.boutique-buzz-stats,
+.boutique-drama-top,
+.boutique-drama-author {
+  display: flex;
+  align-items: center;
+}
+.boutique-buzz-header { justify-content: space-between; gap: 12px; }
+.boutique-buzz-header > div:first-child { gap: 8px; min-width: 0; }
+.boutique-buzz-header > div:first-child > span {
+  width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 34px;
+  border-radius: 12px; color: #fff; background: linear-gradient(145deg, #f04483, #bd2867);
+  box-shadow: 0 5px 12px rgba(198, 38, 104, .25);
+}
+.boutique-buzz-header .icon { width: 18px; height: 18px; }
+.boutique-buzz-header p { display: grid; gap: 1px; margin: 0; }
+.boutique-buzz-header p small { color: #d52d72; font-size: 8px; font-weight: 950; letter-spacing: .14em; }
+.boutique-buzz-header p strong { overflow: hidden; color: #503047; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.boutique-buzz-stats { gap: 5px; }
+.boutique-buzz-stats > span {
+  min-width: 58px; padding: 4px 7px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px;
+  border: 1px solid #efd0df; border-radius: 10px; background: rgba(255,255,255,.86);
+}
+.boutique-buzz-stats small { color: #9b7289; font-size: 7px; font-weight: 850; }
+.boutique-buzz-stats b { color: #d32f72; font-size: 12px; }
+.boutique-buzz-list { display: grid; gap: 9px; }
+.boutique-drama-card {
+  position: relative; padding: 10px; overflow: hidden;
+  border: 1px solid #efcada; border-radius: 14px; background: rgba(255,255,255,.95);
+  box-shadow: 0 4px 0 #f2dce6;
+}
+.boutique-drama-card.is-live { border-color: #f28ca7; }
+.boutique-drama-card.is-live::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 3px;
+  background: linear-gradient(#ff496f, #d52d72);
+}
+.boutique-drama-top { justify-content: space-between; gap: 8px; }
+.boutique-drama-top time { color: #a88699; font-size: 8px; font-weight: 750; }
+.boutique-drama-live {
+  display: inline-flex; align-items: center; gap: 4px; color: #dc355f;
+  font-size: 7px; font-weight: 950; letter-spacing: .09em;
+}
+.boutique-drama-live i {
+  width: 6px; height: 6px; border-radius: 50%; background: #ff355f;
+  box-shadow: 0 0 0 3px rgba(255,53,95,.15); animation: buzz-live-dot .9s ease-in-out infinite;
+}
+.boutique-drama-live .icon { width: 10px; height: 10px; }
+.boutique-drama-card h3 { margin: 5px 0 7px; color: #522c45; font-size: 13px; line-height: 1.2; }
+.boutique-drama-author { gap: 6px; }
+.boutique-drama-author > span {
+  width: 25px; height: 25px; display: grid; place-items: center; flex: 0 0 25px;
+  border-radius: 50%; color: #fff; background: linear-gradient(145deg, #ef78ad, #9b58c8);
+  font-size: 10px; font-weight: 950;
+}
+.boutique-drama-author p { display: grid; min-width: 0; margin: 0; line-height: 1.1; }
+.boutique-drama-author strong { color: #593348; font-size: 9px; }
+.boutique-drama-author small { color: #a37c92; font-size: 7px; }
+.boutique-drama-author em {
+  margin-left: auto; padding: 2px 5px; border-radius: 6px; color: #9d3470;
+  background: #fce6f2; font-size: 6px; font-style: normal; font-weight: 950;
+}
+.boutique-drama-post { margin: 8px 0; color: #49303f; font-size: 10px; font-weight: 720; line-height: 1.4; }
+.boutique-drama-comments {
+  display: grid; gap: 3px; padding: 6px 7px; border-radius: 9px; background: #fff5fa;
+}
+.boutique-drama-comments p { margin: 0; color: #76566a; font-size: 8px; line-height: 1.3; }
+.boutique-drama-comments b { color: #c73878; }
+.boutique-drama-actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; margin-top: 8px; }
+.boutique-drama-actions > small { grid-column: 1 / -1; color: #805c70; font-size: 8px; font-weight: 900; }
+.boutique-drama-actions button {
+  min-height: 46px; padding: 6px; border: 1px solid #eac4d8; border-radius: 9px;
+  color: #694157; background: #fff; font-size: 7.5px; font-weight: 750; line-height: 1.25;
+}
+.boutique-drama-actions button:hover { border-color: #de4d91; background: #fff2f8; transform: translateY(-1px); }
+.boutique-drama-actions button span {
+  display: block; margin-bottom: 3px; color: #cd3476; font-size: 7px; font-weight: 950; text-transform: uppercase;
+}
+.boutique-drama-actions button:nth-of-type(2) { border-color: #f08ba9; background: #fff0f4; }
+.boutique-drama-outcome {
+  margin-top: 8px; padding: 7px 8px; border: 1px solid #cfe8dc; border-radius: 9px; background: #f2fbf7;
+}
+.boutique-drama-outcome small { color: #378969; font-size: 7px; font-weight: 950; }
+.boutique-drama-outcome blockquote { margin: 4px 0; color: #55364a; font-size: 9px; font-weight: 850; }
+.boutique-drama-outcome p { margin: 0; color: #6f5b67; font-size: 8px; }
+@keyframes buzz-live-dot { 50% { opacity: .35; transform: scale(.72); } }
+
+@media (max-width: 700px) {
+  .boutique-buzz { padding: 8px; }
+  .boutique-buzz-header { align-items: flex-start; }
+  .boutique-buzz-stats > span { min-width: 48px; padding: 3px 5px; }
+  .boutique-drama-actions { grid-template-columns: 1fr; }
+  .boutique-drama-actions > small { grid-column: auto; }
+  .boutique-drama-actions button { min-height: 36px; text-align: left; }
+}
+
+
+.social-drawer-header { gap: 8px; }
+.boutique-drama-test {
+  min-height: 30px; margin-left: auto; padding: 5px 9px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto;
+  border: 1px solid #ec9fbd; border-radius: 9px; color: #bd2f6d;
+  background: linear-gradient(180deg, #fff8fc, #ffe9f3);
+  box-shadow: 0 3px 0 #ecc4d5; font-size: 8px; font-weight: 950;
+}
+.boutique-drama-test:hover { transform: translateY(-1px); background: #fff; }
+.boutique-drama-test:active { transform: translateY(2px); box-shadow: 0 1px 0 #ecc4d5; }
+.boutique-drama-test:disabled { cursor: wait; opacity: .6; transform: none; }
+.boutique-drama-test .icon { width: 13px; height: 13px; }
+@media (max-width: 700px) {
+  .boutique-drama-test { min-width: 34px; padding: 5px; }
+  .boutique-drama-test span { display: none; }
+}
+
+
+.boutique-drama-free-reply {
+  display: grid; gap: 5px; margin-top: 8px; padding-top: 8px;
+  border-top: 1px dashed #ebc8d8;
+}
+.boutique-drama-free-reply > span {
+  color: #805c70; font-size: 8px; font-weight: 900;
+}
+.boutique-drama-free-reply > div {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: stretch;
+}
+.boutique-drama-free-reply textarea {
+  width: 100%; min-height: 42px; max-height: 76px; padding: 7px 8px; resize: vertical;
+  border: 1px solid #e7bfd3; border-radius: 9px; outline: none;
+  color: #553447; background: #fffafd; font: 750 9px/1.35 var(--font-sans);
+}
+.boutique-drama-free-reply textarea:focus {
+  border-color: #d93d82; box-shadow: 0 0 0 3px rgba(217,61,130,.11);
+}
+.boutique-drama-free-reply button {
+  min-width: 58px; padding: 6px 9px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  border: 0; border-radius: 9px; color: #fff; background: linear-gradient(145deg, #e34a91, #bd2d70);
+  box-shadow: 0 3px 0 #982255; font-size: 8px; font-weight: 950;
+}
+.boutique-drama-free-reply button:disabled { cursor: wait; opacity: .6; }
+.boutique-drama-free-reply button .icon { width: 12px; height: 12px; }
+.boutique-drama-free-reply > small { color: #aa8799; font-size: 7px; font-weight: 700; }
+@media (max-width: 700px) {
+  .boutique-drama-free-reply > div { grid-template-columns: 1fr; }
+  .boutique-drama-free-reply button { min-height: 32px; }
+}
+
+
+/* Boutique Buzz thread-style post layout. */
+.boutique-drama-card {
+  padding: 0 0 11px; border: 1px solid #e7dfe4; border-radius: 16px;
+  color: #2f2630; background: #fff; box-shadow: 0 2px 0 rgba(78,45,67,.06);
+}
+.boutique-drama-card.is-live { border-color: #e7dfe4; }
+.boutique-drama-card.is-live::before { display: none; }
+.thread-post-layout {
+  display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 8px; padding: 12px 12px 4px;
+}
+.thread-author-rail { display: grid; grid-template-rows: 34px 1fr; justify-items: center; min-height: 100%; }
+.thread-avatar,
+.thread-shop-avatar {
+  width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 34px;
+  border-radius: 50%; color: #fff; background: linear-gradient(145deg, #e46da4, #7b4fb2);
+  font-size: 11px; font-weight: 950;
+}
+.thread-author-rail > i { width: 2px; min-height: 26px; margin-top: 6px; border-radius: 2px; background: #e8e1e5; }
+.thread-post-main { min-width: 0; }
+.thread-post-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.thread-post-header p { display: flex; align-items: baseline; gap: 5px; min-width: 0; margin: 0; }
+.thread-post-header strong { color: #2d242b; font-size: 10px; font-weight: 950; }
+.thread-post-header p span {
+  overflow: hidden; color: #93888f; font-size: 8px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap;
+}
+.thread-post-header button {
+  width: 25px; min-height: 18px; padding: 0; border: 0; color: #6f656c; background: transparent;
+  font-size: 13px; font-weight: 900; letter-spacing: 1px;
+}
+.thread-status-line { min-height: 15px; margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+.thread-status-line em {
+  padding: 2px 5px; border-radius: 5px; color: #9b6c83; background: #f7f1f4;
+  font-size: 5.5px; font-style: normal; font-weight: 950; letter-spacing: .08em;
+}
+.thread-post-main h3 { margin: 5px 0 3px; color: #282128; font-size: 11px; line-height: 1.25; }
+.thread-post-main .boutique-drama-post {
+  margin: 0; color: #393037; font-size: 9.5px; font-weight: 650; line-height: 1.42;
+}
+.thread-post-actions { display: flex; align-items: center; gap: 15px; margin-top: 9px; color: #463c43; }
+.thread-post-actions > span { width: 17px; height: 17px; display: grid; place-items: center; }
+.thread-post-actions .icon { width: 15px; height: 15px; stroke-width: 1.8; }
+.thread-post-actions .thread-repost { font-size: 17px; line-height: 1; transform: rotate(-20deg); }
+.thread-post-metrics { margin: 5px 0 0; color: #968b92; font-size: 7.5px; font-weight: 700; }
+.thread-replies {
+  margin: 3px 12px 7px 58px; padding: 0; gap: 7px; border-radius: 0; background: transparent;
+}
+.thread-replies > div { position: relative; display: grid; grid-template-columns: 25px minmax(0,1fr); gap: 7px; align-items: start; }
+.thread-replies > div::before {
+  content: ""; position: absolute; left: -27px; top: -10px; bottom: -10px; width: 2px; background: #e8e1e5;
+}
+.thread-replies > div:last-child::before { bottom: 12px; }
+.thread-replies > div > span {
+  width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%;
+  color: #73566a; background: #f4e8ef; font-size: 8px; font-weight: 950;
+}
+.thread-replies > div p { margin: 1px 0 0; color: #4e454b; font-size: 8px; line-height: 1.35; }
+.thread-replies > div b { display: block; margin-bottom: 1px; color: #2f2730; font-size: 8px; }
+.thread-quick-replies {
+  margin: 8px 12px 0 58px; padding-top: 8px; grid-template-columns: repeat(3,minmax(0,1fr));
+  border-top: 1px solid #eee7eb;
+}
+.thread-quick-replies button {
+  min-height: 38px; border-color: #ded5da; border-radius: 12px; color: #51464d; background: #fff;
+}
+.thread-quick-replies button:nth-of-type(2) { border-color: #e8c4d4; background: #fff9fc; }
+.boutique-drama-free-reply.thread-reply-composer {
+  margin: 9px 12px 0; padding: 10px 0 0; display: grid; grid-template-columns: 34px minmax(0,1fr);
+  gap: 8px; align-items: start; border-top: 1px solid #eee7eb;
+}
+.thread-reply-composer .thread-shop-avatar { width: 32px; height: 32px; flex-basis: 32px; background: linear-gradient(145deg,#dc4c8d,#b52d70); }
+.boutique-drama-free-reply > .thread-compose-main {
+  display: grid; grid-template-columns: 1fr; gap: 4px; min-width: 0;
+}
+.thread-compose-main > strong { color: #2f2730; font-size: 9px; }
+.thread-compose-main textarea {
+  min-height: 38px; padding: 4px 0; resize: none; border: 0; border-radius: 0;
+  color: #393037; background: transparent; font-size: 9px; box-shadow: none;
+}
+.thread-compose-main textarea:focus { border: 0; box-shadow: none; }
+.thread-compose-main footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.thread-compose-main footer small { color: #9d9299; font-size: 6.5px; }
+.thread-compose-main footer button {
+  min-width: 55px; min-height: 27px; padding: 4px 9px; border-radius: 14px; box-shadow: none;
+}
+.thread-shop-reply {
+  margin: 9px 12px 0 58px; padding: 10px 0 0; display: grid; grid-template-columns: 32px minmax(0,1fr);
+  gap: 8px; border: 0; border-top: 1px solid #eee7eb; border-radius: 0; background: transparent;
+}
+.thread-shop-reply .thread-shop-avatar { width: 32px; height: 32px; flex-basis: 32px; }
+.thread-shop-reply > div { min-width: 0; }
+.thread-shop-reply small { color: #342a31; font-size: 8px; font-weight: 950; }
+.thread-shop-reply blockquote { margin: 3px 0; color: #3e343b; font-size: 9px; font-weight: 720; }
+.thread-shop-reply p { margin: 5px 0 0; padding: 6px 7px; border-radius: 8px; color: #70656c; background: #f7f4f6; font-size: 7.5px; }
+
+@media (max-width: 700px) {
+  .thread-post-layout { grid-template-columns: 32px minmax(0,1fr); gap: 7px; padding: 10px 9px 3px; }
+  .thread-avatar { width: 31px; height: 31px; flex-basis: 31px; }
+  .thread-replies,
+  .thread-quick-replies,
+  .thread-shop-reply { margin-left: 48px; margin-right: 9px; }
+  .thread-quick-replies { grid-template-columns: 1fr; }
+  .boutique-drama-free-reply.thread-reply-composer { margin-left: 9px; margin-right: 9px; grid-template-columns: 32px minmax(0,1fr); }
+  .thread-compose-main footer button { min-height: 28px; }
+}
+
+
+/* Phone-width social feed and unboxed drama stream. */
+#content-panel:has(.social-drawer-panel) {
+  width: 430px !important;
+  max-width: calc(100vw - 20px) !important;
+}
+.boutique-buzz-list {
+  gap: 10px;
+  padding: 9px 8px 4px 0;
+}
+@media (max-width: 620px) {
+  #content-panel:has(.social-drawer-panel) {
+    width: calc(100vw - 12px) !important;
+    max-width: calc(100vw - 12px) !important;
+  }
+  .boutique-buzz-list {
+    padding-top: 7px;
+  }
+}
+
+/* Threads posts sit directly on the feed without an outer card. */
+.boutique-drama-card,
+.boutique-drama-card.is-live,
+.boutique-drama-card.is-resolved {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.boutique-drama-card + .boutique-drama-card {
+  border-top: 1px solid #e8e1e5;
+}
+
+/* Polished Threads-style action icons. */
+.thread-post-actions {
+  gap: 5px;
+  margin-left: -7px;
+}
+.thread-post-actions > span {
+  width: 29px;
+  height: 29px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: #362d33;
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .16s ease;
+}
+.thread-post-actions > span:hover {
+  border-color: #eadfe5;
+  color: #c72f76;
+  background: #fff7fb;
+  transform: translateY(-1px);
+}
+.thread-post-actions > span:active {
+  transform: scale(.9);
+}
+.thread-post-actions .icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+}
+.thread-post-actions > span:first-child:hover {
+  color: #e73574;
+  background: #fff0f5;
+}
+
+.social-drawer-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* Compact reply composer with quick replies below it. */
+.boutique-drama-free-reply.thread-reply-composer {
+  margin-top: 7px;
+  padding-top: 9px;
+  gap: 7px;
+}
+.boutique-drama-free-reply > .thread-compose-main {
+  gap: 5px;
+}
+.thread-compose-main > strong {
+  padding-left: 2px;
+}
+.thread-compose-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 3px 2px 9px;
+  border: 1px solid #e6dce2;
+  border-radius: 18px;
+  background: rgba(255,255,255,.82);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.thread-compose-row:focus-within {
+  border-color: #d45a91;
+  box-shadow: 0 0 0 3px rgba(212,90,145,.1);
+}
+.thread-compose-main .thread-compose-row textarea {
+  min-height: 27px;
+  height: 27px;
+  max-height: 54px;
+  padding: 6px 0 4px;
+  line-height: 1.25;
+}
+.thread-compose-main .thread-compose-row button {
+  min-width: 58px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 15px;
+  box-shadow: none;
+}
+.thread-compose-main .thread-compose-row button .icon {
+  width: 11px;
+  height: 11px;
+}
+.thread-quick-replies {
+  margin-top: 6px;
+  padding-top: 7px;
+}
+.thread-quick-replies > small {
+  margin-bottom: -1px;
+  color: #8d7f87;
+  letter-spacing: .02em;
+  text-transform: none;
+}
+@media (max-width: 700px) {
+  .thread-quick-replies {
+    grid-template-columns: repeat(3, minmax(108px, 1fr));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .thread-quick-replies::-webkit-scrollbar {
+    display: none;
+  }
+  .thread-quick-replies button {
+    min-height: 38px;
+    text-align: left;
+  }
+}
+
+/* One compact quick reply per row. */
+.thread-quick-replies {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 5px;
+  overflow: visible;
+}
+.thread-quick-replies > small {
+  margin-bottom: 1px;
+}
+.thread-quick-replies button {
+  width: 100%;
+  min-height: 39px;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  text-align: left;
+  line-height: 1.25;
+}
+.thread-quick-replies button span {
+  margin: 0;
+  padding-right: 8px;
+  border-right: 1px solid #eadde4;
+  text-align: center;
+}
+.thread-reply-composer .thread-shop-avatar {
+  margin-top: 1px;
+}
+@media (max-width: 700px) {
+  .thread-quick-replies {
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow: visible;
+  }
+  .thread-quick-replies button {
+    min-height: 39px;
+    text-align: left;
+  }
+}
+
+/* Refined free-reply composer. */
+.boutique-drama-free-reply.thread-reply-composer {
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 9px;
+  margin: 8px 12px 7px;
+  padding: 10px 0 0;
+  align-items: start;
+  border-top: 1px solid rgba(223,210,218,.8);
+}
+.thread-reply-composer .thread-shop-avatar {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  margin: 0;
+  color: #fff;
+  background: linear-gradient(145deg, #e75b9b 0%, #bd2f76 68%, #963b8b 100%);
+  box-shadow: 0 3px 8px rgba(179,45,111,.2);
+  font-size: 10px;
+}
+.boutique-drama-free-reply > .thread-compose-main {
+  gap: 6px;
+}
+.thread-compose-meta {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 3px;
+  line-height: 1.1;
+}
+.thread-compose-meta strong {
+  overflow: hidden;
+  color: #332830;
+  font-size: 9.5px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-compose-meta small {
+  overflow: hidden;
+  color: #a18f99;
+  font-size: 7px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-compose-row {
+  min-height: 36px;
+  gap: 6px;
+  padding: 3px 3px 3px 11px;
+  border-color: #e4d7df;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(94,54,77,.04);
+}
+.thread-compose-row:focus-within {
+  border-color: #ce4b88;
+  box-shadow: 0 0 0 3px rgba(206,75,136,.1);
+}
+.thread-compose-main .thread-compose-row textarea {
+  min-height: 28px;
+  height: 28px;
+  padding: 6px 0 5px;
+  color: #433740;
+  font-size: 8.5px;
+  font-weight: 750;
+}
+.thread-compose-main .thread-compose-row textarea::placeholder {
+  color: #a797a0;
+  opacity: 1;
+}
+.thread-compose-main .thread-compose-row button {
+  min-width: 61px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #df438c, #c52e76);
+  box-shadow: 0 2px 0 #9e245c;
+  transition: transform .14s ease, filter .14s ease, box-shadow .14s ease;
+}
+.thread-compose-main .thread-compose-row button:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.thread-compose-main .thread-compose-row button:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+@media (max-width: 700px) {
+  .boutique-drama-free-reply.thread-reply-composer {
+    grid-template-columns: 34px minmax(0, 1fr);
+    margin: 8px 9px 6px;
+  }
+  .thread-reply-composer .thread-shop-avatar {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+}
+
+/* Owner portrait and rating in the Threads composer. */
+.thread-shop-avatar.is-owner-avatar {
+  overflow: hidden;
+  padding: 0;
+  color: #fff;
+  background: linear-gradient(145deg, #ffd8eb, #f3a8cf);
+  box-shadow: 0 3px 8px rgba(179,45,111,.18);
+}
+.thread-shop-avatar.is-owner-avatar svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.thread-compose-meta {
+  min-height: 14px;
+  flex-wrap: nowrap;
+}
+.thread-compose-row {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+}
+.thread-post-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #bd7d22;
+}
+.thread-post-rating b {
+  display: inline-flex;
+  color: #f0ad32;
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: .04em;
+}
+.thread-post-rating b i {
+  color: #ddcfd7;
+  font-style: normal;
+}
+.thread-post-rating strong {
+  color: #8d7683;
+  font-size: 6.5px;
+  font-weight: 900;
+}
+
+/* Composer structure: identity row, then full-width input row. */
+.boutique-drama-free-reply.thread-reply-composer {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+}
+.thread-reply-composer .thread-compose-meta {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 3px;
+}
+.thread-compose-meta .thread-shop-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+.thread-compose-meta strong {
+  flex: 0 1 auto;
+}
+.thread-compose-meta small {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.thread-reply-composer > .thread-compose-row {
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 700px) {
+  .boutique-drama-free-reply.thread-reply-composer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .thread-compose-meta .thread-shop-avatar {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+}
+
+/* Compact unboxed reply controls. */
+.thread-reply-composer > .thread-compose-row {
+  min-height: 0;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.thread-reply-composer > .thread-compose-row:focus-within {
+  border: 0;
+  box-shadow: none;
+}
+.thread-reply-composer .thread-compose-row textarea {
+  width: 100%;
+  min-height: 32px;
+  height: 32px;
+  max-height: 32px;
+  padding: 7px 11px;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid #e1cdd9;
+  border-radius: 17px;
+  color: #433740;
+  background: rgba(255,255,255,.9);
+  box-shadow: none;
+  box-sizing: border-box;
+  font-size: 8.5px;
+  line-height: 16px;
+}
+.thread-reply-composer .thread-compose-row textarea:focus {
+  border: 1px solid #ce4b88;
+  box-shadow: 0 0 0 3px rgba(206,75,136,.1);
+}
+.thread-reply-composer .thread-compose-row button {
+  min-width: 54px;
+  min-height: 32px;
+  height: 32px;
+  padding: 4px 9px;
+  border-radius: 17px;
+  box-shadow: 0 2px 0 #9e245c;
+}
+
+.thread-compose-identity {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  line-height: 1.05;
+}
+.thread-compose-identity strong,
+.thread-compose-identity small {
+  display: block;
+  min-width: 0;
+}
+.thread-compose-identity strong {
+  overflow: hidden;
+  color: #332830;
+  font-size: 9.5px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-compose-identity small {
+  overflow: hidden;
+  color: #a18f99;
+  font-size: 7px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ongoing social conversation under each drama post. */
+.thread-conversation {
+  display: grid;
+  gap: 0;
+  margin: 8px 12px 0 58px;
+  border-top: 1px solid #eee7eb;
+}
+.thread-exchange {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0e9ed;
+}
+.thread-exchange::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 38px;
+  bottom: 38px;
+  width: 2px;
+  border-radius: 2px;
+  background: #e6dfe3;
+}
+.thread-shop-comment,
+.thread-community-comment {
+  position: relative;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.thread-shop-comment .thread-shop-avatar {
+  width: 31px;
+  height: 31px;
+  flex-basis: 31px;
+}
+.thread-community-comment > span {
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #ead6e2;
+  border-radius: 50%;
+  color: #a13670;
+  background: linear-gradient(145deg, #fff7fb, #f6dce9);
+  font-size: 8px;
+  font-weight: 950;
+}
+.thread-shop-comment header,
+.thread-community-comment header {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  line-height: 1.1;
+}
+.thread-shop-comment header strong,
+.thread-community-comment header strong {
+  overflow: hidden;
+  color: #332a30;
+  font-size: 8.5px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-shop-comment header small,
+.thread-community-comment header small {
+  overflow: hidden;
+  color: #9e9098;
+  font-size: 6.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-shop-comment p,
+.thread-community-comment p {
+  margin: 3px 0 0;
+  color: #4a3f46;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.38;
+}
+.thread-community-comment {
+  margin-left: 18px;
+}
+.thread-community-comment p {
+  color: #554850;
+}
+.thread-conversation + .thread-reply-composer {
+  margin-top: 0;
+}
+@media (max-width: 700px) {
+  .thread-conversation {
+    margin-left: 48px;
+    margin-right: 9px;
+  }
+}
+
+/* Refined Threads-inspired drama feed. */
+.boutique-buzz-list {
+  gap: 0;
+  padding: 0 8px 8px 0;
+}
+.boutique-drama-card,
+.boutique-drama-card.is-live,
+.boutique-drama-card.is-discussing {
+  padding: 0 0 8px;
+  border: 0;
+  border-bottom: 1px solid rgba(225,216,221,.9);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.boutique-drama-card + .boutique-drama-card {
+  padding-top: 4px;
+  border-top: 0;
+}
+.thread-post-layout {
+  grid-template-columns: 40px minmax(0,1fr);
+  gap: 10px;
+  padding: 13px 12px 3px;
+}
+.thread-author-rail {
+  grid-template-rows: 38px 1fr;
+}
+.thread-avatar.is-character-avatar,
+.thread-replies .is-character-avatar,
+.thread-community-comment > .is-character-avatar {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #eadde4;
+  color: transparent;
+  background: linear-gradient(145deg,#fff5fa,#f5dce9);
+  box-shadow: 0 2px 7px rgba(75,42,61,.1);
+}
+.thread-avatar.is-character-avatar {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+}
+.is-character-avatar img {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 112%;
+  height: 112%;
+  max-width: none;
+  object-fit: contain;
+  transform: translateX(-50%);
+}
+.thread-author-rail > i {
+  width: 1.5px;
+  min-height: 24px;
+  margin-top: 7px;
+  background: #ddd5da;
+}
+.thread-post-header {
+  min-height: 20px;
+  align-items: center;
+}
+.thread-post-header p {
+  gap: 6px;
+}
+.thread-post-header strong {
+  font-size: 10.5px;
+  letter-spacing: -.01em;
+}
+.thread-post-header p span {
+  font-size: 7.5px;
+  font-weight: 650;
+}
+.thread-post-header button {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: 50%;
+  font-size: 11px;
+}
+.thread-post-header button:hover {
+  background: rgba(77,59,69,.06);
+}
+.thread-post-main h3 {
+  margin: 4px 0 2px;
+  font-size: 11px;
+  letter-spacing: -.01em;
+}
+.thread-post-main .boutique-drama-post {
+  color: #40363d;
+  font-size: 9px;
+  font-weight: 680;
+  line-height: 1.45;
+}
+.thread-post-actions {
+  gap: 3px;
+  margin-top: 7px;
+  margin-left: -7px;
+}
+.thread-post-actions > span {
+  width: 28px;
+  height: 28px;
+}
+.thread-post-actions .icon {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.7;
+}
+.thread-post-metrics {
+  margin: 1px 0 0;
+  color: #9a8e95;
+  font-size: 7px;
+  font-weight: 700;
+}
+.thread-replies {
+  margin: 2px 12px 2px 62px;
+  gap: 0;
+}
+.thread-replies > div {
+  grid-template-columns: 28px minmax(0,1fr);
+  gap: 8px;
+  padding: 7px 0;
+}
+.thread-replies > div::before {
+  left: -32px;
+  top: -8px;
+  bottom: -8px;
+  width: 1.5px;
+  background: #ddd5da;
+}
+.thread-replies > div:last-child::before {
+  bottom: 20px;
+}
+.thread-replies > div > span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+.thread-replies header {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  line-height: 1.1;
+}
+.thread-replies header strong {
+  color: #332a30;
+  font-size: 8px;
+  font-weight: 950;
+}
+.thread-replies header small {
+  overflow: hidden;
+  color: #9d9198;
+  font-size: 6.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-replies > div p {
+  margin: 3px 0 0;
+  color: #4a4046;
+  font-size: 8px;
+  font-weight: 680;
+  line-height: 1.38;
+}
+.thread-conversation {
+  margin: 0 12px 0 62px;
+  border-top: 0;
+}
+.thread-exchange {
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee8ec;
+}
+.thread-exchange::before {
+  left: 14px;
+  top: 36px;
+  bottom: 36px;
+  width: 1.5px;
+  background: #ddd5da;
+}
+.thread-community-comment {
+  margin-left: 16px;
+}
+.thread-community-comment > .is-character-avatar {
+  width: 29px;
+  height: 29px;
+}
+.thread-shop-comment p,
+.thread-community-comment p {
+  font-weight: 680;
+}
+.boutique-drama-free-reply.thread-reply-composer {
+  margin: 3px 12px 4px 62px;
+  padding: 9px 0 0;
+  border-top: 1px solid #eee8ec;
+}
+.thread-reply-composer .thread-compose-meta {
+  min-height: 32px;
+  gap: 7px;
+}
+.thread-compose-meta .thread-shop-avatar {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+}
+.thread-compose-identity {
+  gap: 1px;
+}
+.thread-compose-identity strong {
+  font-size: 8.5px;
+}
+.thread-compose-identity small {
+  font-size: 6.5px;
+}
+.thread-reply-composer .thread-compose-row textarea {
+  background: rgba(255,255,255,.72);
+}
+@media (max-width: 700px) {
+  .thread-post-layout {
+    grid-template-columns: 36px minmax(0,1fr);
+    gap: 8px;
+    padding: 11px 9px 3px;
+  }
+  .thread-avatar.is-character-avatar {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+  .thread-replies,
+  .thread-conversation,
+  .boutique-drama-free-reply.thread-reply-composer {
+    margin-left: 53px;
+    margin-right: 9px;
+  }
+}
+
+/* Crop customer avatars to a head-and-shoulders portrait. */
+.is-character-avatar img {
+  top: -2px;
+  bottom: auto;
+  width: 150%;
+  height: 216%;
+  max-width: none;
+  object-fit: contain;
+  transform: translateX(-50%);
+}
+/* Threads-style activity bar and comment controls. */
+.thread-feed-toolbar {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid #eadfe5;
+  color: #41363d;
+}
+.thread-feed-toolbar button,
+.thread-feed-toolbar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 8px;
+  font-weight: 900;
+}
+.thread-feed-toolbar > span {
+  color: #9b8f96;
+  font-weight: 700;
+}
+.thread-feed-toolbar .icon {
+  width: 9px;
+  height: 9px;
+}
+.thread-feed-toolbar button .icon {
+  transform: rotate(90deg);
+}
+.thread-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 6px 0 0 -3px;
+  color: #4b4047;
+}
+.thread-inline-actions > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.thread-inline-actions .icon {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.65;
+}
+.thread-inline-actions b {
+  color: #8f838a;
+  font-size: 6px;
+  font-weight: 700;
+}
+.thread-shop-badge {
+  padding: 2px 5px;
+  border-radius: 5px;
+  color: #fff;
+  background: #d33883;
+  font-size: 5.5px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+.thread-activity-heart {
+  margin-left: auto;
+  color: #e62d72;
+  font-size: 9px;
+  font-style: normal;
+}
+.thread-exchange::before {
+  left: 14px;
+  top: 35px;
+  bottom: 34px;
+}
+.thread-community-comment::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: -9px;
+  width: 18px;
+  height: 23px;
+  border-left: 1.5px solid #d9d1d6;
+  border-bottom: 1.5px solid #d9d1d6;
+  border-radius: 0 0 0 10px;
+  pointer-events: none;
+}
+/* Keep reply branches clear of nested avatars. */
+.thread-exchange::before {
+  content: none;
+}
+.thread-community-comment::before {
+  left: -17px;
+  top: -10px;
+  width: 17px;
+  height: 24px;
+  border-left: 1.5px solid #d9d1d6;
+  border-bottom: 1.5px solid #d9d1d6;
+  border-radius: 0 0 0 10px;
+  z-index: 0;
+}
+.thread-community-comment > .is-character-avatar {
+  position: relative;
+  z-index: 1;
+  background: #fff7fb;
+}
+/* Continuous Threads-style parent-to-reply branch. */
+.thread-shop-comment::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 30px;
+  width: 1.5px;
+  height: calc(100% - 30px);
+  border-radius: 2px 2px 0 0;
+  background: #d9d1d6;
+  pointer-events: none;
+  z-index: 0;
+}
+.thread-shop-comment > .thread-shop-avatar {
+  position: relative;
+  z-index: 1;
+  background: #fff7fb;
+}
+.thread-community-comment {
+  margin-left: 30px;
+}
+.thread-community-comment::before {
+  left: -16px;
+  top: -10px;
+  width: 16px;
+  height: 24px;
+}
+/* One continuous outer rail for the complete discussion. */
+.thread-discussion-body {
+  position: relative;
+}
+.thread-discussion-body::before {
+  content: "";
+  position: absolute;
+  left: 32px;
+  top: 58px;
+  bottom: 0;
+  width: 1.5px;
+  border-radius: 2px;
+  background: #ddd5da;
+  pointer-events: none;
+}
+.thread-author-rail > i {
+  display: none;
+}
+@media (max-width: 700px) {
+  .thread-discussion-body::before {
+    left: 27px;
+    top: 52px;
+  }
+}
+/* The discussion body now owns the single outer rail. */
+.thread-replies > div::before {
+  content: none;
+}
+/* Reviews and dramas share one chronological feed. */
+.drawer-review-feed > .drawer-review-summary {
+  order: 0;
+}
+.drawer-review-feed > .boutique-buzz-list,
+.drawer-review-feed > .drawer-review-list {
+  display: contents;
+}
+.dock-social-badge.is-drama-alert {
+  min-width: 14px !important;
+  padding: 0 !important;
+  color: #fff;
+  background: linear-gradient(180deg, #ff5f84, #d92663);
+  box-shadow: 0 1px 0 #9d1f48, 0 2px 5px rgba(187,31,84,.3) !important;
+}
+/* Make review dates easier to read. */
+.drawer-review-main time {
+  padding: 2px 5px;
+  border-radius: 7px;
+  color: #8f6f82;
+  background: rgba(255,255,255,.7);
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+/* Large review date without a surrounding chip. */
+.drawer-review-main time {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.drawer-review-main time {
+  padding-left: 5px;
+}
+/* Stable chronological feed container for Safari and mobile browsers. */
+.drawer-review-feed > .boutique-buzz-list,
+.drawer-review-feed > .drawer-review-list {
+  display: flex;
+}
+.drawer-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.drawer-activity-list > .drawer-review-card,
+.drawer-activity-list > .boutique-drama-card {
+  flex: 0 0 auto;
+}

@@ -827,12 +827,88 @@ function reviewAvatar(post: SocialPost) {
   }, true);
 }
 
+function threadAvatar(name: string, handle: string) {
+  const seed = Array.from(handle).reduce((total, character) => total + character.charCodeAt(0), 0);
+  const base = customers.find(customer => customer.handle === handle) ?? customers[seed % customers.length];
+  return avatarImage({ ...base, name, handle }, true);
+}
+
+function socialActivityOrder(s: GameState) {
+  const posts = Array.isArray(s.posts) ? s.posts : [];
+  const entries = [
+    ...(Array.isArray(s.dramas) ? s.dramas : []).map((item, index) => ({ kind: 'drama' as const, id: item.id, day: item.day, createdAt: item.createdAt, index })),
+    ...posts.map((item, index) => ({ kind: 'review' as const, id: item.id, day: item.day, createdAt: item.createdAt, index })),
+  ];
+  entries.sort((a, b) => {
+    if (a.day !== b.day) return b.day - a.day;
+    const aTimed = typeof a.createdAt === 'number' && Number.isFinite(a.createdAt);
+    const bTimed = typeof b.createdAt === 'number' && Number.isFinite(b.createdAt);
+    if (aTimed && bTimed && a.createdAt !== b.createdAt) return b.createdAt! - a.createdAt!;
+    if (aTimed !== bTimed) return aTimed ? -1 : 1;
+    if (a.kind !== b.kind) return a.kind === 'review' ? -1 : 1;
+    return a.index - b.index;
+  });
+  return new Map(entries.map((entry, index) => [`${entry.kind}:${entry.id}`, index + 1]));
+}
+
+function socialDramaFeed(s: GameState, activityOrder: Map<string, number>) {
+  const dramas = (Array.isArray(s.dramas) ? s.dramas : []).filter(drama =>
+    !!drama && typeof drama.id === 'string' && typeof drama.title === 'string'
+    && typeof drama.post === 'string' && typeof drama.authorName === 'string'
+    && typeof drama.authorHandle === 'string' && Array.isArray(drama.comments)
+    && Array.isArray(drama.choices)
+  );
+  if (!dramas.length) return '';
+  const commenters = [
+    { name: 'Mê Bông', handle: '@me_bong' },
+    { name: 'Hân Mood', handle: '@han_mood' },
+    { name: 'Lemon Tea', handle: '@lemontea' },
+  ];
+  return dramas.slice(0, 8).map(drama => {
+      const comments = drama.comments.filter(comment => typeof comment === 'string').slice(0, 3);
+      const savedThread = (Array.isArray(drama.threadReplies) ? drama.threadReplies : []).filter(item =>
+        !!item && typeof item.shopText === 'string' && typeof item.communityText === 'string'
+      );
+      const conversation = savedThread.length ? savedThread : drama.shopReply && drama.outcome ? [{
+        id: `legacy-${drama.id}`,
+        shopText: drama.shopReply,
+        tone: drama.resolvedTone ?? 'business' as const,
+        communityAuthorName: 'Cộng đồng',
+        communityAuthorHandle: '@congdong',
+        communityText: drama.outcome,
+        source: 'fallback' as const,
+      }] : [];
+      const hasConversation = conversation.length > 0;
+      const likes = 120 + drama.day * 17 + Math.round((s.dramaHeat || 0) * 2.6);
+      const replies = comments.length + conversation.length * 2;
+      return `<article class="boutique-drama-card ${hasConversation ? 'is-discussing' : 'is-live'}" data-drama-card="${escapeHtml(drama.id)}" style="order:${activityOrder.get(`drama:${drama.id}`) ?? 1}">
+        <div class="thread-discussion-body">
+        <div class="thread-post-layout">
+          <aside class="thread-author-rail"><span class="thread-avatar is-character-avatar">${threadAvatar(drama.authorName, drama.authorHandle)}</span><i></i></aside>
+          <div class="thread-post-main">
+            <header class="thread-post-header"><p><strong>${escapeHtml(drama.authorName)}</strong><span>${escapeHtml(drama.authorHandle)} · ${gameDate(drama.day)}</span></p><button type="button" tabindex="-1" aria-label="Tùy chọn bài viết">•••</button></header>
+            <h3>${escapeHtml(drama.title)}</h3>
+            <p class="boutique-drama-post">${escapeHtml(drama.post)}</p>
+            <div class="thread-post-actions" aria-label="Tương tác bài viết"><span title="Thích">${icon('heart')}</span><span title="Bình luận">${icon('threadReply')}</span><span title="Đăng lại">${icon('threadRepost')}</span><span title="Chia sẻ">${icon('threadShare')}</span></div>
+            <p class="thread-post-metrics">${replies} câu trả lời · ${likes.toLocaleString('vi-VN')} lượt thích</p>
+          </div>
+        </div>
+        ${comments.length ? `<div class="boutique-drama-comments thread-replies">${comments.map((comment, index) => { const person = commenters[index]; return `<div><span class="is-character-avatar">${threadAvatar(person.name, person.handle)}</span><div><header><strong>${escapeHtml(person.name)}</strong><small>${escapeHtml(person.handle)}</small></header><p>${escapeHtml(comment)}</p></div></div>`; }).join('')}</div>` : ''}
+        ${conversation.length ? `<div class="thread-conversation">${conversation.map(item => `<div class="thread-exchange"><div class="thread-shop-comment"><span class="thread-shop-avatar is-owner-avatar" role="img" aria-label="Ảnh đại diện chủ shop">${ownerPortrait(38)}</span><div><header><strong>${escapeHtml(s.shopName || 'My Little Boutique')}</strong><small>@shop · vừa xong</small></header><p>${escapeHtml(item.shopText)}</p></div></div><div class="thread-community-comment"><span class="is-character-avatar">${threadAvatar(item.communityAuthorName || 'Cộng đồng', item.communityAuthorHandle || '@congdong')}</span><div><header><strong>${escapeHtml(item.communityAuthorName || 'Cộng đồng')}</strong><small>${escapeHtml(item.communityAuthorHandle || '@congdong')} · vừa xong</small></header><p>${escapeHtml(item.communityText)}</p></div></div></div>`).join('')}</div>` : ''}
+        </div>
+        <div class="boutique-drama-free-reply thread-reply-composer"><div class="thread-compose-meta"><span class="thread-shop-avatar is-owner-avatar" role="img" aria-label="Ảnh đại diện chủ shop">${ownerPortrait(42)}</span><span class="thread-compose-identity"><strong>${escapeHtml(s.shopName || 'My Little Boutique')}</strong><small>Trả lời ${escapeHtml(drama.authorHandle)}</small></span></div><div class="thread-compose-row"><textarea maxlength="180" rows="1" data-drama-reply="${escapeHtml(drama.id)}" aria-label="Trả lời bài viết" placeholder="Viết bình luận..."></textarea><button data-action="drama-free-response" data-drama="${escapeHtml(drama.id)}"><span>Đăng</span>${icon('threadShare')}</button></div></div>
+      </article>`;
+    }).join('');
+}
+
 export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'feed') {
   const shopStats = shopReviewStats(s);
   const reviewCount = shopStats.count + s.onlineReviews;
   const reviewTotal = shopStats.total + s.onlineRating * s.onlineReviews;
   const reviewAverage = reviewCount ? reviewTotal / reviewCount : 0;
   const reviewFill = Math.max(0, Math.min(100, reviewAverage / 5 * 100));
+  const activityOrder = socialActivityOrder(s);
+  const posts = Array.isArray(s.posts) ? s.posts : [];
   return `<section class="social-drawer-panel">
     <header class="social-drawer-header">
       <nav class="social-drawer-tabs" aria-label="Bảng tin và tuyển dụng">
@@ -850,19 +926,20 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
             <small>${reviewCount.toLocaleString('vi-VN')} lượt</small>
           </div>
         </div>
-        <div class="drawer-review-list">
-        ${s.posts.length ? s.posts.slice().sort((a, b) => b.day - a.day).map(post => {
+        <div class="drawer-activity-list" aria-label="Bài đăng và đánh giá">
+        ${socialDramaFeed(s, activityOrder)}
+        ${posts.length ? posts.slice().sort((a, b) => b.day - a.day).map(post => {
           const stars = Math.max(1, Math.min(5, post.reviewStars));
-          return `<article class="drawer-review-card ${post.viral ? 'is-viral' : ''}">
+          return `<article class="drawer-review-card ${post.viral ? 'is-viral' : ''}" style="order:${activityOrder.get(`review:${post.id}`) ?? 1}">
             <span class="drawer-review-avatar" style="--review-color:${escapeHtml(post.color)}">${reviewAvatar(post)}</span>
             <div class="drawer-review-main">
               <div class="drawer-review-author"><div><strong>${escapeHtml(post.name)}</strong><span>${escapeHtml(post.handle)}</span></div><time>${gameDate(post.day)}</time></div>
               <span class="drawer-review-stars" aria-label="${stars} trên 5 sao"><span class="drawer-stars-meter"><i>★★★★★</i><i style="width:${stars / 5 * 100}%">★★★★★</i></span><b>${stars}</b></span>
               <p>${escapeHtml(post.text)}</p>
-              <footer>${post.channel === 'online' ? `<span class="drawer-review-channel is-online">${icon('globe')} Kênh online</span>` : post.viral ? `<span class="drawer-review-viral">${icon('trend')} Nổi bật</span>` : `<span class="drawer-review-channel">${icon('shop')} Tại cửa hàng</span>`}<button class="drawer-review-likes ${post.likedByShop ? 'is-liked' : ''}" data-action="review-like" data-id="${escapeHtml(post.id)}" aria-label="${post.likedByShop ? 'Bỏ tim' : 'Thả tim'} đánh giá của ${escapeHtml(post.name)}" aria-pressed="${post.likedByShop ? 'true' : 'false'}">${icon('heart')}<span>${post.likes.toLocaleString('vi-VN')}</span></button></footer>
+              <footer>${post.channel === 'online' ? `<span class="drawer-review-channel is-online">${icon('globe')} Kênh online</span>` : post.viral ? `<span class="drawer-review-viral">${icon('trend')} Nổi bật</span>` : `<span class="drawer-review-channel">${icon('shop')} Tại cửa hàng</span>`}</footer>
             </div>
           </article>`;
-        }).join('') : `<div class="social-drawer-state social-drawer-empty">${icon('social')}<strong>Chưa có đánh giá</strong><span>Phục vụ khách hàng để nhận những phản hồi đầu tiên.</span></div>`}
+        }).join('') : !(Array.isArray(s.dramas) && s.dramas.length) ? `<div class="social-drawer-state social-drawer-empty">${icon('social')}<strong>Chưa có hoạt động</strong><span>Phục vụ khách hàng để nhận những phản hồi đầu tiên.</span></div>` : ''}
         </div>
       </section>`}
     </div>

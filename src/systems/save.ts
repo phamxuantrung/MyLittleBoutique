@@ -1,5 +1,5 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { ActiveBrandCampaign, AtelierCraftHistoryEntry, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, CustomProduct, DayStats, GameState, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, ReputationCrisis, ReturnCase, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, TailoringJob, VipAppointment } from '../types';
+import type { ActiveBrandCampaign, AtelierCraftHistoryEntry, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, CustomProduct, DayStats, GameState, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, ReputationCrisis, ReturnCase, SocialDrama, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, TailoringJob, VipAppointment } from '../types';
 import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, displayLevel, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, STAFF_SALARY_MIN } from './rules';
 import { generateDayCustomers, lookupCustomer, registerCustomer } from './customerGen';
 import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProducts } from '../data/atelier';
@@ -41,7 +41,7 @@ export function initialState(): GameState {
       { uid: 'starter-counter', id: 'counter', x: 4, y: 4, rotation: 0 },
       { ...musicPlayerStarter },
       ...movableDecorStarters.map(item => ({ ...item })),
-    ], stats: emptyStats(), posts: [], claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: false, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
+    ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: false, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
     employees: [], staffApplicants: [], recruitmentPost: null, staffLeaveRequests: [],
     shopName: 'My Little Boutique', hasNamedShop: false,
   };
@@ -337,8 +337,46 @@ export function parseSave(raw: string | null): GameState {
     }
     if (Array.isArray(s.posts)) state.posts = s.posts
       .filter((p: Record<string, unknown>) => p && ['id', 'name', 'handle', 'text', 'color'].every(k => typeof p[k] === 'string') && typeof p.viral === 'boolean' && typeof p.likes === 'number' && typeof p.day === 'number')
-      .map((p: Record<string, unknown>) => ({ ...p, channel: p.channel === 'online' ? 'online' : 'shop', reviewStars: Math.max(1, Math.min(5, Math.round(finite(p.reviewStars, p.viral ? 5 : 4, 5)))) }))
+      .map((p: Record<string, unknown>) => ({ ...p, channel: p.channel === 'online' ? 'online' : 'shop', reviewStars: Math.max(1, Math.min(5, Math.round(finite(p.reviewStars, p.viral ? 5 : 4, 5)))), ...(typeof p.createdAt === 'number' && Number.isFinite(p.createdAt) ? { createdAt: p.createdAt } : {}) }))
       .slice(0, 40) as GameState['posts'];
+    state.dramaHeat = Math.round(finite(s.dramaHeat, 12, 100));
+    state.dramaTrust = Math.round(finite(s.dramaTrust, 70, 100));
+    if (Array.isArray(s.dramas)) state.dramas = s.dramas
+      .filter((raw: unknown): raw is Record<string, unknown> => !!raw && typeof raw === 'object')
+      .map((raw: Record<string, unknown>) => {
+        const tones = new Set(['cute', 'sassy', 'business']);
+        const choices = Array.isArray(raw.choices) ? raw.choices
+          .filter((choice: unknown): choice is Record<string, unknown> => !!choice && typeof choice === 'object')
+          .filter(choice => typeof choice.id === 'string' && typeof choice.text === 'string' && typeof choice.resultText === 'string' && tones.has(String(choice.tone)))
+          .slice(0, 3)
+          .map(choice => ({ id: String(choice.id).slice(0, 40), tone: choice.tone as SocialDrama['choices'][number]['tone'], text: String(choice.text).slice(0, 180), resultText: String(choice.resultText).slice(0, 220) })) : [];
+        const threadReplies = Array.isArray(raw.threadReplies) ? raw.threadReplies
+          .filter((item: unknown): item is Record<string, unknown> => !!item && typeof item === 'object')
+          .filter(item => typeof item.shopText === 'string' && typeof item.communityText === 'string' && tones.has(String(item.tone)))
+          .map((item, index) => ({
+            id: typeof item.id === 'string' ? item.id.slice(0, 100) : `saved-reply-${index}`,
+            shopText: String(item.shopText).slice(0, 180),
+            tone: item.tone as SocialDrama['threadReplies'][number]['tone'],
+            communityAuthorName: typeof item.communityAuthorName === 'string' ? item.communityAuthorName.slice(0, 50) : 'Cộng đồng',
+            communityAuthorHandle: typeof item.communityAuthorHandle === 'string' ? item.communityAuthorHandle.slice(0, 50) : '@congdong',
+            communityText: String(item.communityText).slice(0, 220),
+            source: item.source === 'ai' ? 'ai' as const : 'fallback' as const,
+          })) : [];
+        if (typeof raw.id !== 'string' || typeof raw.title !== 'string' || typeof raw.post !== 'string') return undefined;
+        return {
+          id: raw.id.slice(0, 100), day: Math.max(1, Math.floor(finite(raw.day, state.day, 99999))),
+          ...(typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? { createdAt: raw.createdAt } : {}),
+          title: raw.title.slice(0, 100), post: raw.post.slice(0, 500),
+          authorName: typeof raw.authorName === 'string' ? raw.authorName.slice(0, 50) : 'Hội hóng chuyện',
+          authorHandle: typeof raw.authorHandle === 'string' ? raw.authorHandle.slice(0, 50) : '@boutique_buzz',
+          comments: Array.isArray(raw.comments) ? raw.comments.filter((value: unknown): value is string => typeof value === 'string').slice(0, 4).map((value: string) => value.slice(0, 180)) : [],
+          choices, threadReplies, source: raw.source === 'ai' ? 'ai' : 'fallback',
+          ...(typeof raw.resolvedChoiceId === 'string' ? { resolvedChoiceId: raw.resolvedChoiceId.slice(0, 40) } : {}),
+          ...(['cute', 'sassy', 'business'].includes(String(raw.resolvedTone)) ? { resolvedTone: raw.resolvedTone as SocialDrama['resolvedTone'] } : {}),
+          ...(typeof raw.shopReply === 'string' ? { shopReply: raw.shopReply.slice(0, 180) } : {}),
+          ...(typeof raw.outcome === 'string' ? { outcome: raw.outcome.slice(0, 220) } : {}),
+        } satisfies SocialDrama;
+      }).filter((drama: SocialDrama | undefined): drama is SocialDrama => !!drama).slice(0, 20);
     // Older saves only retain the latest 40 public posts. Use that known
     // history, then keep lifetime totals independently of the feed limit.
     const publicCount = s.shopReviewCount;

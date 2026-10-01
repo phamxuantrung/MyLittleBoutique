@@ -22,6 +22,7 @@ import { ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipes } from '../data/
 import { atelierMaterialIllustration, atelierProductPoints } from '../art/atelierArt';
 import type { PanzoomEventDetail, PanzoomObject } from '@panzoom/panzoom';
 import type Moveable from 'moveable';
+import { dramaRequestFromSale, requestDramaReplyEvaluation, requestSocialDrama } from '../systems/drama';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
 type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
@@ -46,6 +47,7 @@ const navItems: { id: Tab; label: string; icon: string; subtitle: string }[] = [
   { id: 'atelier', label: 'Xưởng may', icon: 'hudAtelier', subtitle: 'Thiết kế cá nhân' },
   { id: 'social', label: 'Bảng tin', icon: 'hudSocial', subtitle: 'Chuyện của boutique' },
 ];
+const SOCIAL_DRAMA_SEEN_KEY = 'little-boutique.social-drama-seen';
 
 export class GameUI {
   tab: Tab = 'shop';
@@ -135,6 +137,7 @@ export class GameUI {
   private composingCatalogSearch = false;
   private onlineHandoverProductIds: string[] = [];
   private serveVisitId = '';
+  private dramaRequestDay = 0;
   private staffDetailUid = '';
   private financeSection: 'loan' | 'payroll' | 'land' = 'loan';
   private displayHoldDelay = 0;
@@ -142,7 +145,9 @@ export class GameUI {
   private displayHoldStart?: { x: number; y: number };
   private suppressDisplayAddClick = false;
   private earlyClickTarget?: HTMLElement;
+  private lastSeenDramaId = '';
   constructor(private store: GameStore, private audio: AudioSystem) {
+    try { this.lastSeenDramaId = localStorage.getItem(SOCIAL_DRAMA_SEEN_KEY) ?? ''; } catch { /* Storage may be unavailable. */ }
     this.shell(); this.render(); this.bind();
     this.queueDisplayGuide();
     this.queueCampaignUnlock();
@@ -195,6 +200,7 @@ export class GameUI {
           event.result.success ? 'success' : 'error'
         );
         audio.play(event.result.viral ? 'reward' : event.result.success ? 'sale' : 'error');
+        this.queueSaleDrama(event.result);
       }
       if (event.type === 'summary') this.openModal('summary', summaryModal(store.state));
       if (event.type === 'debt-warning') this.openModal('debt-warning', debtWarningModal(store.state, event.staff));
@@ -1515,6 +1521,22 @@ export class GameUI {
         }
         break;
       }
+      case 'drama-response': {
+        const dramaId = target?.dataset.drama ?? '';
+        const scrollTop = document.querySelector<HTMLElement>('.social-drawer-content')?.scrollTop ?? 0;
+        if (this.store.resolveSocialDrama(dramaId, id)) {
+          this.renderPanel();
+          const scroller = document.querySelector<HTMLElement>('.social-drawer-content');
+          if (scroller) scroller.scrollTop = scrollTop;
+        }
+        break;
+      }
+      case 'drama-test':
+        this.createTestDrama(target as HTMLButtonElement | null);
+        break;
+      case 'drama-free-response':
+        this.submitFreeDramaResponse(target as HTMLButtonElement | null);
+        break;
       case 'recruit-post': {
         const input = document.querySelector<HTMLInputElement>('#staff-salary-input');
         this.store.postRecruitment(Number(input?.value ?? 0));
@@ -1903,6 +1925,10 @@ export class GameUI {
     if (this.store.state.phase === 'open' && (tab === 'import' || tab === 'decor' || tab === 'social' || tab === 'atelier')) {
       tab = 'shop';
     }
+    if (tab === 'social') {
+      this.lastSeenDramaId = this.store.state.dramas[0]?.id ?? '';
+      try { localStorage.setItem(SOCIAL_DRAMA_SEEN_KEY, this.lastSeenDramaId); } catch { /* Storage may be unavailable. */ }
+    }
     if (this.modal !== 'none') this.closeModal();
     if (this.moveMode) this.scene?.setMoveMode(false);
     if (this.tab === tab && tab !== 'shop') tab = 'shop';
@@ -1958,6 +1984,8 @@ export class GameUI {
     if (!dockNav) return;
     const isOpen = this.store.state.phase === 'open';
     const staffNotices = this.store.state.staffLeaveRequests.length + this.store.state.staffApplicants.length;
+    const latestDramaId = this.store.state.dramas[0]?.id ?? '';
+    const hasUnreadDrama = !!latestDramaId && latestDramaId !== this.lastSeenDramaId;
     const availableItems = isOpen
       ? navItems.filter(n => n.id === 'stock' || n.id === 'trend')
       : navItems;
@@ -1966,7 +1994,7 @@ export class GameUI {
         <div class="dock-icon-bubble dock-bubble-${n.id}">
           ${icon(n.icon)}
         </div>
-         ${n.id === 'social' && staffNotices > 0 ? `<b class="dock-social-badge" title="${staffNotices} thông báo nhân viên">${staffNotices}</b>` : ''}
+         ${n.id === 'social' && (hasUnreadDrama || staffNotices > 0) ? `<b class="dock-social-badge ${hasUnreadDrama ? 'is-drama-alert' : ''}" title="${hasUnreadDrama ? 'Có drama mới' : `${staffNotices} thông báo nhân viên`}">${hasUnreadDrama ? '!' : staffNotices}</b>` : ''}
         <span class="dock-btn-label">${n.label}</span>
       </button>
     `).join('');
@@ -2238,7 +2266,23 @@ export class GameUI {
     } else if (this.tab === 'trend') {
       contentHtml = trendPanel(this.store.state, this.trendSection);
     } else if (this.tab === 'social') {
-      contentHtml = socialPanel(this.store.state, this.socialSection);
+      try {
+        contentHtml = socialPanel(this.store.state, this.socialSection);
+      } catch (error) {
+        console.error('Recovered an invalid Boutique Buzz feed', error);
+        const safeState = {
+          ...this.store.state,
+          posts: Array.isArray(this.store.state.posts) ? this.store.state.posts : [],
+          dramas: Array.isArray(this.store.state.dramas) ? this.store.state.dramas : [],
+          staffApplicants: Array.isArray(this.store.state.staffApplicants) ? this.store.state.staffApplicants : [],
+        };
+        try {
+          contentHtml = socialPanel(safeState, this.socialSection);
+        } catch (fallbackError) {
+          console.error('Could not render Boutique Buzz fallback', fallbackError);
+          contentHtml = `<section class="social-drawer-panel"><div class="social-drawer-state social-drawer-empty"><strong>Bảng tin đang tải lại</strong><span>Đóng rồi mở Bảng tin để thử lại.</span></div></section>`;
+        }
+      }
     } else if (this.tab === 'decor') {
       contentHtml = decorCatalog(this.store.state, this.decorCategory);
     } else if (this.tab === 'atelier') {
@@ -3121,6 +3165,95 @@ export class GameUI {
         </footer>
       </section>
     `);
+  }
+  private queueSaleDrama(result: import('../types').SaleResult) {
+    const state = this.store.state;
+    const dramas = Array.isArray(state.dramas) ? state.dramas : [];
+    if (this.dramaRequestDay === state.day || dramas.some(drama => drama.day === state.day)) return;
+    this.dramaRequestDay = state.day;
+    const context = dramaRequestFromSale(state, result);
+    void requestSocialDrama(context).then(drama => {
+      if (this.store.state.day < drama.day) return;
+      this.store.addSocialDrama(drama);
+    });
+  }
+  private createTestDrama(button: HTMLButtonElement | null) {
+    if (button?.disabled) return;
+    if (button) {
+      button.disabled = true;
+      const label = button.querySelector<HTMLElement>('span');
+      if (label) label.textContent = 'Đang tạo...';
+    }
+    const state = this.store.state;
+    const dramaCount = Array.isArray(state.dramas) ? state.dramas.length : 0;
+    const customer = customers[(state.day + dramaCount) % customers.length];
+    const product = products[(state.day + dramaCount) % products.length];
+    const context = {
+      day: state.day,
+      shopName: state.shopName || 'My Little Boutique',
+      customerName: customer.name,
+      customerHandle: customer.handle,
+      personality: customer.personality,
+      products: [product.name],
+      total: product.sellPrice,
+      budget: customer.budget,
+      score: 88,
+      success: true,
+      viral: true,
+      reason: 'Outfit hợp gu đến mức bài đăng bắt đầu viral.',
+      heat: state.dramaHeat,
+      trust: state.dramaTrust,
+    };
+    void requestSocialDrama(context).then(drama => {
+      drama.id = `test-${state.day}-${Date.now().toString(36)}`;
+      this.store.addSocialDrama(drama);
+      if (this.tab === 'social') this.renderPanel();
+    }).finally(() => {
+      if (!button?.isConnected) return;
+      button.disabled = false;
+      const label = button.querySelector<HTMLElement>('span');
+      if (label) label.textContent = 'Test drama';
+    });
+  }
+  private submitFreeDramaResponse(button: HTMLButtonElement | null) {
+    const dramaId = button?.dataset.drama ?? '';
+    const drama = this.store.state.dramas.find(item => item.id === dramaId);
+    const input = document.querySelector<HTMLTextAreaElement>(`textarea[data-drama-reply="${CSS.escape(dramaId)}"]`);
+    const reply = input?.value.trim() ?? '';
+    if (!drama || !reply) {
+      this.toast('Hãy nhập câu trả lời của shop trước nhé!', 'error');
+      input?.focus();
+      return;
+    }
+    if (button) {
+      button.disabled = true;
+      const label = button.querySelector<HTMLElement>('span');
+      if (label) label.textContent = 'Đang gửi...';
+    }
+    const scrollTop = document.querySelector<HTMLElement>('.social-drawer-content')?.scrollTop ?? 0;
+    void requestDramaReplyEvaluation(drama, reply).then(evaluation => {
+      if (!this.store.resolveSocialDramaCustom(
+        dramaId,
+        reply,
+        evaluation.tone,
+        evaluation.communityText,
+        evaluation.communityAuthorName,
+        evaluation.communityAuthorHandle,
+        evaluation.source,
+      )) return;
+      if (this.tab === 'social') this.renderPanel();
+      const scroller = document.querySelector<HTMLElement>('.social-drawer-content');
+      if (scroller) scroller.scrollTop = scrollTop;
+      requestAnimationFrame(() => {
+        const card = document.querySelector<HTMLElement>(`[data-drama-card="${CSS.escape(dramaId)}"]`);
+        card?.querySelector<HTMLElement>('.thread-reply-composer')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
+    }).finally(() => {
+      if (!button?.isConnected) return;
+      button.disabled = false;
+      const label = button.querySelector<HTMLElement>('span');
+      if (label) label.textContent = 'Gửi';
+    });
   }
   private crisisDetailMarkup() {
     const s = this.store.state;

@@ -76,9 +76,43 @@ export interface Furniture { id: string; name: string; price: number; appeal: nu
 export interface PlacedFurniture { uid: string; id: string; x: number; y: number; rotation: number; displayItems?: string[]; displayLevel?: number; customName?: string; }
 export interface SocialPost {
   id: string; name: string; handle: string; text: string; likes: number; day: number; viral: boolean; color: string; reviewStars: number;
+  createdAt?: number;
   channel?: 'shop' | 'online';
   avatar?: { id: string; skin: string; hair: string; outfit: string; hairStyle: number };
   likedByShop?: boolean;
+}
+export type DramaResponseTone = 'cute' | 'sassy' | 'business';
+export interface SocialDramaChoice {
+  id: string;
+  tone: DramaResponseTone;
+  text: string;
+  resultText: string;
+}
+export interface SocialDramaThreadReply {
+  id: string;
+  shopText: string;
+  tone: DramaResponseTone;
+  communityAuthorName: string;
+  communityAuthorHandle: string;
+  communityText: string;
+  source: 'ai' | 'fallback';
+}
+export interface SocialDrama {
+  id: string;
+  day: number;
+  createdAt?: number;
+  title: string;
+  post: string;
+  authorName: string;
+  authorHandle: string;
+  comments: string[];
+  choices: SocialDramaChoice[];
+  threadReplies: SocialDramaThreadReply[];
+  source: 'ai' | 'fallback';
+  resolvedChoiceId?: string;
+  resolvedTone?: DramaResponseTone;
+  shopReply?: string;
+  outcome?: string;
 }
 export interface DayStats { revenue: number; spent: number; costOfGoods: number; sold: number; served: number; happy: number; trendSales: number; followers: number; rent: number; loanInterest: number; tips: number; staffWages: number; walkouts?: number; soldProducts?: Record<string, number>; }
 export interface ShopLoan {
@@ -193,7 +227,7 @@ export interface GameState {
   pendingMaterialOrders: PendingMaterialOrder[];
   onlineListings: string[]; onlineOrders: OnlineOrder[]; onlineNextOrderIn: number; onlineChannelEnabled: boolean;
   onlineRating: number; onlineReviews: number; onlineSales: number;
-  stats: DayStats; posts: SocialPost[]; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; musicTrack: string; tutorialDone: boolean;
+  stats: DayStats; posts: SocialPost[]; dramas: SocialDrama[]; dramaHeat: number; dramaTrust: number; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; musicTrack: string; tutorialDone: boolean;
   employees: StaffMember[]; staffApplicants: StaffCandidate[]; recruitmentPost: RecruitmentPost | null; staffLeaveRequests: StaffLeaveRequest[];
   campaignSeason: number; industryReputation: number; activeCampaign: ActiveBrandCampaign | null; campaignAvailableDay: number;
   completedCampaigns: string[];

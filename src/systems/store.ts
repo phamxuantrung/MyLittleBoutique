@@ -1,5 +1,5 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { CustomProduct, Customer, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
+import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
 import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
@@ -25,7 +25,16 @@ export class GameStore {
   /** Runtime cache: danh sách khách procedural cho ngày hiện tại */
   private dayCustomers: Customer[] = [];
   private dayCustomersKey = -1; // số ngày đã generate
-  constructor(state?: GameState, save = new SaveSystem(), private random: () => number = Math.random) { this.save = save; this.state = state ?? save.load(); this.ensureDayCustomers(); }
+  constructor(state?: GameState, save = new SaveSystem(), private random: () => number = Math.random) {
+    this.save = save;
+    this.state = state ?? save.load();
+    // Hot-reloaded sessions and callers may still hold a pre-Boutique Buzz state.
+    // Normalize it here so opening the social panel can never crash on old data.
+    if (!Array.isArray(this.state.dramas)) this.state.dramas = [];
+    this.state.dramaHeat = Number.isFinite(this.state.dramaHeat) ? this.state.dramaHeat : 12;
+    this.state.dramaTrust = Number.isFinite(this.state.dramaTrust) ? this.state.dramaTrust : 70;
+    this.ensureDayCustomers();
+  }
   subscribe(fn: (event: GameEvent) => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
   emit(event: GameEvent) { this.listeners.forEach(fn => fn(event)); }
   commit() { this.save.write(this.state); this.emit({ type: 'change' }); }
@@ -133,6 +142,7 @@ export class GameStore {
       viral,
       color: customer.outfit,
       reviewStars: stars,
+      createdAt: Date.now(),
       channel: 'shop',
       avatar: { id: customer.id, skin: customer.skin, hair: customer.hair, outfit: customer.outfit, hairStyle: customer.hairStyle },
     });
@@ -152,6 +162,7 @@ export class GameStore {
       viral: false,
       color: customer.outfit,
       reviewStars: stars,
+      createdAt: Date.now(),
       channel: 'online',
       avatar: { id: customer.id, skin: customer.skin, hair: customer.hair, outfit: customer.outfit, hairStyle: customer.hairStyle },
     });
@@ -164,6 +175,90 @@ export class GameStore {
     post.likedByShop = !post.likedByShop;
     post.likes = Math.max(0, post.likes + (post.likedByShop ? 1 : -1));
     this.commit();
+    return true;
+  }
+
+  addSocialDrama(drama: SocialDrama) {
+    if (!Array.isArray(this.state.dramas)) this.state.dramas = [];
+    if (this.state.dramas.some(item => item.id === drama.id)) return false;
+    this.state.dramas.unshift({ ...drama, createdAt: drama.createdAt ?? Date.now() });
+    this.state.dramas = this.state.dramas.slice(0, 20);
+    this.commit();
+    this.toast('Boutique Buzz vừa có drama mới. Vào bảng tin để hóng!');
+    return true;
+  }
+
+  resolveSocialDrama(dramaId: string, choiceId: string) {
+    if (!Array.isArray(this.state.dramas)) this.state.dramas = [];
+    const drama = this.state.dramas.find(item => item.id === dramaId);
+    if (!drama || drama.resolvedChoiceId) return false;
+    const choice = drama.choices.find(item => item.id === choiceId);
+    if (!choice) return false;
+    drama.resolvedChoiceId = choice.id;
+    drama.resolvedTone = choice.tone;
+    drama.shopReply = choice.text;
+    drama.outcome = choice.resultText;
+    return this.applyDramaResponseEffect(choice.tone);
+  }
+
+  resolveSocialDramaCustom(
+    dramaId: string,
+    reply: string,
+    tone: DramaResponseTone,
+    communityText: string,
+    communityAuthorName = 'Cộng đồng',
+    communityAuthorHandle = '@congdong',
+    source: 'ai' | 'fallback' = 'fallback',
+  ) {
+    if (!Array.isArray(this.state.dramas)) this.state.dramas = [];
+    const drama = this.state.dramas.find(item => item.id === dramaId);
+    const normalizedReply = reply.trim().slice(0, 180);
+    if (!drama || !normalizedReply) return false;
+    const firstInteraction = !drama.resolvedChoiceId && (!Array.isArray(drama.threadReplies) || !drama.threadReplies.length);
+    if (!Array.isArray(drama.threadReplies)) drama.threadReplies = [];
+    if (!drama.threadReplies.length && drama.shopReply && drama.outcome) {
+      drama.threadReplies.push({
+        id: `legacy-${drama.id}`,
+        shopText: drama.shopReply.slice(0, 180),
+        tone: drama.resolvedTone ?? 'business',
+        communityAuthorName: 'Cộng đồng',
+        communityAuthorHandle: '@congdong',
+        communityText: drama.outcome.slice(0, 220),
+        source: 'fallback',
+      });
+    }
+    drama.threadReplies.push({
+      id: `reply-${Date.now().toString(36)}-${drama.threadReplies.length}`,
+      shopText: normalizedReply,
+      tone,
+      communityAuthorName: communityAuthorName.trim().slice(0, 50) || 'Cộng đồng',
+      communityAuthorHandle: communityAuthorHandle.trim().slice(0, 50) || '@congdong',
+      communityText: communityText.trim().slice(0, 220),
+      source,
+    });
+    drama.resolvedChoiceId = 'custom';
+    drama.resolvedTone = tone;
+    drama.shopReply = normalizedReply;
+    drama.outcome = communityText.slice(0, 220);
+    if (firstInteraction) return this.applyDramaResponseEffect(tone);
+    this.commit();
+    return true;
+  }
+
+  private applyDramaResponseEffect(tone: DramaResponseTone) {
+    const effects: Record<DramaResponseTone, { heat: number; trust: number; followers: number; reputation: number }> = {
+      cute: { heat: 2, trust: 6, followers: 5, reputation: .03 },
+      sassy: { heat: 10, trust: -2, followers: 15, reputation: -.02 },
+      business: { heat: 4, trust: 4, followers: 8, reputation: .04 },
+    };
+    const effect = effects[tone];
+    this.state.dramaHeat = Math.max(0, Math.min(100, this.state.dramaHeat + effect.heat));
+    this.state.dramaTrust = Math.max(0, Math.min(100, this.state.dramaTrust + effect.trust));
+    this.state.followers += effect.followers;
+    this.state.stats.followers += effect.followers;
+    this.state.reputation = Math.max(1, Math.min(5, this.state.reputation + effect.reputation));
+    this.commit();
+    this.toast(`${tone === 'sassy' ? 'Câu trả lời đang viral' : 'Đã phản hồi drama'} · +${effect.followers} người theo dõi`);
     return true;
   }
 

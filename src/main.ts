@@ -102,7 +102,10 @@ game = new Phaser.Game({
   backgroundColor: '#fdf0f8',
   antialias: true,
   scale: { mode: Phaser.Scale.ENVELOP, autoCenter: Phaser.Scale.CENTER_BOTH },
-  render: { transparent: false, roundPixels: false, antialias: true, preserveDrawingBuffer: true },
+  // Keeping the WebGL drawing buffer alive costs a full-screen copy every
+  // frame on mobile. The shop snapshot feature was removed, so let the
+  // browser discard it after presenting each frame.
+  render: { transparent: false, roundPixels: false, antialias: true, preserveDrawingBuffer: false },
   input: { activePointers: 2 },
   scene: [scene],
   audio: { noAudio: true },

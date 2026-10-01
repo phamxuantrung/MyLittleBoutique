@@ -331,7 +331,9 @@ export class ShopScene extends Phaser.Scene {
     this.drawGrid();
     this.refresh();
     this.time.addEvent({
-      delay: 180, loop: true, callback: () => {
+      // Advice dots only change every 420 ms. Matching that cadence avoids
+      // repeatedly measuring chat bounds between visible updates.
+      delay: 420, loop: true, callback: () => {
         this.updateAdviceWaitingState();
         this.reflowCustomerChats();
       }
@@ -1340,6 +1342,13 @@ export class ShopScene extends Phaser.Scene {
       });
     }
     for (const entry of this.secondaryCustomers.values()) chats.push({ chat: entry.chat, baseX: 0, baseY: 0 });
+    // A single bubble cannot overlap another bubble. Avoid getBounds(),
+    // sorting and rectangle allocation during the common one-customer case.
+    if (chats.length < 2) {
+      const entry = chats[0];
+      if (entry) entry.chat.setPosition(entry.baseX, entry.baseY);
+      return;
+    }
     chats.sort((a, b) => {
       const parentA = a.chat.parentContainer;
       const parentB = b.chat.parentContainer;
@@ -1895,19 +1904,6 @@ export class ShopScene extends Phaser.Scene {
       this.zoomed = true;
       this.cameras.main.zoomTo(1.28, 300);
     }
-  }
-
-  snapshot() {
-    this.game.renderer.snapshot(image => {
-      if (!(image instanceof HTMLImageElement)) return;
-      const canvas = document.createElement('canvas'); canvas.width = 1000; canvas.height = 780;
-      const ctx = canvas.getContext('2d'); if (!ctx) return;
-      ctx.fillStyle = '#f4f3e9'; ctx.fillRect(0, 0, 1000, 780); ctx.drawImage(image, 0, 10, 1000, 700);
-      const name = this.store.state.shopName || 'My Little Boutique';
-      ctx.fillStyle = '#456454'; ctx.font = '30px Georgia'; ctx.textAlign = 'center'; ctx.fillText(name.toLowerCase(), 500, 722);
-      ctx.font = '16px Arial'; ctx.fillText(`${gameDate(this.store.state.day)} · Cấp ${this.store.state.level} · ${this.store.state.reputation.toFixed(1)} / 5 · Made of little dreams`, 500, 752);
-      const a = document.createElement('a'); a.download = `${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-day-${this.store.state.day}.png`; a.href = canvas.toDataURL('image/png'); a.click(); this.store.toast('Đã chụp lại góc shop của bạn!');
-    });
   }
 
   private getCounterOwnerSpot(): { x: number; y: number; depth: number; flipX: boolean } {

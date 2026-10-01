@@ -20,7 +20,7 @@ import { lookupCustomer } from '../systems/customerGen';
 import { atelierCustomizeModal, atelierPanel, atelierRecipeBookModal, atelierSampleModal, type AtelierSection } from './atelierPanel';
 import { ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipes } from '../data/atelier';
 import { atelierMaterialIllustration, atelierProductPoints } from '../art/atelierArt';
-import Panzoom, { type PanzoomEventDetail, type PanzoomObject } from '@panzoom/panzoom';
+import type { PanzoomEventDetail, PanzoomObject } from '@panzoom/panzoom';
 import type Moveable from 'moveable';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
@@ -102,6 +102,7 @@ export class GameUI {
   private atelierPanzoom?: PanzoomObject;
   private atelierPanzoomCanvas?: HTMLElement;
   private atelierPanzoomWheel?: (event: WheelEvent) => void;
+  private atelierPanzoomInitId = 0;
   private atelierStickerMoveable?: Moveable;
   private atelierDesignStickers: ProductDesignSticker[] = [];
   private atelierSelectedStickerId = '';
@@ -1799,7 +1800,6 @@ export class GameUI {
       case 'move-left': this.moveSelected(-1, 0); break;
       case 'move-right': this.moveSelected(1, 0); break;
       case 'zoom': this.scene?.zoom(); break;
-      case 'snapshot': this.scene?.snapshot(); break;
       case 'upgrade-open': {
         if (this.store.state.phase === 'open') {
           this.toast('Đang trong giờ bán hàng! Bạn có thể nâng cấp tiệm sau khi đóng cửa nhé.', 'info');
@@ -2463,12 +2463,17 @@ export class GameUI {
       y: Math.max(0, Math.min(140, (clientY - bounds.top) / Math.max(1, bounds.height) * 140)),
     };
   }
-  private initAtelierPanzoom(fitOnOpen = false) {
+  private async initAtelierPanzoom(fitOnOpen = false) {
     this.destroyAtelierPanzoom();
+    const initId = this.atelierPanzoomInitId;
     if (this.modal !== 'atelier-customize') return;
     const canvas = this.dialog.querySelector<HTMLElement>('[data-shape-canvas]');
     const svg = canvas?.querySelector<SVGSVGElement>('svg');
     if (!canvas || !svg) return;
+    // The editor is optional gameplay. Keep its gesture engine out of the
+    // initial bundle and download it only when the editor is actually opened.
+    const { default: Panzoom } = await import('@panzoom/panzoom');
+    if (initId !== this.atelierPanzoomInitId || this.modal !== 'atelier-customize' || !canvas.isConnected || !svg.isConnected) return;
     const excluded = Array.from(svg.querySelectorAll<SVGElement>('[data-shape-node], [data-design-sticker], [data-sticker-move], [data-sticker-resize]'));
     const panzoom = Panzoom(svg, {
       canvas: true,
@@ -2597,6 +2602,7 @@ export class GameUI {
     });
   }
   private destroyAtelierPanzoom() {
+    this.atelierPanzoomInitId += 1;
     this.atelierStickerMoveable?.destroy();
     this.atelierStickerMoveable = undefined;
     if (this.atelierPanzoomCanvas && this.atelierPanzoomWheel) {

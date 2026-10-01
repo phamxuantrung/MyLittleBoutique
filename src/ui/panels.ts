@@ -834,9 +834,14 @@ function threadAvatar(name: string, handle: string) {
 }
 
 function socialActivityOrder(s: GameState) {
-  const posts = Array.isArray(s.posts) ? s.posts : [];
+  const dramas = (Array.isArray(s.dramas) ? s.dramas : []).filter(item =>
+    !!item && typeof item.id === 'string' && Number.isFinite(item.day)
+  );
+  const posts = (Array.isArray(s.posts) ? s.posts : []).filter(item =>
+    !!item && typeof item.id === 'string' && Number.isFinite(item.day)
+  );
   const entries = [
-    ...(Array.isArray(s.dramas) ? s.dramas : []).map((item, index) => ({ kind: 'drama' as const, id: item.id, day: item.day, createdAt: item.createdAt, index })),
+    ...dramas.map((item, index) => ({ kind: 'drama' as const, id: item.id, day: item.day, createdAt: item.createdAt, index })),
     ...posts.map((item, index) => ({ kind: 'review' as const, id: item.id, day: item.day, createdAt: item.createdAt, index })),
   ];
   entries.sort((a, b) => {
@@ -908,7 +913,12 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
   const reviewAverage = reviewCount ? reviewTotal / reviewCount : 0;
   const reviewFill = Math.max(0, Math.min(100, reviewAverage / 5 * 100));
   const activityOrder = socialActivityOrder(s);
-  const posts = Array.isArray(s.posts) ? s.posts : [];
+  const posts = (Array.isArray(s.posts) ? s.posts : []).filter(post =>
+    !!post && typeof post.id === 'string' && typeof post.name === 'string'
+    && typeof post.handle === 'string' && typeof post.text === 'string'
+    && typeof post.color === 'string' && Number.isFinite(post.day)
+    && Number.isFinite(post.reviewStars)
+  );
   return `<section class="social-drawer-panel">
     <header class="social-drawer-header">
       <nav class="social-drawer-tabs" aria-label="Bảng tin và tuyển dụng">

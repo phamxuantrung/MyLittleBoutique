@@ -2,7 +2,9 @@ import type { GameState } from '../types';
 
 /** Public feedback is separate from reputation penalties and online ratings. */
 export function shopReviewStats(state: GameState) {
-  const shopPosts = (Array.isArray(state.posts) ? state.posts : []).filter(post => post && post.channel !== 'online');
+  const shopPosts = (Array.isArray(state.posts) ? state.posts : []).filter(post =>
+    post && Number.isFinite(post.reviewStars) && post.channel !== 'online'
+  );
   const hasTotals = Number.isInteger(state.shopReviewCount) && state.shopReviewCount >= shopPosts.length &&
     Number.isFinite(state.shopReviewTotal) && state.shopReviewTotal >= state.shopReviewCount &&
     state.shopReviewTotal <= state.shopReviewCount * 5;

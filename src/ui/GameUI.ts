@@ -13,7 +13,7 @@ import type { ShopScene } from '../scenes/ShopScene';
 import { DISPLAY_GUIDE_SEEN, displayGuideModal, needsDisplayGuide } from './displayGuide';
 import { CAMPAIGN_GUIDE_SEEN } from '../systems/campaigns';
 import { customerCareModal } from './operationsPanel';
-import type { ArrivedOrderSummary, ProductDesignBrushTip, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, StaffAssignment, Style, SupplierId } from '../types';
+import type { ArrivedOrderSummary, ProductDesignBrushTip, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SocialDrama, StaffAssignment, Style, SupplierId } from '../types';
 import { supplierFor, suppliers } from '../systems/operations';
 import { gameCalendarDate } from '../systems/calendar';
 import { lookupCustomer } from '../systems/customerGen';
@@ -22,7 +22,7 @@ import { ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipes } from '../data/
 import { atelierMaterialIllustration, atelierProductPoints } from '../art/atelierArt';
 import type { PanzoomEventDetail, PanzoomObject } from '@panzoom/panzoom';
 import type Moveable from 'moveable';
-import { dramaRequestFromSale, requestDramaReplyEvaluation, requestSocialDrama } from '../systems/drama';
+import { requestDramaReplyEvaluation, requestSocialDrama } from '../systems/drama';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
 type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
@@ -137,7 +137,9 @@ export class GameUI {
   private composingCatalogSearch = false;
   private onlineHandoverProductIds: string[] = [];
   private serveVisitId = '';
-  private dramaRequestDay = 0;
+  private pendingDayDramaDay = 0;
+  private pendingDayDrama?: Promise<SocialDrama>;
+  private preparedDayDrama?: SocialDrama;
   private staffDetailUid = '';
   private financeSection: 'loan' | 'payroll' | 'land' = 'loan';
   private displayHoldDelay = 0;
@@ -200,11 +202,10 @@ export class GameUI {
           event.result.success ? 'success' : 'error'
         );
         audio.play(event.result.viral ? 'reward' : event.result.success ? 'sale' : 'error');
-        this.queueSaleDrama(event.result);
       }
-      if (event.type === 'summary') this.openModal('summary', summaryModal(store.state));
-      if (event.type === 'debt-warning') this.openModal('debt-warning', debtWarningModal(store.state, event.staff));
-      if (event.type === 'game-over') this.openModal('gameover', financialGameOverModal(store.state));
+      if (event.type === 'summary') { this.publishPreparedDayDrama(); this.openModal('summary', summaryModal(store.state)); }
+      if (event.type === 'debt-warning') { this.publishPreparedDayDrama(); this.openModal('debt-warning', debtWarningModal(store.state, event.staff)); }
+      if (event.type === 'game-over') { this.publishPreparedDayDrama(); this.openModal('gameover', financialGameOverModal(store.state)); }
       if (event.type === 'customer' && event.reason !== 'focus') audio.play('bell');
       if (event.type === 'orders-arrived') {
         const items = event.items;
@@ -899,6 +900,7 @@ export class GameUI {
       case 'open': {
         this.navigate('shop');
         this.store.openShop();
+        if (this.store.state.phase === 'open') this.prepareDayDrama();
         // Recover from an interrupted pointer/modal interaction before the sale
         // starts. Without this, the DOM speed button still works while Phaser is
         // left unable to receive taps or drags.
@@ -3166,18 +3168,54 @@ export class GameUI {
       </section>
     `);
   }
-  private queueSaleDrama(result: import('../types').SaleResult) {
+  private prepareDayDrama() {
     const state = this.store.state;
     const dramas = Array.isArray(state.dramas) ? state.dramas : [];
     const nextDramaDay = Number.isFinite(state.nextDramaDay) ? state.nextDramaDay : state.day;
     if (state.day < nextDramaDay) return;
-    if (this.dramaRequestDay === state.day || dramas.some(drama => drama.day === state.day)) return;
-    this.dramaRequestDay = state.day;
-    const context = dramaRequestFromSale(state, result);
-    void requestSocialDrama(context).then(drama => {
-      if (this.store.state.day < drama.day) return;
-      this.store.addSocialDrama(drama);
+    if (this.pendingDayDramaDay === state.day || dramas.some(drama => drama.day === state.day)) return;
+    const customer = customers[(state.day + dramas.length) % customers.length];
+    const availableProducts = products.filter(product => (state.inventory[product.id] ?? 0) > 0);
+    const featuredProducts = (availableProducts.length ? availableProducts : products).slice(0, 4);
+    const context = {
+      day: state.day,
+      shopName: state.shopName || 'My Little Boutique',
+      customerName: customer.name,
+      customerHandle: customer.handle,
+      personality: customer.personality,
+      products: featuredProducts.map(product => product.name),
+      total: featuredProducts.reduce((sum, product) => sum + (state.prices[product.id] ?? product.sellPrice), 0),
+      budget: customer.budget,
+      score: Math.round(Math.max(30, Math.min(95, state.reputation * 18))),
+      success: state.reputation >= 3.5,
+      viral: state.dramaHeat >= 60,
+      reason: `${currentEvent(state).name}: ${currentEvent(state).description}`,
+      heat: state.dramaHeat,
+      trust: state.dramaTrust,
+      recentDramas: dramas.slice(0, 6).map(drama => `${drama.title}: ${drama.post}`.slice(0, 240)),
+    };
+    this.pendingDayDramaDay = state.day;
+    this.preparedDayDrama = undefined;
+    const request = requestSocialDrama(context);
+    this.pendingDayDrama = request;
+    void request.then(drama => {
+      if (this.pendingDayDrama === request && this.pendingDayDramaDay === drama.day) this.preparedDayDrama = drama;
     });
+  }
+  private publishPreparedDayDrama() {
+    const day = this.pendingDayDramaDay;
+    const request = this.pendingDayDrama;
+    const prepared = this.preparedDayDrama;
+    if (!day || (!request && !prepared)) return;
+    this.pendingDayDramaDay = 0;
+    this.pendingDayDrama = undefined;
+    this.preparedDayDrama = undefined;
+    const publish = (drama: SocialDrama) => {
+      if (drama.day !== day || this.store.state.dramas.some(item => item.day === day)) return;
+      this.store.addSocialDrama(drama);
+    };
+    if (prepared) publish(prepared);
+    else if (request) void request.then(publish);
   }
   private createTestDrama(button: HTMLButtonElement | null) {
     if (button?.disabled) return;

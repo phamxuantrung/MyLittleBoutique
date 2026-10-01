@@ -362,6 +362,10 @@ export class ShopScene extends Phaser.Scene {
     });
     this.input.on('dragstart', (pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image) => {
       if (!this.edit) return;
+      if (this.pinchPointerIds || this.activeTouchPointerIds.size > 1) {
+        this.input.setDragState(pointer, 0);
+        return;
+      }
       this.isDraggingPiece = true;
       this.furnitureGesturePointerId = pointer.id;
       this.furnitureDragPointerId = pointer.id;
@@ -390,8 +394,8 @@ export class ShopScene extends Phaser.Scene {
       const draggingWallItem = isWallFurnitureId(obj.getData('furnitureId'));
       obj.setAlpha(.75).setDepth(draggingWallItem ? -600 : 1000);
     });
-    this.input.on('drag', (_pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image, x: number, y: number) => {
-      if (!this.edit) return;
+    this.input.on('drag', (pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image, x: number, y: number) => {
+      if (!this.edit || !this.isDraggingPiece || pointer.id !== this.furnitureDragPointerId) return;
       const p = this.store.state.layout.find(p => p.uid === obj.getData('uid'));
       if (!p) return;
       const wallLift = obj.getData('wallLift') ?? 0;
@@ -416,7 +420,7 @@ export class ShopScene extends Phaser.Scene {
       this.drawGhost({ ...p, ...cell }, valid);
     });
     this.input.on('dragend', (pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image) => {
-      if (!this.edit) return;
+      if (!this.edit || !this.isDraggingPiece || pointer.id !== this.furnitureDragPointerId) return;
       this.isDraggingPiece = false;
       if (this.furnitureDragPointerId === pointer.id) this.furnitureDragPointerId = -1;
       const p = this.store.state.layout.find(piece => piece.uid === obj.getData('uid'));
@@ -440,29 +444,24 @@ export class ShopScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.currentTab !== 'shop') return;
       const nativeEvent = pointer.event as PointerEvent | undefined;
-      const isTouch = nativeEvent?.pointerType === 'touch';
+      // Phaser may expose a TouchEvent without pointerType on iOS Safari.
+      // A coarse device is therefore treated as touch unless it explicitly
+      // reports a mouse pointer.
+      const isTouch = nativeEvent?.pointerType === 'touch'
+        || (this.coarsePointer && nativeEvent?.pointerType !== 'mouse');
       if (isTouch) this.activeTouchPointerIds.add(pointer.id);
-      // A furniture touch owns the whole gesture until that finger is released.
-      // This prevents a brief/stale second touch from converting an item drag
-      // into a camera pinch zoom on mobile devices.
-      if (this.isDraggingPiece || this.furnitureGesturePointerId >= 0) {
+      // An active furniture drag owns the gesture. A stationary furniture
+      // touch may still become a deliberate two-finger pinch below.
+      if (this.isDraggingPiece) {
         this.isPanning = false;
         this.pinchDist = 0;
         this.pinchPointerIds = undefined;
         this.panPointerId = -1;
-        return;
-      }
-      if (this.edit && this.activeTouchPointerIds.size > 1) {
-        this.isPanning = false;
-        this.panPointerId = -1;
-        this.pinchDist = 0;
-        this.pinchPointerIds = undefined;
         return;
       }
       const first = this.input.pointer1;
       const second = this.input.pointer2;
       const hasExactTouchPair = isTouch
-        && !this.edit
         && this.activeTouchPointerIds.size === 2
         && first.isDown
         && second.isDown
@@ -471,13 +470,15 @@ export class ShopScene extends Phaser.Scene {
       if (hasExactTouchPair) {
         this.isPanning = false;
         this.panPointerId = -1;
+        this.furnitureGesturePointerId = -1;
+        this.furnitureDragPointerId = -1;
         this.pinchPointerIds = [first.id, second.id];
         this.pinchDist = Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y);
         this.pinchZoom = this.cameras.main.zoom;
         return;
       }
       if (isTouch && this.activeTouchPointerIds.size !== 1) return;
-      if (this.isDraggingPiece) return;
+      if (this.furnitureGesturePointerId >= 0) return;
       this.isPanning = true;
       this.panPointerId = pointer.id;
       this.hasPanned = false;
@@ -489,7 +490,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.currentTab !== 'shop') return;
-      if (this.isDraggingPiece || this.furnitureGesturePointerId >= 0) {
+      if (this.isDraggingPiece) {
         this.isPanning = false;
         this.pinchDist = 0;
         this.pinchPointerIds = undefined;
@@ -520,6 +521,7 @@ export class ShopScene extends Phaser.Scene {
         this.cameras.main.scrollY += before.y - after.y;
         return;
       }
+      if (this.furnitureGesturePointerId >= 0) return;
       if (!this.isPanning || this.isDraggingPiece || pointer.id !== this.panPointerId) return;
       const pointerDx = pointer.x - this.panStartX;
       const pointerDy = pointer.y - this.panStartY;

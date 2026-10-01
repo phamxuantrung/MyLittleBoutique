@@ -9,6 +9,7 @@ import { ShopScene } from './scenes/ShopScene';
 
 let game: Phaser.Game | undefined;
 let viewportFrame = 0;
+let viewportSettleTimers: number[] = [];
 
 /**
  * Mobile Safari can report its final landscape height a few frames after the
@@ -17,8 +18,13 @@ let viewportFrame = 0;
  */
 const syncVisualViewport = () => {
   const viewport = window.visualViewport;
-  const height = Math.round(viewport?.height ?? window.innerHeight);
-  const width = Math.round(viewport?.width ?? window.innerWidth);
+  // On a cold landscape launch iOS may initially report visualViewport as
+  // shorter than the actual layout viewport. Never shrink the game to that
+  // transient value; include its offset for Safari's shifted visual viewport.
+  const visualHeight = Math.round((viewport?.height ?? 0) + (viewport?.offsetTop ?? 0));
+  const visualWidth = Math.round((viewport?.width ?? 0) + (viewport?.offsetLeft ?? 0));
+  const height = Math.max(visualHeight, window.innerHeight, document.documentElement.clientHeight);
+  const width = Math.max(visualWidth, window.innerWidth, document.documentElement.clientWidth);
   document.documentElement.style.setProperty('--app-height', `${height}px`);
   document.documentElement.style.setProperty('--app-width', `${width}px`);
   cancelAnimationFrame(viewportFrame);
@@ -50,16 +56,25 @@ game = new Phaser.Game({
   banner: false,
 });
 const settleMobileViewport = () => {
+  viewportSettleTimers.forEach(timer => window.clearTimeout(timer));
+  viewportSettleTimers = [];
   syncVisualViewport();
-  window.setTimeout(syncVisualViewport, 80);
-  window.setTimeout(syncVisualViewport, 260);
-  window.setTimeout(syncVisualViewport, 600);
+  // Safari can finish expanding a directly-opened landscape tab well after
+  // its first resize/orientation event, especially when restored from history.
+  for (const delay of [50, 150, 320, 650, 1000, 1600, 2400, 3600]) {
+    viewportSettleTimers.push(window.setTimeout(syncVisualViewport, delay));
+  }
 };
 window.addEventListener('resize', settleMobileViewport, { passive: true });
 window.addEventListener('orientationchange', settleMobileViewport, { passive: true });
+window.screen.orientation?.addEventListener('change', settleMobileViewport);
 window.addEventListener('pageshow', settleMobileViewport, { passive: true });
+window.addEventListener('focus', settleMobileViewport, { passive: true });
 window.visualViewport?.addEventListener('resize', syncVisualViewport, { passive: true });
 window.visualViewport?.addEventListener('scroll', syncVisualViewport, { passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) settleMobileViewport(); });
+document.addEventListener('pointerdown', syncVisualViewport, { capture: true, passive: true });
+new ResizeObserver(syncVisualViewport).observe(document.documentElement);
 settleMobileViewport();
 ui.attachScene(scene);
 game.events.once('shop-ready', () => {

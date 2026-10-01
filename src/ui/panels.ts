@@ -872,9 +872,18 @@ function socialDramaFeed(s: GameState, activityOrder: Map<string, number>) {
   return dramas.slice(0, 8).map(drama => {
       const comments = drama.comments.filter(comment => typeof comment === 'string').slice(0, 3);
       const savedThread = (Array.isArray(drama.threadReplies) ? drama.threadReplies : []).filter(item =>
-        !!item && typeof item.shopText === 'string' && typeof item.communityText === 'string'
-      );
-      const conversation = savedThread.length ? savedThread : drama.shopReply && drama.outcome ? [{
+        !!item && typeof item === 'object'
+        && typeof item.shopText === 'string' && typeof item.communityText === 'string'
+      ).map((item, index) => ({
+        id: typeof item.id === 'string' ? item.id : `safe-reply-${index}`,
+        shopText: item.shopText,
+        tone: item.tone === 'cute' || item.tone === 'sassy' || item.tone === 'business' ? item.tone : 'business' as const,
+        communityAuthorName: typeof item.communityAuthorName === 'string' && item.communityAuthorName.trim() ? item.communityAuthorName : 'Cộng đồng',
+        communityAuthorHandle: typeof item.communityAuthorHandle === 'string' && item.communityAuthorHandle.trim() ? item.communityAuthorHandle : '@congdong',
+        communityText: item.communityText,
+        source: item.source === 'ai' ? 'ai' as const : 'fallback' as const,
+      }));
+      const conversation = savedThread.length ? savedThread : typeof drama.shopReply === 'string' && typeof drama.outcome === 'string' ? [{
         id: `legacy-${drama.id}`,
         shopText: drama.shopReply,
         tone: drama.resolvedTone ?? 'business' as const,
@@ -925,6 +934,7 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
         <button class="${section === 'feed' ? 'is-active' : ''}" data-action="social-section" data-id="feed" aria-pressed="${section === 'feed'}">${icon('social')}<span>Bảng tin</span></button>
         <button class="${section === 'recruitment' ? 'is-active' : ''}" data-action="social-section" data-id="recruitment" aria-pressed="${section === 'recruitment'}">${icon('edit')}<span>Đăng tin</span>${s.staffApplicants.length ? `<b>${s.staffApplicants.length}</b>` : ''}</button>
       </nav>
+      ${section === 'feed' ? `<button class="boutique-drama-test" data-action="drama-ai-test" title="Kiểm tra kết nối AI trên máy chủ">${icon('sparkle')}<span>Test AI</span></button>` : ''}
     </header>
     <div class="social-drawer-content">
       ${section === 'recruitment' ? socialDrawerRecruitment(s) : `<section class="drawer-review-feed">

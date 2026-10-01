@@ -1533,8 +1533,8 @@ export class GameUI {
         }
         break;
       }
-      case 'drama-test':
-        this.createTestDrama(target as HTMLButtonElement | null);
+      case 'drama-ai-test':
+        this.testDramaAI(target as HTMLButtonElement | null);
         break;
       case 'drama-free-response':
         this.submitFreeDramaResponse(target as HTMLButtonElement | null);
@@ -2274,15 +2274,26 @@ export class GameUI {
         console.error('Recovered an invalid Boutique Buzz feed', error);
         const safeState = {
           ...this.store.state,
-          posts: Array.isArray(this.store.state.posts) ? this.store.state.posts : [],
-          dramas: Array.isArray(this.store.state.dramas) ? this.store.state.dramas : [],
+          posts: (Array.isArray(this.store.state.posts) ? this.store.state.posts : []).filter(post =>
+            !!post && typeof post === 'object' && typeof post.id === 'string'
+            && typeof post.name === 'string' && typeof post.handle === 'string'
+            && typeof post.text === 'string' && typeof post.color === 'string'
+            && Number.isFinite(post.day) && Number.isFinite(post.reviewStars)
+          ),
+          dramas: (Array.isArray(this.store.state.dramas) ? this.store.state.dramas : []).filter(drama =>
+            !!drama && typeof drama === 'object' && typeof drama.id === 'string'
+            && typeof drama.title === 'string' && typeof drama.post === 'string'
+            && typeof drama.authorName === 'string' && typeof drama.authorHandle === 'string'
+            && Array.isArray(drama.comments) && Array.isArray(drama.choices)
+          ),
           staffApplicants: Array.isArray(this.store.state.staffApplicants) ? this.store.state.staffApplicants : [],
         };
         try {
           contentHtml = socialPanel(safeState, this.socialSection);
         } catch (fallbackError) {
           console.error('Could not render Boutique Buzz fallback', fallbackError);
-          contentHtml = `<section class="social-drawer-panel"><div class="social-drawer-state social-drawer-empty"><strong>Bảng tin đang tải lại</strong><span>Đóng rồi mở Bảng tin để thử lại.</span></div></section>`;
+          this.toast('Bảng tin vừa bỏ qua một bài bị lỗi dữ liệu.', 'error');
+          contentHtml = `<section class="social-drawer-panel"><header class="social-drawer-header"><strong>Bảng tin</strong></header><div class="social-drawer-content"><div class="social-drawer-state social-drawer-empty">${icon('social')}<strong>Đã chặn dữ liệu bài viết bị lỗi</strong><span>Tiến trình game vẫn được giữ nguyên. Hãy đóng rồi mở lại Bảng tin.</span></div></div><button class="social-drawer-handle" data-action="nav" data-id="shop" aria-label="Đóng bảng tin" title="Đóng">${icon('arrow')}</button></section>`;
         }
       }
     } else if (this.tab === 'decor') {
@@ -3217,12 +3228,12 @@ export class GameUI {
     if (prepared) publish(prepared);
     else if (request) void request.then(publish);
   }
-  private createTestDrama(button: HTMLButtonElement | null) {
+  private testDramaAI(button: HTMLButtonElement | null) {
     if (button?.disabled) return;
     if (button) {
       button.disabled = true;
       const label = button.querySelector<HTMLElement>('span');
-      if (label) label.textContent = 'Đang tạo...';
+      if (label) label.textContent = 'Đang kiểm tra...';
     }
     const state = this.store.state;
     const dramaCount = Array.isArray(state.dramas) ? state.dramas.length : 0;
@@ -3244,15 +3255,31 @@ export class GameUI {
       heat: state.dramaHeat,
       trust: state.dramaTrust,
     };
-    void requestSocialDrama(context).then(drama => {
-      drama.id = `test-${state.day}-${Date.now().toString(36)}`;
-      this.store.addSocialDrama(drama);
-      if (this.tab === 'social') this.renderPanel();
+    const startedAt = performance.now();
+    void fetch('/api/drama', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(context),
+    }).then(async response => {
+      const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+      if (!response.ok) {
+        const upstream = typeof payload.upstreamStatus === 'number' ? ` · OpenAI ${payload.upstreamStatus}` : '';
+        throw new Error(`API ${response.status}${upstream}: ${typeof payload.error === 'string' ? payload.error : 'Không có phản hồi hợp lệ'}`);
+      }
+      if (typeof payload.title !== 'string' || typeof payload.post !== 'string' || !Array.isArray(payload.comments)) {
+        throw new Error('API 200 nhưng dữ liệu drama không hợp lệ');
+      }
+      const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1);
+      this.toast(`AI hoạt động tốt · ${elapsed}s · “${payload.title.slice(0, 45)}”`);
+    }).catch(error => {
+      const message = error instanceof Error ? error.message : 'Không xác định được lỗi';
+      console.error('Drama AI diagnostic failed', error);
+      this.toast(`Test AI thất bại · ${message}`, 'error');
     }).finally(() => {
       if (!button?.isConnected) return;
       button.disabled = false;
       const label = button.querySelector<HTMLElement>('span');
-      if (label) label.textContent = 'Test drama';
+      if (label) label.textContent = 'Test AI';
     });
   }
   private submitFreeDramaResponse(button: HTMLButtonElement | null) {

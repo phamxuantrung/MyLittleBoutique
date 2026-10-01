@@ -92,6 +92,20 @@ describe('timed shop and random visits', () => {
     store.state.customerMode = 'browse'; store.state.patience = 1; store.state.inventory = {};
     store.tick(); expect(store.state.phase).toBe('closed'); expect(store.state.stats.walkouts).toBe(0); expect(store.state.stats.sold).toBe(0);
   });
+  it('lets an open consultation finish its customer wait after trading time ends', () => {
+    const store = make(() => .34); store.openShop(); arrive(store);
+    const visit = store.state.activeVisits[0];
+    expect(visit.mode).toBe('advice');
+    visit.patience = 2; store.state.patience = 2; store.state.dayTimer = 1;
+    store.tick(visit.uid);
+    expect(store.state.phase).toBe('open');
+    expect(store.state.dayTimer).toBe(0);
+    expect(store.state.activeVisits).toHaveLength(1);
+    expect(store.state.patience).toBe(1);
+    store.tick(visit.uid);
+    expect(store.state.phase).toBe('closed');
+    expect(store.state.stats.walkouts).toBe(1);
+  });
   it('persists the current visitor, mode, countdown and idle interval across reload', () => {
     const store = make(() => .34); store.openShop(); arrive(store);
     store.state.nextArrivalIn = 1; store.tick();

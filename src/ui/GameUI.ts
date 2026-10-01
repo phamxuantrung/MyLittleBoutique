@@ -218,7 +218,7 @@ export class GameUI {
         this.saleTickProgress += this.saleSpeed / 4;
         if (this.saleTickProgress >= 1) {
           this.saleTickProgress -= 1;
-          this.store.tick();
+          this.store.tick(this.modal === 'serve' ? this.serveVisitId : '');
         }
       }
       this.updatePatience();

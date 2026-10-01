@@ -39008,3 +39008,31 @@ html, body {
     left: calc(max(14px, var(--mobile-safe-left, 14px)) + 80px) !important;
   }
 }
+
+/* Active customer consultation: red warning aura around the modal edge. */
+dialog.dialog-serve[open] {
+  border-color: rgba(244, 76, 103, .82);
+  animation: consultation-red-aura-pulse 1.15s ease-in-out infinite;
+}
+
+@keyframes consultation-red-aura-pulse {
+  0%, 100% {
+    box-shadow:
+      0 16px 48px rgba(140, 40, 130, .22),
+      0 0 0 2px rgba(255, 80, 105, .16),
+      0 0 14px rgba(239, 45, 77, .28);
+  }
+  50% {
+    border-color: rgba(255, 48, 78, 1);
+    box-shadow:
+      0 16px 48px rgba(140, 40, 130, .28),
+      0 0 0 4px rgba(255, 73, 99, .42),
+      0 0 28px 8px rgba(239, 45, 77, .58);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.dialog-serve[open] {
+    animation-duration: 2.4s;
+  }
+}

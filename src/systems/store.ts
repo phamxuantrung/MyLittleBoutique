@@ -1152,7 +1152,7 @@ export class GameStore {
     if (needsAdvice) this.toast(`${customer.name} cần tư vấn! Chạm vào khách hoặc khung chat để phối đồ.`);
     return true;
   }
-  tick() {
+  tick(overtimeAdviceVisitId = '') {
     if (this.state.phase !== 'open') return;
     if (!this.hasDisplayedStock()) {
       this.closeDay('sold-out');
@@ -1175,14 +1175,25 @@ export class GameStore {
       }
     }
     this.state.dayTimer = Math.max(0, this.state.dayTimer - 1);
-    if (!this.state.dayTimer) { this.closeDay('time'); return; }
-    this.processOnlineChannel();
-    this.state.nextArrivalIn = Math.max(0, this.state.nextArrivalIn - 1);
-    if (!this.state.nextArrivalIn && this.state.activeVisits.length < this.maxConcurrentCustomers()) {
-      this.state.nextArrivalIn = arrivalDelay(this.state, this.random);
-      this.admitCustomer();
-      const groupChance = Math.min(.24, .015 + Math.max(0, this.state.level - 1) * .03 + (this.state.landLevel ?? 0) * .025);
-      if (this.state.activeVisits.length < this.maxConcurrentCustomers() && this.random() < groupChance) this.admitCustomer();
+    const overtimeAdviceVisit = !this.state.dayTimer && overtimeAdviceVisitId
+      ? this.state.activeVisits.find(visit => visit.uid === overtimeAdviceVisitId && visit.mode === 'advice')
+      : undefined;
+    if (!this.state.dayTimer && !overtimeAdviceVisit) { this.closeDay('time'); return; }
+    if (overtimeAdviceVisit) {
+      // Keep only the consultation that was already open when trading time ended.
+      // No new visitors or online orders are processed during this short grace period.
+      this.state.activeVisits = [overtimeAdviceVisit];
+      this.state.currentVisitId = overtimeAdviceVisit.uid;
+      this.syncFocusedVisit();
+    } else {
+      this.processOnlineChannel();
+      this.state.nextArrivalIn = Math.max(0, this.state.nextArrivalIn - 1);
+      if (!this.state.nextArrivalIn && this.state.activeVisits.length < this.maxConcurrentCustomers()) {
+        this.state.nextArrivalIn = arrivalDelay(this.state, this.random);
+        this.admitCustomer();
+        const groupChance = Math.min(.24, .015 + Math.max(0, this.state.level - 1) * .03 + (this.state.landLevel ?? 0) * .025);
+        if (this.state.activeVisits.length < this.maxConcurrentCustomers() && this.random() < groupChance) this.admitCustomer();
+      }
     }
 
     for (const visit of this.state.activeVisits) visit.patience = Math.max(0, visit.patience - 1);
@@ -1200,6 +1211,10 @@ export class GameStore {
         if (pick.success) this.customerSelfPickSale(pick.items, pick.total, pick.score, pick.speech);
         else this.customerSelfWalkout(pick.speech);
       }
+    }
+    if (!this.state.dayTimer && !this.state.activeVisits.some(visit => visit.uid === overtimeAdviceVisitId)) {
+      this.closeDay('time');
+      return;
     }
     if (this.state.dayTimer % 5 === 0) this.save.write(this.state);
   }

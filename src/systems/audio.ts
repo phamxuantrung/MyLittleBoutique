@@ -28,11 +28,53 @@ export class AudioSystem {
   private musicTrack?: HTMLAudioElement;
   private effectPools = new Map<SfxKind, HTMLAudioElement[]>();
   private effectCursor = new Map<SfxKind, number>();
+  private effectContext?: AudioContext;
+  private effectBuffers = new Map<SfxKind, AudioBuffer>();
+  private effectLoads = new Map<SfxKind, Promise<void>>();
   private musicVolume = 0.55;
   private selectedTrack = 'boutique-bloom';
   enabled = true;
 
+  constructor() {
+    // Start fetching and decoding while the opening screen is visible. HTML
+    // audio remains as a fallback, but decoded Web Audio buffers remove the
+    // first-tap delay that Mobile Safari adds to MP3 elements.
+    (Object.keys(SFX_URLS) as SfxKind[]).forEach(kind => {
+      this.effectPool(kind).forEach(effect => effect.load());
+      void this.loadEffectBuffer(kind);
+    });
+  }
+
+  private context() {
+    if (this.effectContext) return this.effectContext;
+    try {
+      this.effectContext = new AudioContext({ latencyHint: 'interactive' });
+    } catch { /* HTMLAudio fallback covers browsers without Web Audio. */ }
+    return this.effectContext;
+  }
+
+  private loadEffectBuffer(kind: SfxKind) {
+    const existing = this.effectLoads.get(kind);
+    if (existing) return existing;
+    const context = this.context();
+    if (!context) return Promise.resolve();
+    const loading = fetch(SFX_URLS[kind], { cache: 'force-cache' })
+      .then(response => response.ok ? response.arrayBuffer() : Promise.reject(new Error(`Audio ${response.status}`)))
+      .then(bytes => context.decodeAudioData(bytes))
+      .then(buffer => { this.effectBuffers.set(kind, buffer); })
+      .catch(() => { /* Keep the preloaded HTMLAudio fallback. */ });
+    this.effectLoads.set(kind, loading);
+    return loading;
+  }
+
   async unlock() {
+    const context = this.context();
+    if (context) {
+      try {
+        if (context.state === 'suspended') await context.resume();
+        return;
+      } catch { /* Continue with the HTMLAudio primer below. */ }
+    }
     try {
       (Object.keys(SFX_URLS) as SfxKind[]).forEach(kind => this.effectPool(kind));
       const primer = this.effectPool('click')[0];
@@ -79,6 +121,19 @@ export class AudioSystem {
 
   play(kind: SfxKind) {
     if (!this.enabled) return;
+    const context = this.context();
+    const buffer = this.effectBuffers.get(kind);
+    if (context && buffer) {
+      if (context.state === 'suspended') void context.resume();
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      source.buffer = buffer;
+      gain.gain.value = SFX_VOLUME[kind];
+      source.connect(gain).connect(context.destination);
+      source.start(0);
+      return;
+    }
+    void this.loadEffectBuffer(kind);
     const pool = this.effectPool(kind);
     const available = pool.find(effect => effect.paused || effect.ended);
     const cursor = this.effectCursor.get(kind) ?? 0;

@@ -38847,3 +38847,14 @@ input[data-music-volume] {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* iOS visual viewport bootstrap fix */
+:root { --app-width: 100vw; --app-height: 100dvh; }
+#app { width: var(--app-width, 100vw) !important; height: var(--app-height, 100dvh) !important; }
+
+
+/* iOS first-landscape full-screen surfaces */
+@media (orientation: landscape) and (max-height: 540px) {
+  dialog.dialog-name-shop:has(.game-intro-screen) { height: var(--app-height, 100dvh) !important; max-height: var(--app-height, 100dvh) !important; }
+  dialog.dialog-name-shop:has(.game-intro-screen) .game-intro-screen { height: 100% !important; }
+}

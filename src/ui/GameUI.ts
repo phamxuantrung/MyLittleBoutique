@@ -140,6 +140,7 @@ export class GameUI {
   private displayHoldRepeat = 0;
   private displayHoldStart?: { x: number; y: number };
   private suppressDisplayAddClick = false;
+  private earlyClickTarget?: HTMLElement;
   constructor(private store: GameStore, private audio: AudioSystem) {
     this.shell(); this.render(); this.bind();
     this.queueDisplayGuide();
@@ -383,6 +384,17 @@ export class GameUI {
     };
     document.addEventListener('pointerdown', protectCanvasFromUiPointer, true);
     document.addEventListener('pointerup', protectCanvasFromUiPointer, true);
+    document.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      const target = (event.target as Element).closest<HTMLElement>('[data-action]');
+      if (!target || target instanceof HTMLButtonElement && target.disabled || target.closest('input[type="range"]')) return;
+      const action = target.dataset.action ?? '';
+      const isFinancePayment = this.modal === 'finance' && FINANCE_BALANCE_ACTIONS.has(action);
+      if (MONEY_PURCHASE_ACTIONS.has(action) || isFinancePayment) return;
+      void this.audio.unlock();
+      this.audio.play('click');
+      this.earlyClickTarget = target;
+    }, { capture: true, passive: true });
     let musicVolumePointer = -1;
     let musicVolumeInput: HTMLInputElement | undefined;
     const updateMusicVolumeFromPointer = (input: HTMLInputElement, clientX: number, persist: boolean) => {
@@ -635,7 +647,9 @@ export class GameUI {
       const isFinancePayment = this.modal === 'finance' && FINANCE_BALANCE_ACTIONS.has(action);
       const isMoneyPurchase = MONEY_PURCHASE_ACTIONS.has(action) || isFinancePayment;
       const moneyBefore = this.store.state.money;
-      if (!isMoneyPurchase) this.audio.play('click');
+      const clickPlayedOnPointerDown = this.earlyClickTarget === target;
+      this.earlyClickTarget = undefined;
+      if (!isMoneyPurchase && !clickPlayedOnPointerDown) this.audio.play('click');
       this.suppressSuccessToastAudio = isMoneyPurchase || action === 'online-list' || action === 'place-stored';
       this.suppressTransactionSuccessToast = isImportPayment || isFinancePayment;
       try {

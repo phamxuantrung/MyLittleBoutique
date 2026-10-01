@@ -24,7 +24,7 @@ import Panzoom, { type PanzoomEventDetail, type PanzoomObject } from '@panzoom/p
 import type Moveable from 'moveable';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
-type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
+type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'atelier-recipe-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
 const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
@@ -56,6 +56,7 @@ export class GameUI {
   private selected: string[] = [];
   private outfitCategory = 'all';
   private selectedFurniture?: string;
+  private pendingStoreFurnitureUid = '';
   private filter = 'all';
   private inventoryMode: 'stock' | 'pending' | 'custom' = 'stock';
   private importFilters = defaultFilters();
@@ -1674,12 +1675,27 @@ export class GameUI {
         break;
       }
       case 'move-store': {
-        if (this.selectedFurniture) {
-          this.store.storeFurniture(this.selectedFurniture);
-          this.selectedFurniture = undefined;
-          this.scene?.setMoveMode(false);
-          this.renderMoveToolbar();
-        }
+        const placed = this.store.state.layout.find(item => item.uid === this.selectedFurniture);
+        const definition = placed && furniture.find(item => item.id === placed.id);
+        if (!placed || !definition) break;
+        this.pendingStoreFurnitureUid = placed.uid;
+        const displayedItems = placed.displayItems?.length ?? 0;
+        this.openModal('store-furniture-confirm', `<section class="store-furniture-confirmation">
+          <button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
+          <div class="store-furniture-art"><span>${furnitureImage(definition)}</span><i>${icon('hudFixtureStore')}</i></div>
+          <div class="store-furniture-copy"><small>CẤT ĐỒ VÀO KHO</small><h2>Cất ${escapeHtml(placed.customName || definition.name)}?</h2><p>Món đồ sẽ được đưa vào kho nội thất và bạn có thể đặt lại bất cứ lúc nào.${displayedItems ? ` ${displayedItems} sản phẩm đang trưng bày cũng sẽ được trả về kho hàng.` : ''}</p></div>
+          <footer><button class="btn btn-secondary" data-action="close-modal">Giữ lại</button><button class="btn btn-primary" data-action="move-store-confirmed">${icon('hudFixtureStore')} Cất vào kho</button></footer>
+        </section>`);
+        break;
+      }
+      case 'move-store-confirmed': {
+        const uid = this.pendingStoreFurnitureUid;
+        if (uid && this.store.state.layout.some(item => item.uid === uid)) this.store.storeFurniture(uid);
+        this.pendingStoreFurnitureUid = '';
+        if (this.selectedFurniture === uid) this.selectedFurniture = undefined;
+        this.scene?.setMoveMode(false);
+        this.closeModal();
+        this.renderMoveToolbar();
         break;
       }
       case 'move-start': if (this.selectedFurniture) this.scene?.setMoveMode(true, this.selectedFurniture); break;
@@ -2831,6 +2847,7 @@ export class GameUI {
       this.destroyAtelierPanzoom();
     }
     if (closingModal === 'atelier-delete-confirm') this.pendingBlueprintDeleteId = '';
+    if (closingModal === 'store-furniture-confirm') this.pendingStoreFurnitureUid = '';
     if (closingModal === 'import-quantity') this.expandedImportPurchase = '';
     this.modal = 'none';
     this.dialog.close();

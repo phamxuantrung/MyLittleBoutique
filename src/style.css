@@ -39036,3 +39036,22 @@ dialog.dialog-serve[open] {
     animation-duration: 2.4s;
   }
 }
+
+
+/* Pulse only when the matching consultation has 10 seconds or less. */
+dialog.dialog-serve[open] {
+  border-color: #f0d4ec;
+  box-shadow: 0 16px 48px rgba(140, 40, 130, .22);
+  animation: none;
+}
+
+dialog.dialog-serve[open].is-patience-urgent {
+  border-color: rgba(244, 76, 103, .82);
+  animation: consultation-red-aura-pulse 1.15s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.dialog-serve[open].is-patience-urgent {
+    animation-duration: 2.4s;
+  }
+}

@@ -2281,6 +2281,8 @@ export class GameUI {
   private updatePatience() {
     const s = this.store.state, c = activeCustomer(s);
     const visit = activeVisit(s);
+    const urgentConsultation = this.modal === 'serve' && visit?.uid === this.serveVisitId && visit.patience <= 10;
+    this.dialog.classList.toggle('is-patience-urgent', urgentConsultation);
     const label = document.querySelector('#patience-label'); if (label) label.textContent = `${s.patience}s`;
     const bar = document.querySelector<HTMLElement>('#patience-bar'); if (bar && c) bar.style.width = `${visit ? visit.patience / visit.maxPatience * 100 : 0}%`;
     const modal = document.querySelector('#modal-patience'); if (modal) modal.innerHTML = `${icon('clock')} ${s.patience}s`;
@@ -2428,6 +2430,7 @@ export class GameUI {
     this.selected = [];
     this.outfitCategory = 'all';
     this.openModal('serve', serveModal(this.store.state, this.selected, this.outfitCategory));
+    this.updatePatience();
   }
   private refreshOnlineChannel() {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');

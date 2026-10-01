@@ -38872,3 +38872,139 @@ html, body {
     min-height: 100lvh;
   }
 }
+
+/* Desktop readability layer: never applies to touch-first mobile layouts. */
+@media (min-width: 1280px) and (min-height: 700px) and (hover: hover) and (pointer: fine) {
+  :root { --desktop-ui-scale: 1.16; }
+
+  .game-top-bar > * {
+    zoom: var(--desktop-ui-scale);
+  }
+
+  .game-hud-layer :is(
+    .standalone-dock-btn,
+    .dock-item,
+    .staff-manager-fab,
+    .online-channel-fab,
+    .customer-care-hud-button,
+    .land-expand-fab,
+    .finance-hud-button,
+    .hud-edge-button,
+    .selection-move-fab,
+    .sale-character-card,
+    .close-shop-button,
+    .sale-speed-button
+  ) {
+    zoom: var(--desktop-ui-scale);
+  }
+
+  .settings-hud-button,
+  .finance-hud-button,
+  .hud-edge-button {
+    bottom: calc(max(12px, var(--mobile-safe-bottom, 12px)) + 72px) !important;
+  }
+
+  .land-expand-fab,
+  .campaign-hud-button {
+    bottom: calc(max(12px, var(--mobile-safe-bottom, 12px)) + 116px) !important;
+  }
+
+  .dock-btn-decor,
+  .dock-btn-social {
+    bottom: calc(max(12px, var(--mobile-safe-bottom, 12px)) + 160px) !important;
+  }
+
+  .dock-btn-stock {
+    right: calc(max(12px, var(--mobile-safe-right, 12px)) + 72px) !important;
+  }
+
+  .dock-btn-atelier {
+    right: calc(max(12px, var(--mobile-safe-right, 12px)) + 116px) !important;
+  }
+
+  .dock-btn-trend {
+    left: calc(max(12px, var(--mobile-safe-left, 12px)) + 72px) !important;
+  }
+
+  dialog[open]:not(.dialog-name-shop) {
+    max-width: 84vw !important;
+    max-height: 82vh !important;
+    transform: scale(1.12);
+    transform-origin: center;
+  }
+
+  :is(.game-content-panel, dialog) :is(p, li, label, small, em, output) {
+    font-size: clamp(10.5px, .68vw, 12px) !important;
+    line-height: 1.42 !important;
+  }
+
+  :is(.game-content-panel, dialog) :is(.eyebrow, [class*="label"], [class*="badge"], [class*="chip"], [class*="tag"]) {
+    font-size: clamp(9.5px, .62vw, 11px) !important;
+    line-height: 1.28 !important;
+  }
+
+  :is(.game-content-panel, dialog) h1 {
+    font-size: clamp(25px, 1.65vw, 32px) !important;
+    line-height: 1.12 !important;
+  }
+
+  :is(.game-content-panel, dialog) h2 {
+    font-size: clamp(20px, 1.35vw, 27px) !important;
+    line-height: 1.16 !important;
+  }
+
+  :is(.game-content-panel, dialog) h3 {
+    font-size: clamp(15px, 1vw, 20px) !important;
+    line-height: 1.22 !important;
+  }
+
+  :is(.game-content-panel, dialog) button {
+    font-size: clamp(11px, .72vw, 13px) !important;
+    line-height: 1.2 !important;
+  }
+
+  :is(.game-content-panel, dialog) :is(.btn, .panel-close-btn, .icon-button) {
+    min-height: 42px;
+  }
+
+  :is(.game-content-panel, dialog) :is(input:not([type="range"]), select, textarea) {
+    min-height: 40px;
+    font-size: 12px !important;
+  }
+}
+
+@media (min-width: 1600px) and (min-height: 850px) and (hover: hover) and (pointer: fine) {
+  :root { --desktop-ui-scale: 1.26; }
+
+  dialog[open]:not(.dialog-name-shop) {
+    transform: scale(1.18);
+  }
+
+  .settings-hud-button,
+  .finance-hud-button,
+  .hud-edge-button {
+    bottom: calc(max(14px, var(--mobile-safe-bottom, 14px)) + 80px) !important;
+  }
+
+  .land-expand-fab,
+  .campaign-hud-button {
+    bottom: calc(max(14px, var(--mobile-safe-bottom, 14px)) + 130px) !important;
+  }
+
+  .dock-btn-decor,
+  .dock-btn-social {
+    bottom: calc(max(14px, var(--mobile-safe-bottom, 14px)) + 180px) !important;
+  }
+
+  .dock-btn-stock {
+    right: calc(max(14px, var(--mobile-safe-right, 14px)) + 80px) !important;
+  }
+
+  .dock-btn-atelier {
+    right: calc(max(14px, var(--mobile-safe-right, 14px)) + 130px) !important;
+  }
+
+  .dock-btn-trend {
+    left: calc(max(14px, var(--mobile-safe-left, 14px)) + 80px) !important;
+  }
+}

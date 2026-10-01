@@ -629,7 +629,7 @@ describe('decoration, upgrades and resilient saves', () => {
     const s = initialState(); for (const p of s.layout) expect(canPlace(s.layout, p)).toBe(true);
     const item = { uid: 'test', id: 'plant', x: 0, y: 0, rotation: 0 };
     expect(canPlace(s.layout, item)).toBe(false); expect(canPlace([], { ...item, x: -1 })).toBe(false);
-    expect(canPlace([], { ...item, x: 3, y: 4 })).toBe(false); expect(canPlace([], { ...item, x: 6, y: 6 })).toBe(false);
+    expect(canPlace([], { ...item, x: 3, y: 4 })).toBe(true); expect(canPlace([], { ...item, x: 6, y: 6 })).toBe(false);
     expect(canPlace([], { uid: 'wall', id: 'fashion-print', x: 4, y: 1, rotation: 0 })).toBe(false);
     expect(canPlace([], { uid: 'wall', id: 'fashion-print', x: 4, y: 0, rotation: 0 })).toBe(true);
     expect(canPlace([], { uid: 'wall', id: 'fashion-print', x: 0, y: 4, rotation: 1 })).toBe(true);
@@ -638,12 +638,13 @@ describe('decoration, upgrades and resilient saves', () => {
     expect(canPlace(s.layout, { uid: 'rug-overlap', id: 'heart-rug', x: 0, y: 2, rotation: 0 })).toBe(true);
     expect(canPlace([], { uid: 'rug-outside', id: 'heart-rug', x: 7, y: 0, rotation: 0 })).toBe(false);
   });
-  it('moves the reserved entrance path outward with every land expansion', () => {
-    const oldEntrance = { uid: 'old-entrance', id: 'plant', x: 3, y: 4, rotation: 0 };
-    expect(canPlace([], oldEntrance, 0)).toBe(false);
-    expect(canPlace([], oldEntrance, 1)).toBe(true);
-    expect(canPlace([], { ...oldEntrance, uid: 'new-entrance', x: 4, y: 5 }, 1)).toBe(false);
-    expect(canPlace([], { ...oldEntrance, uid: 'latest-entrance', x: 10, y: 11 }, 7)).toBe(false);
+  it('reserves only the real front doorway as the land expands', () => {
+    const middleTile = { uid: 'middle', id: 'plant', x: 3, y: 4, rotation: 0 };
+    expect(canPlace([], middleTile, 0)).toBe(true);
+    expect(canPlace([], { ...middleTile, uid: 'old-door', x: 5, y: 5 }, 0)).toBe(false);
+    expect(canPlace([], { ...middleTile, uid: 'old-door-expanded', x: 5, y: 5 }, 1)).toBe(true);
+    expect(canPlace([], { ...middleTile, uid: 'new-door', x: 6, y: 6 }, 1)).toBe(false);
+    expect(canPlace([], { ...middleTile, uid: 'latest-door', x: 12, y: 12 }, 7)).toBe(false);
   });
   it('rejects illegal movement without losing furniture and refunds sold furniture once', () => {
     const store = makeStore(); const piece = { ...store.state.layout[0] };

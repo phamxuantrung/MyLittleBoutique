@@ -317,14 +317,10 @@ export function canPlace(layout: PlacedFurniture[], item: PlacedFurniture, landL
   if (isRugFurnitureId(item.id)) return true;
   // Wall decorations use rotation to choose a wall: 0 = right wall, 1 = left wall.
   if (isWallFurnitureId(item.id) && !((item.rotation === 0 && item.y === 0) || (item.rotation === 1 && item.x === 0))) return false;
-  // Keep the path to the front entrance accessible. The welcome mat and the
-  // front edge move one grid cell outward per land tier, so the reserved path
-  // must move by the same amount instead of remaining inside the old floor.
-  const expansion = size - landExpansion[0].size;
-  const aisleX = 3 + expansion;
-  const aisleY = 4 + expansion;
+  // Reserve only the actual doorway at the front corner. Customers choose a
+  // free arrival point inside the room, so an otherwise empty middle tile
+  // must remain usable for furniture.
   const entranceEdge = size - 2;
-  if (item.x <= aisleX && item.x + w > aisleX && item.y <= aisleY && item.y + h > aisleY) return false;
   if (item.x + w > entranceEdge && item.y + h > entranceEdge) return false;
   return !layout.some(other => {
     if (other.uid === item.uid) return false;

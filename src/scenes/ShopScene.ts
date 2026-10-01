@@ -151,6 +151,7 @@ export class ShopScene extends Phaser.Scene {
   private grid!: Phaser.GameObjects.Graphics;
   private landExpandButtons: Phaser.GameObjects.Container[] = [];
   private pendingSvgTextures = new Set<string>();
+  private furnitureVisualOrigins = new Map<string, { x: number; y: number }>();
   private renderedLandLevel = -1;
   private renderedDefaultLamp?: boolean;
   private renderedGridSize = -1;
@@ -960,7 +961,8 @@ export class ShopScene extends Phaser.Scene {
                 : ['botanical-print', 'runway-print', 'parfum-print', 'shoe-sketch-print'].includes(f.art) ? .72 : .85;
         // Furniture textures have generous transparent viewboxes. Use the actual
         // rendered alpha mask and ignore faint shadows/antialiasing around the art.
-        img = this.add.image(pos.x, pos.y, textureKey).setOrigin(.5, .87).setScale(scale).setInteractive({
+        const visualOrigin = wallMounted ? { x: .5, y: .87 } : this.furnitureVisualOrigin(textureKey);
+        img = this.add.image(pos.x, pos.y, textureKey).setOrigin(visualOrigin.x, visualOrigin.y).setScale(scale).setInteractive({
           hitArea: {},
           hitAreaCallback: this.furniturePixelHitTest,
           useHandCursor: true,
@@ -1051,7 +1053,11 @@ export class ShopScene extends Phaser.Scene {
           : anchor.y;
       img.setData('furnitureId', p.id);
       img.setData('wallLift', wallLift);
-      if (this.textures.exists(textureKey)) img.setTexture(textureKey);
+      if (this.textures.exists(textureKey)) {
+        img.setTexture(textureKey);
+        const visualOrigin = wallMounted ? { x: .5, y: .87 } : this.furnitureVisualOrigin(textureKey);
+        img.setOrigin(visualOrigin.x, visualOrigin.y);
+      }
       img.setPosition(pos.x, pos.y).setDepth(renderDepth).setFlipX(!wallMounted && p.rotation === 1);
       // Trong giờ bán, toàn bộ nội thất được khóa để thao tác chạm chỉ dành cho khách hàng.
       if (img.input) img.input.enabled = this.store.state.phase !== 'open' || p.id === 'vinyl-player';
@@ -1068,6 +1074,41 @@ export class ShopScene extends Phaser.Scene {
     this.syncSelectionPulse();
     this.updateOwnerPosition(true);
     this.refreshStaff();
+  }
+
+  /**
+   * SVG viewboxes deliberately leave room for tall decorations, so their
+   * geometric centre is often not the centre of the painted furniture. Find
+   * the opaque horizontal bounds once and anchor the visible base—not the
+   * empty SVG padding—to the centre of its logical floor footprint.
+   */
+  private furnitureVisualOrigin(textureKey: string) {
+    const cached = this.furnitureVisualOrigins.get(textureKey);
+    if (cached) return cached;
+    const frame = this.textures.getFrame(textureKey);
+    const width = Math.max(1, frame?.width ?? 180);
+    const height = Math.max(1, frame?.height ?? 230);
+    let minX = width;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        if ((this.textures.getPixelAlpha(x, y, textureKey) ?? 0) < FURNITURE_HIT_ALPHA_TOLERANCE) continue;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    const origin = maxX >= minX
+      ? {
+          x: Phaser.Math.Clamp(((minX + maxX) / 2) / width, .2, .8),
+          // Most isometric assets place their feet around 90% of the viewbox.
+          // Respect shorter art while ignoring soft shadows below the feet.
+          y: Phaser.Math.Clamp(Math.min(height * .91, maxY - height * .04) / height, .65, .94),
+        }
+      : { x: .5, y: .87 };
+    this.furnitureVisualOrigins.set(textureKey, origin);
+    return origin;
   }
 
   private staffFloorSpots(count: number) {
@@ -1303,9 +1344,26 @@ export class ShopScene extends Phaser.Scene {
     const floorShift = expansion * 56;
     const laneOffsets = [0, -20, 20, -40, 40];
     const laneX = laneOffsets[lane % laneOffsets.length];
+    const arrivalCells = [
+      { x: 3 + expansion, y: 4 + expansion },
+      { x: 2 + expansion, y: 4 + expansion },
+      { x: 4 + expansion, y: 3 + expansion },
+      { x: 2 + expansion, y: 3 + expansion },
+      { x: 4 + expansion, y: 4 + expansion },
+    ];
+    const arrivalCell = arrivalCells.find(point => !this.store.state.layout.some(item => {
+      if (isWallFurnitureId(item.id) || ['atelier-rug', 'heart-rug', 'checkered-rug'].includes(item.id)) return false;
+      const footprint = furnitureFootprint(item);
+      return point.x + .5 > item.x && point.x + .5 < item.x + footprint.width
+        && point.y + .5 > item.y && point.y + .5 < item.y + footprint.height;
+    }));
+    const freeInside = arrivalCell ? toWorld(arrivalCell.x + .5, arrivalCell.y + .5) : undefined;
     return {
       spawn: { x: 522 + laneX, y: 594 + floorShift + Math.abs(laneX) * .18 },
-      inside: { x: 426 + laneX * .55, y: 442 + floorShift + Math.abs(laneX) * .1 },
+      inside: {
+        x: (freeInside?.x ?? 426) + laneX * .35,
+        y: (freeInside?.y ?? 442 + floorShift) + Math.abs(laneX) * .1,
+      },
       outside: { x: 548 + laneX, y: 645 + floorShift + Math.abs(laneX) * .18 },
     };
   }

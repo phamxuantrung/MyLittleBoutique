@@ -11,6 +11,14 @@ let game: Phaser.Game | undefined;
 let viewportFrame = 0;
 let viewportSettleTimers: number[] = [];
 
+const isLandscapeViewport = () => {
+  const legacyAngle = Number((window as Window & { orientation?: number }).orientation ?? 0);
+  return window.matchMedia('(orientation: landscape)').matches
+    || Math.abs(window.screen.orientation?.angle ?? 0) === 90
+    || Math.abs(legacyAngle) === 90
+    || window.innerWidth > window.innerHeight;
+};
+
 /**
  * Mobile Safari can report its final landscape height a few frames after the
  * page starts. Keep the app tied to the visual viewport instead of the stale
@@ -23,8 +31,17 @@ const syncVisualViewport = () => {
   // transient value; include its offset for Safari's shifted visual viewport.
   const visualHeight = Math.round((viewport?.height ?? 0) + (viewport?.offsetTop ?? 0));
   const visualWidth = Math.round((viewport?.width ?? 0) + (viewport?.offsetLeft ?? 0));
-  const height = Math.max(visualHeight, window.innerHeight, document.documentElement.clientHeight);
-  const width = Math.max(visualWidth, window.innerWidth, document.documentElement.clientWidth);
+  const landscape = isLandscapeViewport();
+  const screenWidth = Number(window.screen.width) || window.innerWidth;
+  const screenHeight = Number(window.screen.height) || window.innerHeight;
+  const screenLongSide = Math.max(screenWidth, screenHeight);
+  const screenShortSide = Math.min(screenWidth, screenHeight);
+  const measuredHeight = Math.max(visualHeight, window.innerHeight, document.documentElement.clientHeight);
+  const measuredWidth = Math.max(visualWidth, window.innerWidth, document.documentElement.clientWidth);
+  // A cold iOS launch can briefly keep the previous portrait innerHeight even
+  // though orientation already says landscape. Clamp that stale long side out.
+  const height = landscape ? Math.min(measuredHeight, screenShortSide) : Math.min(measuredHeight, screenLongSide);
+  const width = landscape ? Math.min(measuredWidth, screenLongSide) : Math.min(measuredWidth, screenShortSide);
   document.documentElement.style.setProperty('--app-height', `${height}px`);
   document.documentElement.style.setProperty('--app-width', `${width}px`);
   cancelAnimationFrame(viewportFrame);
@@ -32,6 +49,42 @@ const syncVisualViewport = () => {
 };
 
 syncVisualViewport();
+
+const waitForInitialLandscapeViewport = async () => {
+  const coarse = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  const landscape = isLandscapeViewport();
+  if (!coarse || !landscape) return;
+
+  const startedAt = performance.now();
+  let lastSignature = '';
+  let stableSamples = 0;
+  await new Promise<void>(resolve => {
+    const sample = () => {
+      syncVisualViewport();
+      const viewport = window.visualViewport;
+      const signature = [
+        Math.round(viewport?.width ?? 0),
+        Math.round(viewport?.height ?? 0),
+        window.innerWidth,
+        window.innerHeight,
+        document.documentElement.clientWidth,
+        document.documentElement.clientHeight,
+      ].join('x');
+      stableSamples = signature === lastSignature ? stableSamples + 1 : 0;
+      lastSignature = signature;
+      const elapsed = performance.now() - startedAt;
+      if (elapsed >= 320 && stableSamples >= 3 || elapsed >= 1600) {
+        syncVisualViewport();
+        resolve();
+        return;
+      }
+      window.setTimeout(sample, 80);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(sample));
+  });
+};
+
+await waitForInitialLandscapeViewport();
 
 const store = new GameStore();
 const audio = new AudioSystem();

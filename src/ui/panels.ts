@@ -934,7 +934,6 @@ export function socialPanel(s: GameState, section: 'feed' | 'recruitment' = 'fee
         <button class="${section === 'feed' ? 'is-active' : ''}" data-action="social-section" data-id="feed" aria-pressed="${section === 'feed'}">${icon('social')}<span>Bảng tin</span></button>
         <button class="${section === 'recruitment' ? 'is-active' : ''}" data-action="social-section" data-id="recruitment" aria-pressed="${section === 'recruitment'}">${icon('edit')}<span>Đăng tin</span>${s.staffApplicants.length ? `<b>${s.staffApplicants.length}</b>` : ''}</button>
       </nav>
-      ${section === 'feed' ? `<button class="boutique-drama-test" data-action="drama-ai-test" title="Kiểm tra kết nối AI trên máy chủ">${icon('sparkle')}<span>Test AI</span></button>` : ''}
     </header>
     <div class="social-drawer-content">
       ${section === 'recruitment' ? socialDrawerRecruitment(s) : `<section class="drawer-review-feed">

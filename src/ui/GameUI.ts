@@ -1533,9 +1533,6 @@ export class GameUI {
         }
         break;
       }
-      case 'drama-ai-test':
-        this.testDramaAI(target as HTMLButtonElement | null);
-        break;
       case 'drama-free-response':
         this.submitFreeDramaResponse(target as HTMLButtonElement | null);
         break;
@@ -3227,60 +3224,6 @@ export class GameUI {
     };
     if (prepared) publish(prepared);
     else if (request) void request.then(publish);
-  }
-  private testDramaAI(button: HTMLButtonElement | null) {
-    if (button?.disabled) return;
-    if (button) {
-      button.disabled = true;
-      const label = button.querySelector<HTMLElement>('span');
-      if (label) label.textContent = 'Đang kiểm tra...';
-    }
-    const state = this.store.state;
-    const dramaCount = Array.isArray(state.dramas) ? state.dramas.length : 0;
-    const customer = customers[(state.day + dramaCount) % customers.length];
-    const product = products[(state.day + dramaCount) % products.length];
-    const context = {
-      day: state.day,
-      shopName: state.shopName || 'My Little Boutique',
-      customerName: customer.name,
-      customerHandle: customer.handle,
-      personality: customer.personality,
-      products: [product.name],
-      total: product.sellPrice,
-      budget: customer.budget,
-      score: 88,
-      success: true,
-      viral: true,
-      reason: 'Outfit hợp gu đến mức bài đăng bắt đầu viral.',
-      heat: state.dramaHeat,
-      trust: state.dramaTrust,
-    };
-    const startedAt = performance.now();
-    void fetch('/api/drama', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(context),
-    }).then(async response => {
-      const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-      if (!response.ok) {
-        const upstream = typeof payload.upstreamStatus === 'number' ? ` · OpenAI ${payload.upstreamStatus}` : '';
-        throw new Error(`API ${response.status}${upstream}: ${typeof payload.error === 'string' ? payload.error : 'Không có phản hồi hợp lệ'}`);
-      }
-      if (typeof payload.title !== 'string' || typeof payload.post !== 'string' || !Array.isArray(payload.comments)) {
-        throw new Error('API 200 nhưng dữ liệu drama không hợp lệ');
-      }
-      const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1);
-      this.toast(`AI hoạt động tốt · ${elapsed}s · “${payload.title.slice(0, 45)}”`);
-    }).catch(error => {
-      const message = error instanceof Error ? error.message : 'Không xác định được lỗi';
-      console.error('Drama AI diagnostic failed', error);
-      this.toast(`Test AI thất bại · ${message}`, 'error');
-    }).finally(() => {
-      if (!button?.isConnected) return;
-      button.disabled = false;
-      const label = button.querySelector<HTMLElement>('span');
-      if (label) label.textContent = 'Test AI';
-    });
   }
   private submitFreeDramaResponse(button: HTMLButtonElement | null) {
     const dramaId = button?.dataset.drama ?? '';

@@ -3,6 +3,7 @@ import { products } from './catalog';
 
 export const ATELIER_UNLOCK_LEVEL = 8;
 export const ATELIER_PURCHASE_COST = 30000000;
+export const ATELIER_RECIPE_CARD_COST = 750000;
 
 export const atelierMaterials: AtelierMaterial[] = [
   { id: 'cotton', name: 'Cotton Cloud', description: 'Cotton mềm, dễ tạo phom cho thiết kế hằng ngày.', level: 8, price: 65000, color: '#f6efe5' },

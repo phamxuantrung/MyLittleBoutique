@@ -7,7 +7,7 @@ import { recordPublicShopReview, shopReviewStats } from './reviews';
 import { CAMPAIGN_GUIDE_SEEN, campaignIsComplete, campaignOffers } from './campaigns';
 import { createVipAppointment, crisisComplete, RETURN_EXCHANGE_SHIPPING_FEE, supplierFor, suppliers } from './operations';
 import { gameDate } from './calendar';
-import { ATELIER_PURCHASE_COST, ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProduct, unregisterCustomProduct } from '../data/atelier';
+import { ATELIER_PURCHASE_COST, ATELIER_RECIPE_CARD_COST, ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProduct, unregisterCustomProduct } from '../data/atelier';
 
 const STAFF_NAMES = [
   'Mai An', 'Thảo Nhi', 'Gia Hân', 'Bảo Trân', 'Minh Châu', 'Khánh Linh', 'Yến Vy', 'Hà My', 'Ngọc Lam', 'Tú Anh',
@@ -46,7 +46,7 @@ export class GameStore {
   focusCustomer(uid: string) {
     if (!this.focusVisit(uid)) return false;
     this.commit();
-    this.emit({ type: 'customer' });
+    this.emit({ type: 'customer', reason: 'focus' });
     return true;
   }
 
@@ -503,6 +503,25 @@ export class GameStore {
     this.commit();
     this.toast('Đã mua xưởng may. Không gian này giờ thuộc về boutique của bạn!');
     return true;
+  }
+  buyRandomAtelierRecipe() {
+    const s = this.state;
+    if (!this.atelierAvailable() || s.phase === 'open' || !atelierRecipes.length) return { success: false as const, reason: 'unavailable' as const };
+    if (s.money < ATELIER_RECIPE_CARD_COST) {
+      this.toast(`Bạn cần ${ATELIER_RECIPE_CARD_COST.toLocaleString('vi-VN')}₫ để mua một bản công thức.`, 'error');
+      return { success: false as const, reason: 'money' as const };
+    }
+    const index = Math.min(atelierRecipes.length - 1, Math.floor(this.random() * atelierRecipes.length));
+    const recipe = atelierRecipes[index];
+    const cards = s.atelierRecipeCards ?? (s.atelierRecipeCards = []);
+    s.money -= ATELIER_RECIPE_CARD_COST;
+    s.stats.spent += ATELIER_RECIPE_CARD_COST;
+    cards.push(recipe.id);
+    if (cards.length > 200) cards.splice(0, cards.length - 200);
+    const count = cards.filter(id => id === recipe.id).length;
+    this.commit();
+    this.toast(count > 1 ? `Nhận lại công thức ${recipe.name} · hiện có ×${count}.` : `Đã nhận công thức ${recipe.name}!`);
+    return { success: true as const, recipe, count };
   }
   buyAtelierMaterial(materialId: string, quantity: number) {
     const s = this.state;
@@ -1885,6 +1904,11 @@ export class GameStore {
   settings(key: 'sound' | 'music' | 'tutorialDone', value: boolean) { this.state[key] = value; this.commit(); }
   setMusicVolume(value: number) {
     this.state.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
+    this.commit();
+  }
+  setMusicTrack(track: string) {
+    if (!['boutique-bloom', 'better-for-you-1', 'die-for-you-remix', 'daffodil-live'].includes(track)) return;
+    this.state.musicTrack = track;
     this.commit();
   }
   setShopName(name: string) {

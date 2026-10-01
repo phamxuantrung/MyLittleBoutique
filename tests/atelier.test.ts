@@ -1,13 +1,44 @@
 import { describe, expect, it } from 'vitest';
 import { GameStore } from '../src/systems/store';
 import { initialState, parseSave } from '../src/systems/save';
-import { ATELIER_PURCHASE_COST } from '../src/data/atelier';
+import { ATELIER_PURCHASE_COST, ATELIER_RECIPE_CARD_COST, atelierRecipes } from '../src/data/atelier';
+import { atelierProductBody, atelierProductPoints } from '../src/art/atelierArt';
 
 class MemorySave {
   write() {}
 }
 
 describe('personal tailoring workshop', () => {
+  it('gives all twelve recipes a unique editable block and surface identity', () => {
+    const pointSignatures = atelierRecipes.map(recipe => JSON.stringify(atelierProductPoints(recipe.art)));
+    const renderedBodies = atelierRecipes.map(recipe => atelierProductBody(recipe.art, recipe.color));
+
+    expect(atelierRecipes).toHaveLength(12);
+    expect(new Set(pointSignatures).size).toBe(12);
+    expect(new Set(renderedBodies).size).toBe(12);
+    renderedBodies.forEach(body => {
+      expect(body).toContain('atelier-recipe-surface');
+      expect(body).toContain('atelier-live-shape-path');
+    });
+  });
+
+  it('buys random recipe cards and keeps duplicate draws', () => {
+    const state = initialState();
+    state.level = 8;
+    state.atelierOwned = true;
+    state.money = 3000000;
+    const store = new GameStore(state, new MemorySave() as never, () => 0);
+
+    const first = store.buyRandomAtelierRecipe();
+    const second = store.buyRandomAtelierRecipe();
+
+    expect(first).toMatchObject({ success: true, count: 1, recipe: { id: 'cloud-tee' } });
+    expect(second).toMatchObject({ success: true, count: 2, recipe: { id: 'cloud-tee' } });
+    expect(state.atelierRecipeCards).toEqual(['cloud-tee', 'cloud-tee']);
+    expect(state.money).toBe(3000000 - ATELIER_RECIPE_CARD_COST * 2);
+    expect(parseSave(JSON.stringify(state)).atelierRecipeCards).toEqual(['cloud-tee', 'cloud-tee']);
+  });
+
   it('buys the workshop, consumes failed samples and produces an approved design in batches', () => {
     const state = initialState();
     state.level = 8;

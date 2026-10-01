@@ -713,6 +713,38 @@
 }
 .sale-card-aura:has(.is-current)::before { opacity: 1; filter: blur(9px); }
 
+.sale-card-aura.is-courier-aura::before {
+  background: radial-gradient(ellipse at center, rgba(145, 239, 218, .76) 0%, rgba(83, 200, 179, .34) 44%, rgba(55, 174, 156, 0) 76%);
+}
+
+.sale-character-card.is-customer.is-courier {
+  color: #fff;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(229, 255, 249, .98) 0 20%, rgba(142, 224, 209, .8) 48%, transparent 72%),
+    linear-gradient(150deg, #58b8a8 0%, #a9eadf 58%, #318d80 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.8),
+    inset 0 -4px 8px rgba(34, 103, 92, .25),
+    0 4px 9px rgba(30, 92, 84, .25);
+}
+
+.sale-character-card.is-customer.is-courier::before {
+  background: linear-gradient(135deg, rgba(255,255,255,.34), transparent 45%);
+}
+
+.sale-character-card.is-customer.is-courier .sale-card-name {
+  border-bottom-color: rgba(31, 91, 83, .52);
+  background: linear-gradient(180deg, #3e9f91, #28776d);
+  text-shadow: -1px -1px 0 #205e57, 1px -1px 0 #205e57, -1px 1px 0 #205e57, 1px 1px 0 #205e57;
+}
+
+.sale-character-card.is-customer.is-courier .sale-card-countdown {
+  min-width: 35px;
+  color: #effffb;
+  background: linear-gradient(180deg, #347f76, #1d504b);
+  box-shadow: 0 2px 0 rgba(18, 66, 60, .72), 0 3px 5px rgba(22, 71, 65, .25);
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   .sale-card-aura { width: 72px; min-width: 72px; height: 98px; min-height: 98px; flex-basis: 72px; }
   .sale-character-card.is-customer { width: 70px; min-width: 70px; height: 90px; min-height: 90px; }

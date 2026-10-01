@@ -1,4 +1,4 @@
-import { ownerPortrait } from '../art/svg';
+import { courierSvg, ownerPortrait } from '../art/svg';
 import { shopReviewStats } from '../systems/reviews';
 import { categories, customers, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
@@ -1160,30 +1160,26 @@ export function onlineOrderModal(s: GameState, orderId: string, selectedProductI
   if (!order) return onlineChannelModal(s);
   const requestedIds = onlineOrderProductIds(order);
   const requestedProducts = requestedIds.map(id => products.find(item => item.id === id)).filter((product): product is Product => !!product);
-  const rawWarehouseQuantity = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - displayedQuantity(s, productId));
   const handoverQuantity = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - s.onlineOrders.filter(candidate => candidate.id !== orderId && onlineOrderProductIds(candidate).includes(productId)).length);
   const warehouse = products.filter(product => (s.inventory[product.id] ?? 0) > 0);
   const selectedProducts = selectedProductIds.map(id => warehouse.find(product => product.id === id && handoverQuantity(product.id) > 0)).filter((product): product is Product => !!product);
   const readyToShip = selectedProducts.length === requestedProducts.length;
-  return `<div class="online-handover-modal">
-    <header class="handover-topbar"><button class="online-back-button" data-action="online-open">${icon('arrow')} Kênh online</button><div><small>GIAO ĐƠN ONLINE</small><strong>Shipper đang chờ tại shop</strong></div><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
-    <section class="handover-order-card">
-      <div class="courier-mini-art">${icon('truck')}<b>${String(s.onlineOrders.indexOf(order) + 1).padStart(2, '0')}</b></div>
-      <div class="handover-customer"><small>ĐƠN CỦA ${escapeHtml(order.customerHandle)}</small><h2>${escapeHtml(order.customerName)}</h2><span>Khách đặt ${requestedProducts.length} sản phẩm</span></div>
-      <div class="handover-requested"><span class="handover-requested-images">${requestedProducts.map(product => productImage(product)).join('')}</span><div><small>${requestedProducts.length} SẢN PHẨM CẦN GIAO</small><strong>${requestedProducts.map(product => escapeHtml(product.name)).join(' · ')}</strong><em>${requestedProducts.map(product => `${product.colorName} (kho ${rawWarehouseQuantity(product.id)})`).join(' · ')}</em></div></div>
-      <div class="handover-payout"><small>THU VỀ SAU PHÍ</small><strong>${money(order.price - order.fee)}</strong><span>Phí ${money(order.fee)}</span></div>
-    </section>
-    <div class="handover-list-heading"><div><small>TOÀN BỘ SẢN PHẨM TRONG KHO</small><h3>Chọn sản phẩm đưa cho shipper</h3><p>Bấm một lần để chọn, bấm lại để bỏ chọn.</p></div><span>${warehouse.length} mẫu</span></div>
-    <div class="online-handover-grid">${warehouse.length ? warehouse.map(product => {
+  return `<div class="online-handover-modal handover-consultation-modal fitting-studio-layout consultation-modal courier-consultation-modal">
+    <aside class="handover-consultation-left studio-col-left">
+      <div class="handover-balance-bar"><span>${icon('coin')} Thu về sau phí</span><strong>${money(order.price - order.fee)}</strong><em>Phí ${money(order.fee)}</em></div>
+      <div class="handover-customer-heading"><small>ĐƠN CỦA ${escapeHtml(order.customerHandle)}</small><h2>${escapeHtml(order.customerName)}</h2><span>Khách đặt ${requestedProducts.length} sản phẩm</span></div>
+      <div class="handover-courier-stage"><svg class="handover-pickup" viewBox="0 0 240 120" aria-hidden="true"><path d="M14 79V55c0-7 5-12 12-12h93l20 4 20 24h37c12 0 22 9 22 21v8H14Z" fill="#9bded2" stroke="#47796f" stroke-width="3" stroke-linejoin="round"/><path d="M31 51h78v27H31Z" fill="#c8f1e9" stroke="#47796f" stroke-width="2"/><path d="M119 47h24l16 24h-40Z" fill="#dff8ff" stroke="#47796f" stroke-width="2"/><path d="M164 73h29" stroke="#f6a7cb" stroke-width="5" stroke-linecap="round"/><path d="M17 82h199v15H17Z" fill="#ef94bf" stroke="#70445d" stroke-width="2"/><circle cx="61" cy="99" r="16" fill="#fff" stroke="#70445d" stroke-width="4"/><circle cx="61" cy="99" r="7" fill="#b8a4c8"/><circle cx="178" cy="99" r="16" fill="#fff" stroke="#70445d" stroke-width="4"/><circle cx="178" cy="99" r="7" fill="#b8a4c8"/><path d="M38 58h15M38 66h25" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="m201 76 9 4-9 4Z" fill="#ffe179" stroke="#8b6731" stroke-width="1.5"/></svg><div class="handover-courier-art">${courierSvg(order.courierVariant)}<b>${String(s.onlineOrders.indexOf(order) + 1).padStart(2, '0')}</b></div><span>${icon('truck')} Shipper đang chờ tại shop</span></div>
+      <div class="handover-requested"><span class="handover-requested-images">${requestedProducts.map(product => productImage(product)).join('')}</span><div><small>${requestedProducts.length} SẢN PHẨM CẦN GIAO</small><strong>${requestedProducts.map(product => escapeHtml(product.name)).join(' · ')}</strong></div></div>
+    </aside>
+    <section class="handover-consultation-right studio-col-right">
+      <section class="handover-consultation-request consultation-request"><div class="consultation-request-copy"><span class="eyebrow">${icon('truck')} GIAO ĐƠN ONLINE</span><p>Chọn đúng ${requestedProducts.length} món khách đã đặt để bàn giao cho shipper.</p></div><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></section>
+      <div class="online-handover-grid outfit-grid">${warehouse.length ? warehouse.map(product => {
       const available = handoverQuantity(product.id);
-      const displayed = displayedQuantity(s, product.id);
-      const reserved = s.onlineOrders.filter(candidate => candidate.id !== orderId && onlineOrderProductIds(candidate).includes(product.id)).length;
-      const stockLocation = displayed > 0 ? ` · ${displayed} đang trưng` : '';
-      const unavailableReason = reserved > 0 ? `${reserved} món đều đã giữ cho đơn khác` : 'Không còn món khả dụng';
       const selected = selectedProductIds.includes(product.id);
-      return `<button class="${selected ? 'is-selected' : ''} ${available < 1 ? 'is-unavailable' : ''}" data-action="online-hand-over-select" data-id="${product.id}" aria-pressed="${selected}" ${available < 1 ? 'disabled' : ''}><span>${productImage(product)}</span><div><strong>${escapeHtml(product.name)}</strong><small>${product.style} · ${product.colorName} · Tổng kho ${s.inventory[product.id] ?? 0}${stockLocation}</small><em>${available > 0 ? `Có thể giao: ${available}` : unavailableReason}</em></div><i>${selected ? icon('check') : available > 0 ? icon('plus') : icon('lock')}</i></button>`;
-    }).join('') : `<div class="handover-empty">${icon('box')}<strong>Kho hiện không có sản phẩm</strong><span>Bạn có thể hủy đơn mà không ảnh hưởng tới shop.</span></div>`}</div>
-    <footer class="handover-actions"><button class="handover-cancel" data-action="online-cancel-order" data-id="${order.id}">${icon('close')} Hủy đơn</button><div><span>Đã chọn <strong>${selectedProducts.length}/${requestedProducts.length} món</strong></span><button class="handover-submit" data-action="online-hand-over" data-order="${order.id}" ${readyToShip ? '' : 'disabled'}>${icon('truck')} Giao cho shipper</button></div></footer>
+      return `<button class="outfit-option handover-outfit-option ${selected ? 'selected is-selected' : ''} ${available < 1 ? 'is-unavailable' : ''}" data-action="online-hand-over-select" data-id="${product.id}" aria-pressed="${selected}" aria-label="${selected ? 'Bỏ' : 'Chọn'} ${escapeHtml(product.name)}" ${available < 1 ? 'disabled' : ''}><div class="outfit-thumb-container">${productImage(product)}<span class="outfit-stock-corner">×${available}</span>${selected ? `<span class="outfit-check is-checked">${icon('check')}</span>` : ''}<span class="outfit-match-tag style-label">${escapeHtml(product.name)}</span></div></button>`;
+      }).join('') : `<div class="handover-empty">${icon('box')}<strong>Kho hiện không có sản phẩm</strong><span>Bạn có thể hủy đơn mà không ảnh hưởng tới shop.</span></div>`}</div>
+      <footer class="handover-actions studio-checkout-dock"><button class="handover-cancel" data-action="online-cancel-order" data-id="${order.id}">${icon('close')} Hủy đơn</button><div><span>Đã chọn <strong>${selectedProducts.length}/${requestedProducts.length} món</strong></span><button class="handover-submit studio-serve-btn ${readyToShip ? 'is-ready' : 'is-empty'}" data-action="online-hand-over" data-order="${order.id}" ${readyToShip ? '' : 'disabled'}><span class="serve-btn-icon-wrap">${icon('truck')}</span><span class="serve-btn-copy"><strong class="serve-btn-label">${readyToShip ? 'Giao cho shipper' : 'Chưa đủ sản phẩm'}</strong><small>${selectedProducts.length}/${requestedProducts.length} món đã chọn</small></span><span class="serve-btn-arrow">${icon('arrow')}</span></button></div></footer>
+    </section>
   </div>`;
 }
 

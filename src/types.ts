@@ -193,16 +193,16 @@ export interface GameState {
   pendingMaterialOrders: PendingMaterialOrder[];
   onlineListings: string[]; onlineOrders: OnlineOrder[]; onlineNextOrderIn: number; onlineChannelEnabled: boolean;
   onlineRating: number; onlineReviews: number; onlineSales: number;
-  stats: DayStats; posts: SocialPost[]; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; tutorialDone: boolean;
+  stats: DayStats; posts: SocialPost[]; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; musicTrack: string; tutorialDone: boolean;
   employees: StaffMember[]; staffApplicants: StaffCandidate[]; recruitmentPost: RecruitmentPost | null; staffLeaveRequests: StaffLeaveRequest[];
   campaignSeason: number; industryReputation: number; activeCampaign: ActiveBrandCampaign | null; campaignAvailableDay: number;
   completedCampaigns: string[];
   activeSupplierId: SupplierId; supplierRelations: Record<SupplierId, number>;
   returnCases: ReturnCase[]; vipAppointments: VipAppointment[]; coutureOrder: CoutureOrder | null; coutureAvailableDay: number;
   operationSequence: number; reputationCrisis: ReputationCrisis | null;
-  atelierOwned: boolean; materialInventory: Record<string, number>; craftedRecipeIds: string[]; atelierCraftHistory: AtelierCraftHistoryEntry[]; customProducts: CustomProduct[];
+  atelierOwned: boolean; materialInventory: Record<string, number>; craftedRecipeIds: string[]; atelierRecipeCards: string[]; atelierCraftHistory: AtelierCraftHistoryEntry[]; customProducts: CustomProduct[];
   tailoringJobs: TailoringJob[]; atelierDraft: CustomProduct | null;
   shopName: string; hasNamedShop?: boolean;
 }
 export interface SaleResult { success: boolean; score: number; reason: string; total: number; followers: number; viral: boolean; customer: Customer; products: Product[]; isSelfPick?: boolean; isStaffAssisted?: boolean; visitUid?: string; xpEarned?: number; tip?: number; staffName?: string; loyaltyPoints?: number; loyaltyTier?: LoyaltyTier; loyaltyReward?: string; reviewStars?: number; }
-export type GameEvent = { type: 'change' } | { type: 'toast'; message: string; tone?: 'success' | 'error' } | { type: 'sale'; result: SaleResult } | { type: 'customer' } | { type: 'summary' } | { type: 'debt-warning'; staff?: StaffFinancialNotice } | { type: 'game-over' } | { type: 'orders-arrived'; items: ArrivedOrderSummary[] };
+export type GameEvent = { type: 'change' } | { type: 'toast'; message: string; tone?: 'success' | 'error' } | { type: 'sale'; result: SaleResult } | { type: 'customer'; reason?: 'arrival' | 'focus' } | { type: 'summary' } | { type: 'debt-warning'; staff?: StaffFinancialNotice } | { type: 'game-over' } | { type: 'orders-arrived'; items: ArrivedOrderSummary[] };

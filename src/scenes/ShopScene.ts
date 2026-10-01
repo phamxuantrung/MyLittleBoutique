@@ -44,7 +44,15 @@ const shopSignTextureKey = (side: 'left' | 'right', name: string) => {
 // Ignore faint antialiasing and decorative shadows when hit-testing furniture.
 // This keeps clicks on the visible painted object instead of its transparent SVG box.
 const FURNITURE_HIT_ALPHA_TOLERANCE = 40;
-const FURNITURE_HIT_RADIUS = 2;
+const FURNITURE_HIT_OFFSETS_MOUSE: ReadonlyArray<readonly [number, number]> = [
+  [0, 0], [3, 0], [-3, 0], [0, 3], [0, -3],
+];
+const FURNITURE_HIT_OFFSETS_TOUCH: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [6, 0], [-6, 0], [0, 6], [0, -6],
+  [10, 0], [-10, 0], [0, 10], [0, -10],
+  [7, 7], [-7, 7], [7, -7], [-7, -7],
+];
 
 const shopSignTextLayout = (name: string) => {
   const normalized = (name.trim() || 'My Little Boutique').normalize('NFC');
@@ -170,6 +178,12 @@ export class ShopScene extends Phaser.Scene {
   private isDraggingPiece = false;
   private selectionClearBlockedUntil = 0;
   private currentTab = 'shop';
+  private readonly coarsePointer = typeof window !== 'undefined'
+    && (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
+  private tapTolerance(pointer?: Phaser.Input.Pointer) {
+    const nativeEvent = pointer?.event as PointerEvent | undefined;
+    return nativeEvent?.pointerType === 'touch' || this.coarsePointer ? 14 : 8;
+  }
   private pointerIsCoveredByUi(pointer: Phaser.Input.Pointer) {
     const nativeEvent = pointer.event as PointerEvent | undefined;
     if (!nativeEvent || typeof nativeEvent.clientX !== 'number' || typeof nativeEvent.clientY !== 'number') return false;
@@ -181,15 +195,17 @@ export class ShopScene extends Phaser.Scene {
     const image = gameObject as Phaser.GameObjects.Image;
     const centerX = Math.round(x);
     const centerY = Math.round(y);
-    for (let offsetY = -FURNITURE_HIT_RADIUS; offsetY <= FURNITURE_HIT_RADIUS; offsetY++) {
-      for (let offsetX = -FURNITURE_HIT_RADIUS; offsetX <= FURNITURE_HIT_RADIUS; offsetX++) {
-        if (Math.abs(offsetX) + Math.abs(offsetY) > FURNITURE_HIT_RADIUS) continue;
-        const alpha = this.textures.getPixelAlpha(centerX + offsetX, centerY + offsetY, image.texture.key, image.frame.name);
-        if (alpha !== null && alpha >= FURNITURE_HIT_ALPHA_TOLERANCE) return true;
-      }
+    // Exact painted pixels are checked first. A small fixed set of surrounding
+    // probes gives touch input some tolerance without scanning a full pixel disk
+    // for every furniture item on every pointer move.
+    const offsets = this.coarsePointer ? FURNITURE_HIT_OFFSETS_TOUCH : FURNITURE_HIT_OFFSETS_MOUSE;
+    for (const [offsetX, offsetY] of offsets) {
+      const alpha = this.textures.getPixelAlpha(centerX + offsetX, centerY + offsetY, image.texture.key, image.frame.name);
+      if (alpha !== null && alpha >= FURNITURE_HIT_ALPHA_TOLERANCE) return true;
     }
     return false;
   };
+  private furnitureDragHitTest = () => true;
   setSaleSpeed(speed: 1 | 2 | 4) {
     if (this.time) this.time.timeScale = speed;
     if (this.tweens) this.tweens.timeScale = speed;
@@ -203,11 +219,14 @@ export class ShopScene extends Phaser.Scene {
   private ownerSpeechText?: Phaser.GameObjects.Text;
   private ownerThoughtTimer?: Phaser.Time.TimerEvent;
   private ownerHideTimer?: Phaser.Time.TimerEvent;
+  private ownerMusicNoteTimer?: Phaser.Time.TimerEvent;
+  private ownerQueuedSpeechTimer?: Phaser.Time.TimerEvent;
+  private ownerMusicNotesUntil = 0;
   private staffAvatars = new Map<string, Phaser.GameObjects.Container>();
   private staffWorkLabels = new Map<string, Phaser.GameObjects.Text>();
   private onlineShippers = new Map<string, Phaser.GameObjects.Container>();
 
-  constructor(store: GameStore, focus: () => void, select: (uid?: string) => void, private onlineOrderCallback: (orderId: string) => void = () => { }) {
+  constructor(store: GameStore, focus: () => void, select: (uid?: string) => void, private onlineOrderCallback: (orderId: string) => void = () => { }, private musicPlayerCallback: () => void = () => { }) {
     super('ShopScene'); this.store = store; this.focusCallback = focus; this.selectCallback = select;
   }
   setTab(tab: string) {
@@ -276,7 +295,7 @@ export class ShopScene extends Phaser.Scene {
     selectionSurface.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (Date.now() < this.selectionClearBlockedUntil) return;
       if (this.currentTab !== 'shop' || this.edit || this.hasPanned) return;
-      if (Phaser.Math.Distance.Between(surfaceDownX, surfaceDownY, pointer.x, pointer.y) >= 8) return;
+      if (Phaser.Math.Distance.Between(surfaceDownX, surfaceDownY, pointer.x, pointer.y) >= this.tapTolerance(pointer)) return;
       if (this.selected) {
         this.selected = undefined;
         this.selectCallback(undefined);
@@ -297,6 +316,7 @@ export class ShopScene extends Phaser.Scene {
     this.updateOwnerPosition(false);
     this.setupOwnerSpeechBubble();
     this.startOwnerChatter();
+    this.startOwnerMusicNotes();
     this.unsubscribe = this.store.subscribe(event => {
       if (event.type === 'change') {
         if (this.store.state.phase === 'open' && (this.selected || this.edit)) {
@@ -321,10 +341,23 @@ export class ShopScene extends Phaser.Scene {
       if (!this.edit) return;
       this.isDraggingPiece = true;
       this.stopSelectionPulse();
+      this.selectionArrows?.clear();
       obj.setData('dragCell', undefined);
-      this.selected = obj.getData('uid');
-      this.selectCallback(this.selected);
-      this.moveModeChangeCallback?.(true, this.selected);
+      const uid = obj.getData('uid') as string;
+      if (this.selected !== uid) {
+        this.selected = uid;
+        this.selectCallback(uid);
+        this.moveModeChangeCallback?.(true, uid);
+      }
+      // Phaser performs hit tests for every enabled interactive image on each
+      // pointer move. While dragging, only the active piece needs input.
+      for (const [pieceUid, piece] of this.pieces) {
+        if (pieceUid !== uid && piece.input) piece.input.enabled = false;
+      }
+      // Once Phaser has captured the drag, alpha hit-testing is unnecessary.
+      // Replace it temporarily with a constant callback to avoid texture reads
+      // on every pointer move.
+      if (obj.input) obj.input.hitAreaCallback = this.furnitureDragHitTest;
       const draggingWallItem = isWallFurnitureId(obj.getData('furnitureId'));
       obj.setAlpha(.75).setDepth(draggingWallItem ? -600 : 1000);
     });
@@ -335,19 +368,23 @@ export class ShopScene extends Phaser.Scene {
       const wallLift = obj.getData('wallLift') ?? 0;
       const wallMounted = isWallFurnitureId(p.id);
       const cell = wallMounted ? toWallGrid(p, x, y + wallLift) : toFurnitureGrid(p, x, y);
-      if (wallMounted) {
+      // Floor furniture follows the pointer every frame. Grid validation and
+      // preview drawing below only run when the pointer enters another cell.
+      if (!wallMounted) obj.setPosition(x, y);
+      else {
+        const vx = p.rotation === 1 ? -56 : 56;
+        const vy = 28;
         const span = furniture.find(definition => definition.id === p.id)?.width ?? 1;
-        const anchor = p.rotation === 1 ? toWorld(0, cell.y + span / 2) : toWorld(cell.x + span / 2, 0);
+        const pointerDistance = ((x - 500) * vx + (y + wallLift - 225) * vy) / (vx * vx + vy * vy);
+        const centerDistance = Phaser.Math.Clamp(pointerDistance, span / 2, landSize(this.store.state) - span / 2);
+        const anchor = p.rotation === 1 ? toWorld(0, centerDistance) : toWorld(centerDistance, 0);
         obj.setPosition(anchor.x, anchor.y - wallLift);
-      } else {
-        const anchor = furnitureAnchor({ ...p, ...cell });
-        obj.setPosition(anchor.x, anchor.y);
       }
+      const previousCell = obj.getData('dragCell') as { x: number; y: number } | undefined;
+      if (previousCell?.x === cell.x && previousCell.y === cell.y) return;
       obj.setData('dragCell', cell);
       const valid = canPlace(this.store.state.layout, { ...p, ...cell }, this.store.state.landLevel);
       this.drawGhost({ ...p, ...cell }, valid);
-      this.selectionArrows?.clear();
-      this.drawSelectionArrows({ ...p, ...cell });
     });
     this.input.on('dragend', (_pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image) => {
       if (!this.edit) return;
@@ -356,12 +393,17 @@ export class ShopScene extends Phaser.Scene {
       const cell = obj.getData('dragCell') ?? (p && isWallFurnitureId(p.id)
         ? toWallGrid(p, obj.x, obj.y + (obj.getData('wallLift') ?? 0))
         : p ? toFurnitureGrid(p, obj.x, obj.y) : { x: 0, y: 0 });
-      this.store.moveFurniture(obj.getData('uid'), cell.x, cell.y);
+      const moved = this.store.moveFurniture(obj.getData('uid'), cell.x, cell.y);
       obj.setData('dragCell', undefined);
       obj.setAlpha(1);
+      if (obj.input) obj.input.hitAreaCallback = this.furniturePixelHitTest;
       this.dragGhost?.clear();
-      this.refreshFurniture();
-      this.updateOwnerPosition(true);
+      // A successful move commits synchronously and the store subscriber has
+      // already refreshed the scene. Invalid drops need a manual snap-back.
+      if (!moved) this.refreshFurniture();
+      for (const piece of this.pieces.values()) {
+        if (piece.input) piece.input.enabled = this.store.state.phase !== 'open' || piece.getData('furnitureId') === 'vinyl-player';
+      }
     });
 
     // Camera Pan (Drag shop qua lại) & Pinch/Wheel Zoom - cho phép cả khi ở chế độ di chuyển (miễn là không kéo trúng món đồ)
@@ -397,9 +439,11 @@ export class ShopScene extends Phaser.Scene {
         return;
       }
       if (!this.isPanning || this.isDraggingPiece) return;
-      const dx = (pointer.x - this.panStartX) / this.cameras.main.zoom;
-      const dy = (pointer.y - this.panStartY) / this.cameras.main.zoom;
-      if (Math.hypot(dx, dy) > 5) this.hasPanned = true;
+      const pointerDx = pointer.x - this.panStartX;
+      const pointerDy = pointer.y - this.panStartY;
+      const dx = pointerDx / this.cameras.main.zoom;
+      const dy = pointerDy / this.cameras.main.zoom;
+      if (Math.hypot(pointerDx, pointerDy) > this.tapTolerance(pointer)) this.hasPanned = true;
       if (this.hasPanned) {
         const { x: limitX, y: limitY } = this.cameraPanLimits();
         const nextX = Phaser.Math.Clamp(this.camStartX - dx, -limitX, limitX);
@@ -763,22 +807,27 @@ export class ShopScene extends Phaser.Scene {
         img = this.add.image(pos.x, pos.y, textureKey).setOrigin(.5, .87).setScale(scale).setInteractive({
           hitArea: {},
           hitAreaCallback: this.furniturePixelHitTest,
+          useHandCursor: true,
         });
         img.setData('uid', p.uid); this.input.setDraggable(img); this.pieces.set(p.uid, img);
         let downX = 0, downY = 0, downTime = 0;
+        let tapHandled = false;
         let longPressTimer: Phaser.Time.TimerEvent | undefined;
         let longPressPointer: Phaser.Input.Pointer | undefined;
 
         img.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
           if (this.currentTab !== 'shop' || this.pointerIsCoveredByUi(pointer)) return;
           downX = pointer.x; downY = pointer.y; downTime = Date.now();
+          tapHandled = false;
 
           if (this.edit) {
             // Đã ở chế độ di chuyển: Chạm vào món đồ để chọn
-            this.selected = p.uid;
-            this.selectCallback(p.uid);
-            this.moveModeChangeCallback?.(true, p.uid);
-            this.refreshFurniture();
+            if (this.selected !== p.uid) {
+              this.selected = p.uid;
+              this.selectCallback(p.uid);
+              this.moveModeChangeCallback?.(true, p.uid);
+              this.refreshFurniture();
+            }
             return;
           }
 
@@ -788,7 +837,7 @@ export class ShopScene extends Phaser.Scene {
           longPressTimer?.remove(false);
           longPressTimer = this.time.delayedCall(500, () => {
             const activePointer = longPressPointer;
-            const moved = !activePointer || Phaser.Math.Distance.Between(downX, downY, activePointer.x, activePointer.y) > 10;
+            const moved = !activePointer || Phaser.Math.Distance.Between(downX, downY, activePointer.x, activePointer.y) > this.tapTolerance(activePointer);
             if (moved || this.hasPanned || this.currentTab !== 'shop' || this.store.state.phase === 'open') return;
             this.selectionClearBlockedUntil = Date.now() + 350;
             this.setMoveMode(true, p.uid);
@@ -796,13 +845,15 @@ export class ShopScene extends Phaser.Scene {
         });
 
         img.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-          if (longPressTimer && Phaser.Math.Distance.Between(downX, downY, pointer.x, pointer.y) > 10) {
+          if (longPressTimer && Phaser.Math.Distance.Between(downX, downY, pointer.x, pointer.y) > this.tapTolerance(pointer)) {
             longPressTimer.remove(false);
             longPressTimer = undefined;
           }
         });
 
-        img.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+        const finishFurnitureTap = (pointer: Phaser.Input.Pointer) => {
+          if (tapHandled) return;
+          tapHandled = true;
           longPressTimer?.remove(false);
           longPressTimer = undefined;
           longPressPointer = undefined;
@@ -811,13 +862,19 @@ export class ShopScene extends Phaser.Scene {
           if (this.currentTab !== 'shop' || this.edit || isDialogOpen) return;
           const dist = Phaser.Math.Distance.Between(downX, downY, pointer.x, pointer.y);
           const elapsed = Date.now() - downTime;
-          if (dist < 8 && elapsed < 350 && !this.hasPanned) {
+          if (dist < this.tapTolerance(pointer) && elapsed < (this.coarsePointer ? 700 : 500) && !this.hasPanned) {
+            if (p.id === 'vinyl-player') {
+              this.musicPlayerCallback();
+              return;
+            }
             const nextSelected = this.selected === p.uid ? undefined : p.uid;
             this.selected = nextSelected;
             this.selectCallback(nextSelected);
             this.refreshFurniture();
           }
-        });
+        };
+        img.on('pointerup', finishFurnitureTap);
+        img.on('pointerupoutside', finishFurnitureTap);
 
         img.on('pointerout', () => {
           longPressTimer?.remove(false);
@@ -836,7 +893,7 @@ export class ShopScene extends Phaser.Scene {
       if (this.textures.exists(textureKey)) img.setTexture(textureKey);
       img.setPosition(pos.x, pos.y).setDepth(renderDepth).setFlipX(!wallMounted && p.rotation === 1);
       // Trong giờ bán, toàn bộ nội thất được khóa để thao tác chạm chỉ dành cho khách hàng.
-      if (img.input) img.input.enabled = this.store.state.phase !== 'open';
+      if (img.input) img.input.enabled = this.store.state.phase !== 'open' || p.id === 'vinyl-player';
       if (this.selected === p.uid) {
         img.setTint(this.edit ? 0xffc840 : 0xffb6dc);
       } else if (this.edit) {
@@ -1850,6 +1907,57 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
+  private startOwnerMusicNotes() {
+    this.ownerMusicNoteTimer?.remove(false);
+    this.ownerMusicNoteTimer = this.time.delayedCall(Phaser.Math.Between(2800, 4400), () => {
+      if (this.store.state.music && this.currentTab === 'shop' && !this.edit && !this.isDraggingPiece && this.owner?.visible && !this.ownerSpeechBubble?.visible) {
+        this.releaseOwnerMusicNotes();
+      }
+      this.startOwnerMusicNotes();
+    });
+  }
+
+  private releaseOwnerMusicNotes() {
+    const owner = this.owner;
+    if (!owner || this.ownerSpeechBubble?.visible) return;
+    this.ownerMusicNotesUntil = this.time.now + 2500;
+    const headY = owner.y - owner.displayHeight * owner.originY + 13;
+    const notes = [
+      { glyph: '♪', color: '#d4429a', delay: 0, side: -1, rise: 54 },
+      { glyph: '♫', color: '#9a67d1', delay: 230, side: 1, rise: 67 },
+      { glyph: '♩', color: '#f07898', delay: 500, side: -1, rise: 46 },
+    ];
+    notes.forEach((noteSpec, index) => {
+      this.time.delayedCall(noteSpec.delay, () => {
+        if (!this.store.state.music || this.currentTab !== 'shop' || this.edit || this.isDraggingPiece || !this.owner?.visible) return;
+        const startX = this.owner.x + noteSpec.side * (10 + index * 3);
+        const startY = this.owner.y - this.owner.displayHeight * this.owner.originY + 15;
+        const note = this.add.text(startX, startY, noteSpec.glyph, {
+          fontFamily: "'Nunito', Arial, sans-serif",
+          fontSize: index === 1 ? '20px' : '17px',
+          fontStyle: 'bold',
+          color: noteSpec.color,
+          stroke: '#fff8fc',
+          strokeThickness: 3,
+        }).setOrigin(.5).setDepth(this.owner.depth + 30).setAlpha(0).setScale(.72);
+        this.tweens.add({
+          targets: note,
+          y: headY - noteSpec.rise,
+          angle: noteSpec.side * (12 + index * 4),
+          scale: 1,
+          duration: 1650 + index * 120,
+          ease: 'Sine.easeOut',
+          onUpdate: tween => {
+            const progress = tween.progress;
+            note.x = startX + noteSpec.side * progress * 17 + Math.sin(progress * Math.PI * 3) * 4;
+            note.setAlpha(Math.sin(progress * Math.PI) * .95);
+          },
+          onComplete: () => note.destroy(),
+        });
+      });
+    });
+  }
+
   /* ==============================================================================
      Ô CHAT & CẢM THÁN CỦA CHỦ SHOP (Nhân vật chính)
      ============================================================================== */
@@ -1873,6 +1981,17 @@ export class ShopScene extends Phaser.Scene {
 
   showOwnerSpeech(message: string, duration = 4200) {
     if (!this.owner || !this.ownerSpeechBubble || !this.ownerSpeechGfx || !this.ownerSpeechText) return;
+
+    // Musical notes and dialogue never overlap. Keep the latest requested line
+    // and reveal it as soon as the final note has faded away.
+    if (this.time.now < this.ownerMusicNotesUntil) {
+      this.ownerQueuedSpeechTimer?.remove(false);
+      this.ownerQueuedSpeechTimer = this.time.delayedCall(this.ownerMusicNotesUntil - this.time.now + 60, () => {
+        this.ownerQueuedSpeechTimer = undefined;
+        this.showOwnerSpeech(message, duration);
+      });
+      return;
+    }
 
     this.ownerHideTimer?.remove(false);
     this.ownerSpeechText.setText(message);

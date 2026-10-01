@@ -7,6 +7,9 @@ import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCus
 export const SAVE_KEY = 'little-boutique.save.v1';
 const MOVABLE_DECOR_MIGRATION = 'system:wall-decor-v5';
 const CAMPAIGN_LEVEL3_MIGRATION = 'system:campaign-level3-preview-v1';
+const MUSIC_DEFAULT_ON_MIGRATION = 'system:music-default-on-v1';
+const MUSIC_PLAYER_STARTER_MIGRATION = 'system:music-player-starter-v1';
+const musicPlayerStarter: PlacedFurniture = { uid: 'starter-music-player', id: 'vinyl-player', x: 6, y: 3, rotation: 0 };
 const movableDecorStarters: PlacedFurniture[] = [
   { uid: 'starter-atelier-rug', id: 'atelier-rug', x: 2, y: 2, rotation: 0 },
   { uid: 'starter-fashion-print', id: 'fashion-print', x: 4, y: 0, rotation: 0 },
@@ -29,15 +32,16 @@ export function initialState(): GameState {
     campaignSeason: 1, industryReputation: 0, activeCampaign: null, campaignAvailableDay: 1, completedCampaigns: [],
     activeSupplierId: 'local', supplierRelations: { local: 10, wholesale: 0, global: 0 },
     returnCases: [], vipAppointments: [], coutureOrder: null, coutureAvailableDay: 1, operationSequence: 0, reputationCrisis: null,
-    atelierOwned: false, materialInventory: {}, craftedRecipeIds: [], atelierCraftHistory: [], customProducts: [], tailoringJobs: [], atelierDraft: null,
+    atelierOwned: false, materialInventory: {}, craftedRecipeIds: [], atelierRecipeCards: [], atelierCraftHistory: [], customProducts: [], tailoringJobs: [], atelierDraft: null,
     storedFurniture: [],
     layout: [
       { uid: 'starter-rack', id: 'rack', x: 0, y: 2, rotation: 0, displayItems: [] },
       { uid: 'starter-mirror', id: 'mirror', x: 0, y: 0, rotation: 0 },
       { uid: 'starter-plant', id: 'plant', x: 6, y: 0, rotation: 0 },
       { uid: 'starter-counter', id: 'counter', x: 4, y: 4, rotation: 0 },
+      { ...musicPlayerStarter },
       ...movableDecorStarters.map(item => ({ ...item })),
-    ], stats: emptyStats(), posts: [], claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION], sound: true, music: false, musicVolume: 0.55, tutorialDone: false,
+    ], stats: emptyStats(), posts: [], claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_ON_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: true, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
     employees: [], staffApplicants: [], recruitmentPost: null, staffLeaveRequests: [],
     shopName: 'My Little Boutique', hasNamedShop: false,
   };
@@ -201,6 +205,9 @@ export function parseSave(raw: string | null): GameState {
       ...state.customProducts.map(product => product.recipeId),
       ...(state.atelierDraft ? [state.atelierDraft.recipeId] : []),
     ])).slice(0, atelierRecipes.length);
+    state.atelierRecipeCards = Array.isArray(s.atelierRecipeCards)
+      ? s.atelierRecipeCards.filter((id: unknown): id is string => typeof id === 'string' && atelierRecipes.some(recipe => recipe.id === id)).slice(-200)
+      : [];
     const knownMaterialIds = new Set(atelierMaterials.map(material => material.id));
     state.atelierCraftHistory = Array.isArray(s.atelierCraftHistory) ? s.atelierCraftHistory.flatMap((raw: unknown) => {
       if (!raw || typeof raw !== 'object') return [];
@@ -413,9 +420,24 @@ export function parseSave(raw: string | null): GameState {
       }
       state.claimed.push(MOVABLE_DECOR_MIGRATION);
     }
+    if (!state.claimed.includes(MUSIC_PLAYER_STARTER_MIGRATION)) {
+      if (!state.layout.some(item => item.id === musicPlayerStarter.id)) {
+        if (canPlace(state.layout, musicPlayerStarter, state.landLevel)) state.layout.push({ ...musicPlayerStarter });
+        else {
+          state.storedFurniture ??= [];
+          state.storedFurniture.push(musicPlayerStarter.id);
+        }
+      }
+      state.claimed.push(MUSIC_PLAYER_STARTER_MIGRATION);
+    }
     state.sound = typeof s.sound === 'boolean' ? s.sound : true;
-    state.music = typeof s.music === 'boolean' ? s.music : false;
+    state.music = typeof s.music === 'boolean' ? s.music : true;
+    if (!state.claimed.includes(MUSIC_DEFAULT_ON_MIGRATION)) {
+      state.music = true;
+      state.claimed.push(MUSIC_DEFAULT_ON_MIGRATION);
+    }
     state.musicVolume = finite(s.musicVolume, 0.55, 1);
+    state.musicTrack = ['boutique-bloom', 'better-for-you-1', 'die-for-you-remix', 'daffodil-live'].includes(s.musicTrack) ? s.musicTrack : fresh.musicTrack;
     state.tutorialDone = s.tutorialDone === true;
     state.onlineRating = finite(s.onlineRating, 5, 5);
     state.onlineReviews = Math.floor(finite(s.onlineReviews, 0, 999999));

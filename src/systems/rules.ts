@@ -84,7 +84,7 @@ export const landExpansion = [
   { size: 15, cost: 9200000, rent: 490000, traffic: 10 },
   { size: 16, cost: 12000000, rent: 610000, traffic: 11 },
 ] as const;
-export const shopLevelRent = [30000, 55000, 85000, 120000, 160000, 205000, 255000, 320000, 400000, 500000] as const;
+export const shopLevelRent = [50000, 90000, 140000, 200000, 280000, 380000, 500000, 640000, 810000, 1000000] as const;
 export function landTier(state: GameState) { return Math.max(0, Math.min(landExpansion.length - 1, Math.floor(state.landLevel ?? 0))); }
 export function landSize(state: GameState) { return landExpansion[landTier(state)].size; }
 export function nextLandExpansion(state: GameState) { return landExpansion[landTier(state) + 1]; }

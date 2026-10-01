@@ -381,7 +381,7 @@ describe('customer interactions and day progression', () => {
     const cashBeforeClosing = store.state.money;
     store.openShop(); visit(store); store.closeDay();
     expect(store.state.money).toBe(cashBeforeClosing);
-    expect(store.state.stats.rent).toBe(30000); expect(store.state.rentDue).toBe(30000);
+    expect(store.state.stats.rent).toBe(50000); expect(store.state.rentDue).toBe(50000);
     expect(store.state.stats.loanInterest).toBe(9000);
     expect(store.state.loan).toMatchObject({ balance: 609000, paymentDue: 30000, lastInterestDay: 3 });
     expect(store.state.loanOverdueDays).toBe(1); expect(store.state.rentOverdueDays).toBe(1);
@@ -393,14 +393,14 @@ describe('customer interactions and day progression', () => {
   it('charges the higher daily rent from the first day', () => {
     const store = makeStore(); const cash = store.state.money;
     store.openShop(); store.closeDay();
-    expect(store.state.stats.rent).toBe(30000);
-    expect(store.state.rentDue).toBe(30000);
+    expect(store.state.stats.rent).toBe(50000);
+    expect(store.state.rentDue).toBe(50000);
     expect(store.state.rentOverdueDays).toBe(1);
     expect(store.state.money).toBe(cash);
   });
   it('carries unpaid rent forward instead of taking the last cash automatically', () => {
     const store = makeStore(s => { s.day = 4; s.money = 2000; }); store.openShop(); visit(store); store.closeDay();
-    expect(store.state.stats.rent).toBe(30000); expect(store.state.rentDue).toBe(30000); expect(store.state.money).toBe(2000);
+    expect(store.state.stats.rent).toBe(50000); expect(store.state.rentDue).toBe(50000); expect(store.state.money).toBe(2000);
     expect(store.payRentDue()).toBe(false); expect(store.state.money).toBe(2000);
   });
   it('warns before day seven and ends the run after more than seven unpaid days', () => {

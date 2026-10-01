@@ -1,5 +1,5 @@
 import type { CustomProduct, GameState, ProductDesignMotif, ProductDesignSticker, ProductDesignStroke, Style } from '../types';
-import { ATELIER_PURCHASE_COST, atelierMaterials, atelierRecipes } from '../data/atelier';
+import { ATELIER_PURCHASE_COST, ATELIER_RECIPE_CARD_COST, atelierMaterials, atelierRecipes } from '../data/atelier';
 import { icon } from './icons';
 import { escapeHtml, money, productImage } from './format';
 import { gameDate } from '../systems/calendar';
@@ -28,9 +28,6 @@ export function atelierPanel(
   const unlockedRecipes = atelierRecipes.filter(recipe => Object.keys(recipe.materials).every(id => (atelierMaterials.find(material => material.id === id)?.level ?? 99) <= s.level));
   const totalMaterials = Object.values(s.materialInventory).reduce((sum, value) => sum + value, 0);
   const selectedIngredients = Object.entries(selection).filter((entry): entry is [string, number] => entry[1] > 0).map(([id, quantity]) => ({ material: atelierMaterials.find(item => item.id === id)!, quantity })).filter(item => item.material);
-  const matchedRecipe = unlockedRecipes.find(recipe => recipe.style === selectedStyle
-    && Object.keys(recipe.materials).length === selectedIngredients.length
-    && selectedIngredients.every(item => recipe.materials[item.material.id] === item.quantity));
   const craftHistory = [...(s.atelierCraftHistory ?? [])].reverse();
 
   return `<section class="atelier-page">
@@ -55,17 +52,12 @@ export function atelierPanel(
         </section>
 
         <section class="design-workbench craft-workbench">
-          <header class="craft-board-heading"><div><small>BÀN CẮT MAY</small><h3>Craft thiết kế mới</h3></div><div class="craft-board-actions"><button class="craft-history-button" data-action="atelier-history-open">${icon('clock')}<span>Lịch sử craft</span><b>${craftHistory.length}</b></button></div></header>
+          <header class="craft-board-heading"><div><small>BÀN CẮT MAY</small><h3>Craft thiết kế mới</h3></div><div class="craft-board-actions"><button class="craft-recipe-button" data-action="atelier-recipes-open">${icon('edit')}<span>Sổ công thức</span><b>${s.atelierRecipeCards?.length ?? 0}</b></button><button class="craft-history-button" data-action="atelier-history-open">${icon('clock')}<span>Lịch sử craft</span><b>${craftHistory.length}</b></button></div></header>
           <div class="craft-style-selector"><span>01</span><div><small>CHỌN PHONG CÁCH</small><div class="design-style-strip">${Array.from(new Set(unlockedRecipes.map(recipe => recipe.style))).map(style => `<button data-action="atelier-style" data-id="${style}" class="${selectedStyle === style ? 'active' : ''}">${style}</button>`).join('')}</div></div></div>
           <div class="craft-formula-stage">
             <div class="craft-stage-label"><span>02</span><div><small>PHỐI NGUYÊN LIỆU</small><strong>${selectedIngredients.length ? `${selectedIngredients.length} chất liệu đã chọn` : 'Chọn ít nhất 2 chất liệu'}</strong></div></div>
             <div class="craft-equation">
               <div class="craft-ingredient-slots">${selectedIngredients.length ? selectedIngredients.map((item, index) => `${index ? '<i>+</i>' : ''}<article style="--material:${item.material.color}"><button class="craft-ingredient-remove" data-action="atelier-material-remove" data-id="${item.material.id}" aria-label="Bớt một ${escapeHtml(item.material.name)}"></button><span>${atelierMaterialIllustration(item.material.id)}</span><b>${escapeHtml(item.material.name)}</b><em>×${item.quantity}</em></article>`).join('') : Array.from({ length: 3 }, (_, index) => `${index ? '<i>+</i>' : ''}<article class="is-placeholder"><span>${index + 1}</span><b>Chất liệu</b></article>`).join('')}</div>
-              <span class="craft-result-arrow">${icon('arrow')}</span>
-              <article class="craft-result-preview ${matchedRecipe ? 'has-result' : ''}">
-                ${matchedRecipe ? recipeIllustration(matchedRecipe) : `<span class="craft-mannequin">${icon('hanger')}</span>`}
-                <div><small>${matchedRecipe ? 'MẪU CÓ THỂ TẠO' : 'KẾT QUẢ BÍ ẨN'}</small><strong>${matchedRecipe ? escapeHtml(matchedRecipe.name) : escapeHtml(selectedStyle)}</strong></div>
-              </article>
             </div>
           </div>
           <footer class="craft-action-bar"><div>${icon('info')}<span><strong>Lưu ý</strong>Công thức sai vẫn tiêu hao nguyên liệu thử.</span></div>${s.atelierDraft ? `<button class="atelier-create-sample has-draft" data-action="atelier-review-draft">${icon('star')} Xem mẫu đang chờ duyệt</button>` : `<button class="atelier-create-sample" data-action="atelier-create-sample" ${selectionCount < 2 || s.phase === 'open' ? 'disabled' : ''}><span>Craft mẫu thử</span>${icon('arrow')}</button>`}</footer>
@@ -73,7 +65,7 @@ export function atelierPanel(
       </div>` : `
       <div class="atelier-production-layout production-dashboard">
         <section class="production-blueprint-panel">
-          <header class="production-panel-heading"><div><small>THƯ VIỆN BẢN THIẾT KẾ</small><h3>Chọn mẫu để đưa vào chuyền may</h3></div><div class="production-summary"><span><b>${s.customProducts.length}</b><small>Bản thiết kế</small></span><span><b>${s.tailoringJobs.reduce((sum, job) => sum + job.quantity, 0)}</b><small>Đang sản xuất</small></span></div></header>
+          <header class="production-panel-heading"><div class="production-heading-copy"><span class="production-heading-icon">${icon('hanger')}</span><div><small>THƯ VIỆN THIẾT KẾ</small><h3>Chọn mẫu vào chuyền may</h3></div></div><div class="production-summary"><span><b>${s.customProducts.length}</b><small>Bản thiết kế</small></span><span><b>${s.tailoringJobs.reduce((sum, job) => sum + job.quantity, 0)}</b><small>Đang sản xuất</small></span></div></header>
           ${s.customProducts.length ? `<div class="blueprint-grid production-blueprint-grid">${s.customProducts.map(product => {
             const recipe = atelierRecipes.find(item => item.id === product.recipeId)!;
             const qty = Math.max(5, Math.min(50, batchQtys[product.id] ?? 5));
@@ -88,9 +80,32 @@ export function atelierPanel(
             </article>`;
           }).join('')}</div>` : `<div class="atelier-empty production-empty"><span>${icon('edit')}</span><small>XƯỞNG ĐANG CHỜ Ý TƯỞNG</small><h3>Chưa có bản thiết kế</h3><p>Tạo và duyệt mẫu thử đầu tiên để mở dây chuyền sản xuất.</p><button data-action="atelier-section" data-id="design">Đến phòng thiết kế ${icon('arrow')}</button></div>`}
         </section>
-        <aside class="tailoring-queue production-queue-panel"><header><div><small>CHUYỀN MAY</small><h3>Đang sản xuất</h3></div><b>${s.tailoringJobs.length}</b></header>${s.tailoringJobs.length ? `<div class="production-job-list">${s.tailoringJobs.map((job, index) => { const product = s.customProducts.find(item => item.id === job.productId); const remainingDays = Math.max(0, job.readyDay - s.day); return `<article class="production-job"><span class="production-job-index">${String(index + 1).padStart(2, '0')}</span><div class="production-job-art">${product ? productImage(product) : icon('hanger')}</div><div class="production-job-copy"><small>ĐƠN MAY · ×${job.quantity}</small><strong>${escapeHtml(product?.name ?? 'Thiết kế')}</strong><p>${icon('clock')} ${remainingDays ? `Còn ${remainingDays} ngày` : 'Hoàn thành hôm nay'}</p><div class="production-job-progress"><i style="width:${Math.max(12, 100 - remainingDays * 22)}%"></i></div><em>${gameDate(job.readyDay)}</em></div></article>`; }).join('')}</div>` : `<div class="production-queue-empty"><span>${icon('hanger')}</span><h4>Chuyền may đang trống</h4><p>Chọn một bản thiết kế và số lượng để bắt đầu đơn sản xuất mới.</p></div>`}</aside>
+        <aside class="tailoring-queue production-queue-panel ${s.tailoringJobs.length ? 'is-running' : ''}"><header><div><small>CHUYỀN MAY</small><h3>Đang sản xuất</h3></div><b>${s.tailoringJobs.length}</b></header>${s.tailoringJobs.length ? `<div class="production-job-list">${s.tailoringJobs.map((job, index) => { const product = s.customProducts.find(item => item.id === job.productId); const remainingDays = Math.max(0, job.readyDay - s.day); return `<article class="production-job"><span class="production-job-index">${String(index + 1).padStart(2, '0')}</span><div class="production-job-art">${product ? productImage(product) : icon('hanger')}</div><div class="production-job-copy"><small>ĐƠN MAY · ×${job.quantity}</small><strong>${escapeHtml(product?.name ?? 'Thiết kế')}</strong><p>${icon('clock')} ${remainingDays ? `Còn ${remainingDays} ngày` : 'Hoàn thành hôm nay'}</p><div class="production-job-progress"><i style="width:${Math.max(12, 100 - remainingDays * 22)}%"></i></div><em>${gameDate(job.readyDay)}</em></div></article>`; }).join('')}</div>` : `<div class="production-queue-empty"><span>${icon('hanger')}</span><h4>Chuyền may đang trống</h4><p>Chọn một bản thiết kế và số lượng để bắt đầu đơn sản xuất mới.</p></div>`}${s.tailoringJobs.length ? `<div class="production-machine-track" aria-hidden="true"><i class="production-thread"></i><span class="production-machine">${icon('hudAtelier')}</span></div>` : ''}</aside>
       </div>`}
     ${atelierOwned && section === 'design' ? `<button class="craft-history-backdrop ${historyOpen ? 'is-open' : ''}" data-action="atelier-history-close" aria-label="Đóng lịch sử craft"></button><aside class="craft-history-drawer ${historyOpen ? 'is-open' : ''}" aria-hidden="${historyOpen ? 'false' : 'true'}"><header><div><small>ATELIER ARCHIVE</small><h2>Lịch sử craft</h2><p>${craftHistory.length} lần thử đã được ghi lại</p></div><button data-action="atelier-history-close" aria-label="Đóng">${icon('close')}</button></header>${craftHistory.length ? `<div class="craft-history-list">${craftHistory.map((entry, index) => { const recipe = entry.recipeId ? atelierRecipes.find(item => item.id === entry.recipeId) : undefined; return `<article class="${entry.success ? 'is-success' : 'is-failed'}"><span class="craft-history-number">${String(craftHistory.length - index).padStart(2, '0')}</span><div class="craft-history-art">${entry.success && recipe ? recipeIllustration(recipe) : `<span class="craft-failed-art">${icon('close')}</span>`}</div><div class="craft-history-copy"><small>${entry.style}${recipe ? ` · ${recipe.category}` : ''} · ${gameDate(entry.day)}</small><h3>${recipe ? escapeHtml(recipe.name) : 'Công thức chưa thành công'}</h3><div class="recipe-materials">${materialFormula(entry.materials)}</div><p>${icon(entry.success ? 'check' : 'close')} ${entry.success ? 'Craft thành công' : 'Craft thất bại · đã mất nguyên liệu'}</p></div></article>`; }).join('')}</div>` : `<div class="craft-history-empty"><span>${icon('edit')}</span><h3>Cuốn sổ còn trống</h3><p>Mọi lần craft thành công hoặc thất bại sẽ được ghi lại tại đây.</p></div>`}<footer><span>${icon('info')} Lưu tối đa 50 lần craft gần nhất.</span></footer></aside>` : ''}
+  </section>`;
+}
+
+export function atelierRecipeBookModal(s: GameState, highlightedRecipeId = '') {
+  const cards = s.atelierRecipeCards ?? [];
+  const counts = new Map<string, number>();
+  cards.forEach(id => counts.set(id, (counts.get(id) ?? 0) + 1));
+  const ownedRecipes = atelierRecipes.filter(recipe => counts.has(recipe.id));
+  const highlighted = atelierRecipes.find(recipe => recipe.id === highlightedRecipeId);
+  const recipeCard = (recipe: typeof atelierRecipes[number]) => {
+    const requiredLevel = Math.max(...Object.keys(recipe.materials).map(id => atelierMaterials.find(material => material.id === id)?.level ?? 8));
+    return `<article class="atelier-recipe-card ${recipe.id === highlightedRecipeId ? 'is-new' : ''}">
+      <span class="atelier-recipe-art">${recipeIllustration(recipe)}</span>
+      <div><small>${escapeHtml(recipe.style)} · CẤP ${requiredLevel}</small><strong>${escapeHtml(recipe.name)}</strong><div class="recipe-materials">${materialFormula(recipe.materials)}</div></div>
+      <b>×${counts.get(recipe.id) ?? 0}</b>
+    </article>`;
+  };
+  return `<section class="atelier-recipe-book">
+    <header><button class="atelier-recipe-header-buy" data-action="atelier-recipe-buy" ${s.money < ATELIER_RECIPE_CARD_COST || s.phase === 'open' ? 'disabled' : ''}><span><small>MỞ 1 BẢN NGẪU NHIÊN</small><strong>${money(ATELIER_RECIPE_CARD_COST)}</strong></span>${icon('sparkle')}</button><button class="atelier-recipe-header-close" data-action="close-modal" aria-label="Đóng sổ công thức">${icon('close')}</button></header>
+    ${highlighted ? `<div class="atelier-recipe-reveal"><span>MỚI NHẬN</span>${recipeIllustration(highlighted)}<div><small>${escapeHtml(highlighted.style)}</small><strong>${escapeHtml(highlighted.name)}</strong><p class="recipe-materials">${materialFormula(highlighted.materials)}</p></div><b>×${counts.get(highlighted.id) ?? 1}</b></div>` : ''}
+    <div class="atelier-recipe-book-summary"><span><b>${cards.length}</b> bản đã mua</span><span><b>${ownedRecipes.length}/${atelierRecipes.length}</b> công thức khác nhau</span></div>
+    <div class="atelier-recipe-list">${ownedRecipes.length ? ownedRecipes.map(recipeCard).join('') : `<div class="atelier-recipe-empty">${icon('edit')}<strong>Sổ công thức đang trống</strong><span>Mua lượt đầu tiên để nhận một công thức ngẫu nhiên.</span></div>`}</div>
+    <footer><span>${icon('info')} Công thức trùng vẫn được giữ và tăng số bản sở hữu.</span></footer>
   </section>`;
 }
 
@@ -171,7 +186,7 @@ export function atelierCustomizeModal(product: CustomProduct, design: AtelierCus
   });
   const selectedSticker = design.stickers.find(sticker => sticker.id === design.selectedStickerId);
   const canvasZoom = Math.max(.25, Math.min(4, design.canvasZoom));
-  const nodeOverlay = !selectedSticker && design.shapeSelected ? `<g class="customizer-node-overlay"><polygon points="${design.shapePoints.map(point => `${point.x},${point.y}`).join(' ')}"/><g>${design.shapePoints.map((point, index) => `<circle data-shape-node="${index}" class="${design.selectedNode === index ? 'active' : ''}" cx="${point.x}" cy="${point.y}" r="${design.selectedNode === index ? 4.2 : 3.2}"/>`).join('')}</g></g>` : '';
+  const nodeOverlay = !selectedSticker && design.shapeSelected ? `<g class="customizer-node-overlay"><polygon points="${design.shapePoints.map(point => `${point.x},${point.y}`).join(' ')}"/><g>${design.shapePoints.map((point, index) => `<circle data-shape-node="${index}" class="shape-node-hit" cx="${point.x}" cy="${point.y}" r="9"/><circle data-shape-node="${index}" class="shape-node-visual ${design.selectedNode === index ? 'active' : ''}" cx="${point.x}" cy="${point.y}" r="${design.selectedNode === index ? 4.2 : 3.2}"/>`).join('')}</g></g>` : '';
   const editablePreview = preview
     .replace(/viewBox="[^"]*"/, `viewBox="${ATELIER_CANVAS_VIEW.x} ${ATELIER_CANVAS_VIEW.y} ${ATELIER_CANVAS_VIEW.width} ${ATELIER_CANVAS_VIEW.height}"`)
     .replace('<svg ', '<svg preserveAspectRatio="xMidYMid meet" ')

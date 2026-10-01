@@ -113,7 +113,7 @@ describe('timed shop and random visits', () => {
     let summaries = 0; store.subscribe(e => { if (e.type === 'summary') summaries++; });
     store.closeDay(); const money = store.state.money; store.closeDay(); store.tick();
     expect(summaries).toBe(1); expect(store.state.money).toBe(money);
-    expect(store.state.stats.rent).toBe(30000); expect(store.state.rentDue).toBe(30000); expect(activeCustomer(store.state)).toBeUndefined();
+    expect(store.state.stats.rent).toBe(50000); expect(store.state.rentDue).toBe(50000); expect(activeCustomer(store.state)).toBeUndefined();
     expect(store.state.dayTimer).toBeGreaterThan(0);
     store.nextDay(); expect(store.state.dayTimer).toBe(DAY_DURATION); expect(store.state.currentCustomerId).toBeNull();
   });

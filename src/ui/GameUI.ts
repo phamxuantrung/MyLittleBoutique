@@ -1,8 +1,8 @@
 import { customers, furniture, levels, products } from '../data/catalog';
 import { looks } from '../data/fashion';
 import type { GameStore } from '../systems/store';
-import type { AudioSystem } from '../systems/audio';
-import { activeCustomer, activeVisit, buyPrice, currentEvent, currentTrend, DAY_DURATION, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, landSize, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
+import { MUSIC_TRACKS, type AudioSystem } from '../systems/audio';
+import { activeCustomer, activeVisit, buyPrice, currentEvent, currentTrend, DAY_DURATION, dailyRent, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, landExpansion, landSize, landTier, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
 import { defaultFilters } from '../systems/catalog';
 import { icon } from './icons';
 import { characterSvg, courierSvg, ownerPortrait, productSvg } from '../art/svg';
@@ -17,15 +17,15 @@ import type { ArrivedOrderSummary, ProductDesignBrushTip, ProductDesignMotif, Pr
 import { supplierFor, suppliers } from '../systems/operations';
 import { gameCalendarDate } from '../systems/calendar';
 import { lookupCustomer } from '../systems/customerGen';
-import { atelierCustomizeModal, atelierPanel, atelierSampleModal, type AtelierSection } from './atelierPanel';
+import { atelierCustomizeModal, atelierPanel, atelierRecipeBookModal, atelierSampleModal, type AtelierSection } from './atelierPanel';
 import { ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipes } from '../data/atelier';
 import { atelierMaterialIllustration, atelierProductPoints } from '../art/atelierArt';
 import Panzoom, { type PanzoomEventDetail, type PanzoomObject } from '@panzoom/panzoom';
 import type Moveable from 'moveable';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
-type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
-const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
+type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
+const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'atelier-recipe-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
 const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
 const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
@@ -139,9 +139,14 @@ export class GameUI {
   private displayHoldRepeat = 0;
   private displayHoldStart?: { x: number; y: number };
   private suppressDisplayAddClick = false;
+  private musicAuraLastUpdate = 0;
+  private musicAuraElement?: HTMLElement;
+  private musicWaveBars: HTMLElement[] = [];
+  private musicAuraWasEnabled = false;
 
   constructor(private store: GameStore, private audio: AudioSystem) {
     this.shell(); this.render(); this.bind();
+    this.animateMusicAura();
     this.queueDisplayGuide();
     this.queueCampaignUnlock();
     if (this.store.state.gameOverReason) {
@@ -163,6 +168,10 @@ export class GameUI {
         if (this.modal === 'quests') this.dialog.querySelector('.dialog-inner')!.innerHTML = questPanel(store.state);
         if (this.modal === 'campaign') this.dialog.querySelector('.dialog-inner')!.innerHTML = campaignModal(store.state, this.campaignGuideForced);
         if (this.modal === 'customer-care') this.dialog.querySelector('.dialog-inner')!.innerHTML = customerCareModal(store.state);
+        if (this.modal === 'crisis-detail') {
+          if (store.state.reputationCrisis) this.dialog.querySelector('.dialog-inner')!.innerHTML = this.crisisDetailMarkup();
+          else this.closeModal();
+        }
         if (this.modal === 'staff') this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(store.state, this.staffDetailUid);
         if (this.modal === 'online') this.refreshOnlineChannel();
         if (this.modal === 'online-order') this.refreshOnlineOrder();
@@ -193,7 +202,7 @@ export class GameUI {
       if (event.type === 'summary') this.openModal('summary', summaryModal(store.state));
       if (event.type === 'debt-warning') this.openModal('debt-warning', debtWarningModal(store.state, event.staff));
       if (event.type === 'game-over') this.openModal('gameover', financialGameOverModal(store.state));
-      if (event.type === 'customer') audio.play('bell');
+      if (event.type === 'customer' && event.reason !== 'focus') audio.play('bell');
       if (event.type === 'orders-arrived') {
         const items = event.items;
         window.setTimeout(() => {
@@ -285,6 +294,7 @@ export class GameUI {
               <div id="day-card"></div>
               <div id="shop-status"></div>
             </div>
+            <button id="crisis-alert-button" class="crisis-alert-button" data-action="crisis-detail-open" aria-label="Xem chi tiết khủng hoảng uy tín" hidden></button>
 
             <div class="top-right-cluster"><section class="hud" id="hud" aria-label="Chỉ số cửa hàng"></section></div>
 
@@ -323,9 +333,6 @@ export class GameUI {
                 <span class="staff-fab-icon land-fab-icon">${icon('hudExpand')}</span><span class="staff-fab-copy"><strong>Mở rộng</strong><small id="land-expand-status">Xem nâng cấp</small></span>
               </button>
               <button id="finance-hud-button" class="finance-hud-button hud-edge-button" data-action="finance-open" aria-label="Tài chính" title="Quản lý tài chính"><span>${icon('hudFinance')}</span><strong>Tài chính</strong><b id="finance-hud-badge" class="coc-badge-pill" hidden></b></button>
-              <button id="debug-button" class="debug-fab" data-action="debug-open" aria-label="Mở công cụ debug" title="Mở công cụ debug">
-                ${icon('settings')}<span>Debug</span>
-              </button>
               <!-- Center Zone: Sub-HUD Tools -->
               <div class="game-center-hud"></div>
 
@@ -358,6 +365,9 @@ export class GameUI {
 
           <!-- In-Game Full View Window for Sub-Panels (Stock, Trend, Social) -->
           <div id="content-panel" class="game-content-panel" hidden></div>
+          <div id="music-edge-aura" class="music-edge-aura" aria-hidden="true">
+            <div class="music-edge-wave">${Array.from({ length: 48 }, () => '<i></i>').join('')}</div>
+          </div>
         </div>
       </div>
 
@@ -369,6 +379,47 @@ export class GameUI {
       <div id="announcer" class="sr-only" aria-live="polite"></div>`;
     this.dialog = document.querySelector('#game-dialog')!;
     this.updateDockVisibility();
+  }
+  private animateMusicAura(time = 0) {
+    // 25 fps is enough for a soft light pulse and keeps the canvas drag loop light on mobile.
+    if (time - this.musicAuraLastUpdate >= 40) {
+      this.musicAuraLastUpdate = time;
+      const aura = this.musicAuraElement ?? document.querySelector<HTMLElement>('#music-edge-aura') ?? undefined;
+      this.musicAuraElement = aura;
+      const enabled = this.store.state.music && this.store.state.musicTrack !== 'boutique-bloom';
+      if (aura) {
+        aura.classList.toggle('is-active', enabled);
+        const pulse = enabled ? this.audio.musicPulse() : 0;
+        aura.style.setProperty('--music-aura-opacity', enabled ? String(.3 + pulse * .7) : '0');
+        aura.style.setProperty('--music-aura-spread', `${24 + pulse * 38}px`);
+        aura.style.setProperty('--music-aura-brightness', String(1 + pulse * .9));
+        aura.style.setProperty('--music-wave-glow', `${6 + pulse * 13}px`);
+        if (!this.musicWaveBars.length) this.musicWaveBars = Array.from(aura.querySelectorAll<HTMLElement>('.music-edge-wave i'));
+        if (enabled) this.musicWaveBars.forEach((bar, index) => {
+          const x = index / Math.max(1, this.musicWaveBars.length - 1);
+          const peak = (center: number, width: number, strength: number) => Math.exp(-Math.pow((x - center) / width, 2)) * strength;
+          // Các cụm phổ lớn, vừa và nhỏ giống waveform tham chiếu; dao động nhỏ
+          // trong từng cụm khiến mỗi thanh co lên xuống thay vì cả dải phóng to.
+          const envelope = Math.min(1,
+            peak(.11, .055, 1) +
+            peak(.32, .09, .58) +
+            peak(.62, .065, .38) +
+            peak(.86, .08, .22)
+          );
+          const flicker = .42 + Math.abs(Math.sin(time * .011 + index * .79)) * .4
+            + Math.abs(Math.sin(time * .006 - index * .31)) * .18;
+          const height = .045 + envelope * flicker * (.72 + pulse * .38);
+          bar.style.transform = `scaleY(${height.toFixed(3)})`;
+          bar.style.opacity = String(.46 + Math.min(1, height) * .54);
+        });
+        else if (this.musicAuraWasEnabled) this.musicWaveBars.forEach(bar => {
+            bar.style.transform = 'scaleY(.18)';
+            bar.style.opacity = '.45';
+        });
+        this.musicAuraWasEnabled = enabled;
+      }
+    }
+    requestAnimationFrame(nextTime => this.animateMusicAura(nextTime));
   }
   private bind() {
     const protectCanvasFromUiPointer = (event: PointerEvent) => {
@@ -484,16 +535,29 @@ export class GameUI {
       const canvas = (event.target as Element).closest<HTMLElement>('[data-shape-canvas]');
       if (!node || !canvas) return;
       event.preventDefault();
+      event.stopPropagation();
       const index = Number(node.dataset.shapeNode);
       if (!Number.isInteger(index) || !this.atelierShapePoints[index]) return;
       this.atelierShapeSelected = true;
       this.atelierSelectedNode = index;
       this.atelierShapeDragPointer = event.pointerId;
       canvas.setPointerCapture?.(event.pointerId);
-      canvas.querySelectorAll('[data-shape-node]').forEach(item => item.classList.toggle('active', item === node));
+      const contact = this.atelierCanvasPoint(canvas, event);
+      const point = this.atelierShapePoints[index];
+      point.x = Math.max(4, Math.min(116, contact.x));
+      point.y = Math.max(5, Math.min(138, contact.y));
+      canvas.querySelectorAll<SVGCircleElement>(`[data-shape-node="${index}"]`).forEach(item => {
+        item.setAttribute('cx', point.x.toFixed(1));
+        item.setAttribute('cy', point.y.toFixed(1));
+      });
+      canvas.querySelectorAll<SVGCircleElement>('.shape-node-visual').forEach(item => item.classList.toggle('active', item.dataset.shapeNode === String(index)));
+      const polygon = canvas.querySelector<SVGPolygonElement>('.customizer-node-overlay>polygon');
+      polygon?.setAttribute('points', this.atelierShapePoints.map(item => `${item.x},${item.y}`).join(' '));
+      const shapePath = this.atelierShapePathData();
+      canvas.querySelectorAll<SVGPathElement>('.atelier-live-shape-path').forEach(item => item.setAttribute('d', shapePath));
       const status = this.dialog.querySelector<HTMLElement>('.customizer-vector-tools header em');
       if (status) status.textContent = `Điểm ${index + 1}`;
-    });
+    }, { capture: true });
     document.addEventListener('pointermove', event => {
       if (this.modal !== 'atelier-customize' || event.pointerId !== this.atelierShapeDragPointer || this.atelierSelectedNode < 0) return;
       const canvas = document.querySelector<HTMLElement>('[data-shape-canvas]');
@@ -503,15 +567,19 @@ export class GameUI {
       const next = this.atelierCanvasPoint(canvas, event);
       point.x = Math.max(4, Math.min(116, next.x));
       point.y = Math.max(5, Math.min(138, next.y));
-      const node = canvas.querySelector<SVGCircleElement>(`[data-shape-node="${this.atelierSelectedNode}"]`);
-      node?.setAttribute('cx', point.x.toFixed(1));
-      node?.setAttribute('cy', point.y.toFixed(1));
+      canvas.querySelectorAll<SVGCircleElement>(`[data-shape-node="${this.atelierSelectedNode}"]`).forEach(node => {
+        node.setAttribute('cx', point.x.toFixed(1));
+        node.setAttribute('cy', point.y.toFixed(1));
+      });
       const polygon = canvas.querySelector<SVGPolygonElement>('.customizer-node-overlay>polygon');
       polygon?.setAttribute('points', this.atelierShapePoints.map(item => `${item.x},${item.y}`).join(' '));
-      canvas.querySelector<SVGPathElement>('.atelier-editable-shape')?.setAttribute('d', this.atelierShapePathData());
+      const shapePath = this.atelierShapePathData();
+      canvas.querySelectorAll<SVGPathElement>('.atelier-live-shape-path').forEach(item => item.setAttribute('d', shapePath));
     }, { passive: false });
     const finishShapeDrag = (event: PointerEvent) => {
       if (event.pointerId !== this.atelierShapeDragPointer) return;
+      const canvas = this.dialog.querySelector<HTMLElement>('[data-shape-canvas]');
+      if (canvas?.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       this.atelierShapeDragPointer = -1;
     };
     document.addEventListener('pointerup', finishShapeDrag);
@@ -870,6 +938,17 @@ export class GameUI {
       case 'atelier-buy':
         if (this.store.buyAtelier()) this.renderPanel();
         break;
+      case 'atelier-recipes-open':
+        this.openModal('atelier-recipes', atelierRecipeBookModal(this.store.state));
+        break;
+      case 'atelier-recipe-buy': {
+        const result = this.store.buyRandomAtelierRecipe();
+        if (result.success) {
+          const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+          if (inner) inner.innerHTML = atelierRecipeBookModal(this.store.state, result.recipe.id);
+        }
+        break;
+      }
       case 'atelier-style':
         this.atelierStyle = id as Style;
         this.renderPanel();
@@ -1369,6 +1448,9 @@ export class GameUI {
       case 'campaign-claim': this.store.claimCampaign(); break;
       case 'campaign-abandon': this.store.abandonCampaign(); break;
       case 'customer-care-open': this.openModal('customer-care', customerCareModal(this.store.state)); break;
+      case 'crisis-detail-open':
+        if (this.store.state.reputationCrisis) this.openModal('crisis-detail', this.crisisDetailMarkup());
+        break;
       case 'supplier-select':
         if (this.store.selectSupplier(id as SupplierId)) {
           this.importSourceSelected = true;
@@ -1707,7 +1789,24 @@ export class GameUI {
       }
       case 'upgrade': this.store.upgrade(); this.closeModal(); this.scene?.burst(500, 300, true); this.audio.play('reward'); break;
       case 'sound': this.store.settings('sound', !this.store.state.sound); this.audio.enabled = this.store.state.sound; if (this.modal === 'settings') this.showSettings(); break;
-      case 'music': this.store.settings('music', !this.store.state.music); this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.music(this.store.state.music); this.showSettings(); break;
+      case 'music': {
+        const fromPlayer = this.modal === 'music-player';
+        this.store.settings('music', !this.store.state.music);
+        this.audio.setMusicVolume(this.store.state.musicVolume);
+        this.audio.music(this.store.state.music);
+        if (fromPlayer) this.refreshMusicPlayer(); else this.showSettings();
+        break;
+      }
+      case 'music-player-open':
+        this.scene?.setMoveMode(false);
+        this.openMusicPlayer(false);
+        break;
+      case 'music-player-track':
+        this.store.setMusicTrack(id);
+        this.audio.setMusicTrack(id);
+        if (this.store.state.music) this.audio.music(true);
+        this.refreshMusicPlayer();
+        break;
       case 'settings': {
         if (this.store.state.phase === 'open') {
           this.toast('Đang trong giờ bán hàng! Hãy chăm chút phục vụ khách nhé.', 'info');
@@ -1748,7 +1847,7 @@ export class GameUI {
       case 'tutorial-done': this.store.settings('tutorialDone', true); this.closeModal(); break;
       case 'rescue': this.store.rescue(); break;
       case 'reset-confirm': this.openModal('reset', `<div class="modal-heading"><h2>Bắt đầu một boutique mới?</h2><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div><p>Tiền, hàng hóa, ngày chơi và toàn bộ tiến trình hiện tại sẽ bị xóa khỏi trình duyệt này. Thao tác này không thể hoàn tác.</p><div class="reset-actions"><button class="btn btn-secondary" data-action="settings">Giữ boutique của mình</button><button class="btn btn-danger" data-action="reset">Xóa và chơi lại</button></div>`); break;
-      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.materialQtys = {}; this.expandedImportPurchase = ''; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
+      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.setMusicTrack(this.store.state.musicTrack); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.materialQtys = {}; this.expandedImportPurchase = ''; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
     }
   }
   private scheduleCatalogSearch(inputId: 'catalog-search' | 'import-search', caret: number | null) {
@@ -1816,8 +1915,6 @@ export class GameUI {
     if (onlineButton) onlineButton.hidden = hiddenFromShop;
     const onlineCareCluster = document.querySelector<HTMLElement>('#online-care-cluster');
     if (onlineCareCluster) onlineCareCluster.hidden = hiddenFromShop;
-    const debugButton = document.querySelector<HTMLElement>('#debug-button');
-    if (debugButton) debugButton.hidden = hiddenFromShop;
     const landButton = document.querySelector<HTMLElement>('#land-expand-button');
     if (landButton) landButton.hidden = hiddenFromShop || this.store.state.phase === 'open';
     const financeButton = document.querySelector<HTMLElement>('#finance-hud-button');
@@ -1869,6 +1966,16 @@ export class GameUI {
 
     const calendarDate = gameCalendarDate(s.day);
     document.querySelector('#day-card')!.innerHTML = `${icon('daySun')}<span class="day-calendar"><small>NGÀY</small><strong class="day-num">${String(calendarDate.day).padStart(2, '0')}</strong></span><i></i><span class="day-calendar"><small>THÁNG</small><strong class="day-num">${String(calendarDate.month).padStart(2, '0')}</strong></span>`;
+    const crisisButton = document.querySelector<HTMLButtonElement>('#crisis-alert-button');
+    if (crisisButton) {
+      const crisis = s.reputationCrisis;
+      crisisButton.hidden = !crisis;
+      if (crisis) {
+        const daysLeft = Math.max(0, crisis.deadlineDay - s.day + 1);
+        crisisButton.innerHTML = `${icon('hudCrisis')}<span class="sr-only">Khủng hoảng uy tín · còn ${daysLeft} ngày</span>`;
+        crisisButton.setAttribute('aria-label', `Khủng hoảng uy tín, còn ${daysLeft} ngày. Nhấn để xem chi tiết.`);
+      }
+    }
     document.querySelector('#hud')!.innerHTML = `<span class="hud-item wallet"><strong data-testid="money">${compactMoney(s.money)}</strong>${icon('hudMoney')}</span><span class="hud-item" title="Độ uy tín"><strong>${s.reputation.toFixed(1)}</strong>${icon('hudReputation')}</span><span class="hud-item" title="Người theo dõi"><strong>${compact(s.followers)}</strong>${icon('hudFollowers')}</span><span class="hud-item hud-appeal" title="Điểm thẩm mỹ"><strong>${decorAppealScore(s)}</strong>${icon('hudAppeal')}</span>`;
     const currentProfileLevel = levels[Math.max(0, s.level - 1)];
     const profileNext = levels[s.level];
@@ -1920,10 +2027,11 @@ export class GameUI {
         </button>
       </span>`;
     }).join('');
-    const courierCards = s.onlineOrders.map((order, index) => `<button class="sale-character-card is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn online ${index + 1}">
+    const courierCards = s.onlineOrders.map((order, index) => `<span class="sale-card-aura is-courier-aura"><button class="sale-character-card is-customer is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn online ${index + 1}">
+      <strong class="sale-card-name">Shipper ${String(index + 1).padStart(2, '0')}</strong>
       <span class="sale-character-art">${courierSvg(order.courierVariant)}</span>
-      <span class="sale-character-copy"><small>SHIPPER ĐANG CHỜ</small><strong>Đơn online #${index + 1}</strong><em>${icon('bag')} Giao hàng</em></span>
-    </button>`).join('');
+      <div class="sale-card-countdown sale-card-delivery">${icon('bag')}<span>Giao</span></div>
+    </button></span>`).join('');
     interactionBar.innerHTML = customerCards + courierCards;
     interactionBar.hidden = !isOpen || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || !interactionBar.childElementCount;
     document.querySelector('#shop-status')!.innerHTML = '';
@@ -2011,8 +2119,6 @@ export class GameUI {
       const badge = onlineButton.querySelector<HTMLElement>('#online-fab-badge');
       if (badge) { badge.hidden = s.onlineOrders.length === 0; badge.textContent = String(s.onlineOrders.length); }
     }
-    const debugButton = document.querySelector<HTMLElement>('#debug-button');
-    if (debugButton) debugButton.hidden = this.tab !== 'shop' || this.modal !== 'none' || this.moveMode;
     const landButton = document.querySelector<HTMLButtonElement>('#land-expand-button');
     if (landButton) {
       const expansion = nextLandExpansion(s);
@@ -2206,15 +2312,17 @@ export class GameUI {
         ${data?.display?.upgrade ? `<span class="move-item-badge">Cấp ${data && sel ? displayLevel(data, sel) + 1 : 1}</span>` : ''}
       </strong>
       <nav class="move-toolbar-actions selection-toolbar-actions" aria-label="Thao tác với đồ vật">
-        ${data?.id === 'shop-sign'
+        ${this.moveMode ? '' : data?.id === 'shop-sign'
           ? `<button class="move-tool-btn open-btn" data-action="name-shop" title="Đổi tên trên biển hiệu" aria-label="Đổi tên shop"><span class="tool-btn-icon">${icon('hudFixtureRename')}</span><span class="tool-btn-text">Đổi tên</span></button>`
+          : data?.id === 'vinyl-player'
+            ? `<button class="move-tool-btn open-btn music-player-open-btn" data-action="music-player-open" title="Mở máy nghe nhạc" aria-label="Mở máy nghe nhạc"><span class="tool-btn-icon">${icon('volume')}</span><span class="tool-btn-text">Mở nhạc</span></button>`
           : data?.display
             ? `<button class="move-tool-btn open-btn" data-action="display-open" title="Mở khu trưng bày" aria-label="Mở"><span class="tool-btn-icon">${icon('hudFixtureOpen')}</span><span class="tool-btn-text">Mở</span></button>`
             : ''}
         <button class="move-tool-btn store-btn" data-action="move-store" title="Cất đồ vào kho" aria-label="Cất"><span class="tool-btn-icon">${icon('hudFixtureStore')}</span><span class="tool-btn-text">Cất</span></button>
-        ${data?.display?.upgrade ? `<button class="move-tool-btn upgrade-btn" data-action="display-upgrade" data-fixture="${sel?.uid ?? ''}" title="Nâng cấp khu trưng bày" aria-label="Nâng cấp"><span class="tool-btn-icon">${icon('hudFixtureUpgrade')}</span><span class="tool-btn-text">Nâng cấp</span></button>` : ''}
+        ${!this.moveMode && data?.display?.upgrade ? `<button class="move-tool-btn upgrade-btn" data-action="display-upgrade" data-fixture="${sel?.uid ?? ''}" title="Nâng cấp khu trưng bày" aria-label="Nâng cấp"><span class="tool-btn-icon">${icon('hudFixtureUpgrade')}</span><span class="tool-btn-text">Nâng cấp</span></button>` : ''}
         ${this.moveMode
-          ? `<button class="move-tool-btn sell-btn" data-action="move-sell" title="Bán đồ và nhận lại 50% giá mua" aria-label="Bán đồ"><span class="tool-btn-icon">${icon('trash')}</span><span class="tool-btn-text">Bán</span></button><button class="move-tool-btn done-btn" data-action="move-done" title="Hoàn tất sắp xếp" aria-label="Xong"><span class="tool-btn-icon">${icon('check')}</span><span class="tool-btn-text">Xong</span></button>`
+          ? `<button class="move-tool-btn rotate-btn" data-action="move-rotate" title="Xoay đồ vật" aria-label="Xoay đồ vật"><span class="tool-btn-icon">${icon('hudFixtureRotate')}</span><span class="tool-btn-text">Xoay</span></button><button class="move-tool-btn sell-btn" data-action="move-sell" title="Bán đồ và nhận lại 50% giá mua" aria-label="Bán đồ"><span class="tool-btn-icon">${icon('trash')}</span><span class="tool-btn-text">Bán</span></button><button class="move-tool-btn done-btn" data-action="move-done" title="Hoàn tất sắp xếp" aria-label="Xong"><span class="tool-btn-icon">${icon('check')}</span><span class="tool-btn-text">Xong</span></button>`
           : `<button class="move-tool-btn info-btn" data-action="fixture-info" data-id="${sel?.uid ?? ''}" title="Xem thông tin đồ vật" aria-label="Thông tin"><span class="tool-btn-icon">${icon('hudFixtureInfo')}</span><span class="tool-btn-text">Thông tin</span></button>`}
       </nav>
     `;
@@ -2248,11 +2356,15 @@ export class GameUI {
     const next = nextLandExpansion(this.store.state);
     if (!next) { this.store.expandLand(); return; }
     const currentSize = landSize(this.store.state);
+    const currentLand = landExpansion[landTier(this.store.state)];
+    const trafficIncrease = Math.max(0, next.traffic - currentLand.traffic);
+    const currentDailyRent = dailyRent(this.store.state);
+    const nextDailyRent = currentDailyRent - currentLand.rent + next.rent;
     this.openModal('land-expand-confirm', `<div class="app-info-modal land-upgrade-modal">
       <header class="app-modal-header"><span class="app-header-chip">${icon('coin')} ${money(this.store.state.money)}</span><div><small>NÂNG CẤP MẶT BẰNG</small><h2>Mở rộng boutique</h2></div><button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
       <section class="land-upgrade-hero"><span>${icon('expand')}</span><div><small>KHÔNG GIAN MỚI</small><h3>${next.size} × ${next.size} ô</h3><p>Có thêm diện tích bày đồ, trang trí và đón nhiều khách hơn.</p></div></section>
       <div class="upgrade-capacity-comparison land-size-comparison"><span><small>Hiện tại</small><b>${currentSize} × ${currentSize}</b><em>ô</em></span>${icon('arrow')}<span class="is-next"><small>Sau mở rộng</small><b>${next.size} × ${next.size}</b><em>ô</em></span></div>
-      <div class="app-stat-grid land-upgrade-stats"><span>${icon('users')}<small>Lưu lượng</small><b>+${next.traffic}</b></span><span>${icon('shop')}<small>Thuê mặt bằng</small><b>${compactMoney(next.rent)}/ngày</b></span><span>${icon('expand')}<small>Diện tích tăng</small><b>+${next.size * next.size - currentSize * currentSize}</b></span></div>
+      <div class="app-stat-grid land-upgrade-stats"><span>${icon('users')}<small>Lưu lượng tăng</small><b>+${trafficIncrease}</b></span><span>${icon('shop')}<small>Tổng thuê mới</small><b>${compactMoney(nextDailyRent)}/ngày</b></span><span>${icon('expand')}<small>Diện tích tăng</small><b>+${next.size * next.size - currentSize * currentSize} ô</b></span></div>
       <div class="app-cost-row"><span><small>Chi phí mở rộng</small><strong>${money(next.cost)}</strong></span><em class="${this.store.state.money >= next.cost ? 'is-ready' : 'is-short'}">${this.store.state.money >= next.cost ? 'Đủ tiền' : `Thiếu ${money(next.cost - this.store.state.money)}`}</em></div>
       <footer class="app-modal-actions is-split"><button class="btn btn-secondary" data-action="close-modal">Để sau</button><button class="btn btn-primary" data-action="expand-land-confirmed" ${this.store.state.money < next.cost ? 'disabled' : ''}>${icon('check')} Mở rộng mặt bằng</button></footer>
     </div>`);
@@ -2698,7 +2810,7 @@ export class GameUI {
     const deliveryDays = supplier.deliveryDays + (kind === 'product' && (products.find(item => item.id === id)?.level ?? 0) >= 4 ? 3 : 0);
     return `<section class="import-quantity-modal">
       <header class="app-modal-header import-quantity-header">
-        <span class="app-header-chip">${icon('box')} Nhập hàng</span>
+        <span class="import-current-balance">${icon('coin')} <b>${money(this.store.state.money)}</b></span>
         <div><small>${escapeHtml(subtitle)}</small><h2>${escapeHtml(name)}</h2></div>
         <button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
       </header>
@@ -2978,6 +3090,50 @@ export class GameUI {
       </section>
     `);
   }
+  private crisisDetailMarkup() {
+    const s = this.store.state;
+    const crisis = s.reputationCrisis;
+    if (!crisis) return '';
+    const daysLeft = Math.max(0, crisis.deadlineDay - s.day + 1);
+    const salesDone = Math.min(crisis.sales, crisis.targetSales);
+    const reviewsDone = Math.min(crisis.positiveReviews, crisis.targetReviews);
+    const salesProgress = Math.min(100, salesDone / crisis.targetSales * 100);
+    const reviewProgress = Math.min(100, reviewsDone / crisis.targetReviews * 100);
+    return `<section class="crisis-detail-modal" aria-labelledby="crisis-detail-title">
+      <header class="crisis-detail-header">
+        <span class="crisis-detail-emblem">${icon('hudCrisis')}<i></i></span>
+        <div><small>CẢNH BÁO VẬN HÀNH</small><h2 id="crisis-detail-title">Khủng hoảng uy tín</h2><p>Khách đang mất niềm tin vào boutique. Hãy hoàn thành hai mục tiêu trước hạn để khôi phục hình ảnh shop.</p></div>
+        <button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
+      </header>
+      <div class="crisis-deadline-strip">
+        <span>${icon('clock')}<small>THỜI GIAN CÒN LẠI</small></span>
+        <strong>${daysLeft}<small> ngày</small></strong>
+        <em>Hạn xử lý · Ngày ${crisis.deadlineDay}</em>
+      </div>
+      <div class="crisis-goal-list">
+        <article class="crisis-goal-card ${salesDone >= crisis.targetSales ? 'is-complete' : ''}">
+          <span class="crisis-goal-icon">${icon('bag')}</span>
+          <div class="crisis-goal-copy"><small>MỤC TIÊU BÁN HÀNG</small><strong>Phục vụ đủ sản phẩm</strong><p>Bán thêm sản phẩm để chứng minh shop vẫn hoạt động ổn định.</p></div>
+          <b>${salesDone}<small>/${crisis.targetSales}</small></b>
+          <div class="crisis-goal-track"><i style="width:${salesProgress}%"></i></div>
+        </article>
+        <article class="crisis-goal-card ${reviewsDone >= crisis.targetReviews ? 'is-complete' : ''}">
+          <span class="crisis-goal-icon is-review">${icon('star')}</span>
+          <div class="crisis-goal-copy"><small>MỤC TIÊU ĐÁNH GIÁ</small><strong>Nhận đánh giá tốt</strong><p>Khách chấm từ 4 sao sẽ được tính vào tiến độ khôi phục uy tín.</p></div>
+          <b>${reviewsDone}<small>/${crisis.targetReviews}</small></b>
+          <div class="crisis-goal-track"><i style="width:${reviewProgress}%"></i></div>
+        </article>
+      </div>
+      <div class="crisis-detail-outcomes">
+        <span class="is-success">${icon('shield')}<b>Hoàn thành</b><small>Uy tín tối thiểu 3.8 · +40 người theo dõi</small></span>
+        <span class="is-danger">${icon('warning')}<b>Quá hạn</b><small>Mất 20% người theo dõi · giảm 0.35 uy tín</small></span>
+      </div>
+      <footer class="crisis-detail-footer">
+        <p>${icon('help')} Trong khủng hoảng, khách mới sẽ đến chậm hơn. Hãy ưu tiên tư vấn đúng gu và giữ đủ hàng trưng bày.</p>
+        <button class="btn btn-primary" data-action="close-modal">Tiếp tục xử lý ${icon('arrow')}</button>
+      </footer>
+    </section>`;
+  }
   private showHelp() {
     this.openModal('help', `<div class="modal-heading"><div><span class="eyebrow">HELLO, LITTLE SHOP OWNER</span><h2>Một giấc mơ, bốn bước nhỏ.</h2></div><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div><div class="help-steps">${[
       ['01', 'hanger', 'Chọn đồ thật có gu', 'Kho ban đầu đang trống. Dùng 500.000₫ vốn có sẵn để nhập mẫu phù hợp và điều chỉnh giá bán.'],
@@ -2985,6 +3141,47 @@ export class GameUI {
       ['03', 'heart', 'Biến outfit thành niềm vui', 'Đồ hợp gu mang về doanh thu, XP và người theo dõi. Influencer hài lòng có thể tạo khoảnh khắc viral.'],
       ['04', 'decor', 'Bày hàng trước khi mở cửa', 'Chạm sào, kệ, tủ hoặc ma-nơ-canh để lấy hàng từ kho ra trưng. Chỉ sản phẩm đang trưng mới được khách chọn mua.'],
     ].map(([n, i, title, description]) => `<div><span>${n}</span><div><h3>${icon(i)} ${title}</h3><p>${description}</p></div></div>`).join('')}</div><div class="notice">${icon('leaf')} Chơi thật thong thả. Thời gian chờ của khách tạm dừng khi xem kho hàng, xu hướng, bày trí shop, bảng tin hoặc chuyển sang tab trình duyệt khác.</div><button class="btn btn-primary full-width" data-action="tutorial-done">Mình sẵn sàng rồi ${icon('arrow')}</button>`);
+  }
+  private musicPlayerMarkup() {
+    const s = this.store.state;
+    const volume = Math.round(s.musicVolume * 100);
+    const current = MUSIC_TRACKS.find(track => track.id === s.musicTrack) ?? MUSIC_TRACKS[0];
+    const player = furniture.find(item => item.id === 'vinyl-player');
+    return `<section class="music-player-modal ${s.music ? 'is-playing' : 'is-paused'}">
+      <header class="music-player-header">
+        <span class="music-player-header-icon">${icon('volume')}</span>
+        <div><small>MELODY PLAYER</small><h2>Nhạc trong boutique</h2></div>
+        <button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
+      </header>
+      <div class="music-player-content">
+        <div class="music-player-console">
+          <div class="music-player-now">
+            <div class="music-player-art">${player ? furnitureImage(player) : icon('volume')}<i></i><i></i><i></i></div>
+            <div class="music-player-now-copy"><small>${s.music ? 'ĐANG PHÁT' : 'ĐANG TẠM DỪNG'}</small><strong>${escapeHtml(current.name)}</strong><span>${escapeHtml(current.mood)}</span></div>
+            <button class="music-player-power ${s.music ? 'is-on' : ''}" data-action="music" role="switch" aria-checked="${s.music}" aria-label="${s.music ? 'Tắt' : 'Bật'} nhạc">${icon(s.music ? 'volume' : 'mute')}<b>${s.music ? 'Tắt nhạc' : 'Bật nhạc'}</b></button>
+          </div>
+          <label class="music-player-volume ${s.music ? '' : 'is-disabled'}" for="music-volume">
+            <span>${icon('volume')}<div><strong>Âm lượng</strong><small>Điều chỉnh trực tiếp</small></div></span>
+            <input id="music-volume" type="range" min="0" max="100" step="5" value="${volume}" aria-label="Âm lượng nhạc">
+            <output id="music-volume-value" for="music-volume">${volume}%</output>
+          </label>
+        </div>
+        <section class="music-player-library">
+          <div><small>CHỌN BÀI NHẠC</small><span>${MUSIC_TRACKS.length} bài hát</span></div>
+          <div class="music-track-list">${MUSIC_TRACKS.map((track, index) => `<button class="music-track-card ${track.id === current.id ? 'is-active' : ''}" data-action="music-player-track" data-id="${track.id}" aria-pressed="${track.id === current.id}"><span>${String(index + 1).padStart(2, '0')}</span><div><strong>${escapeHtml(track.name)}</strong><small>${escapeHtml(track.mood)}</small></div><i>${track.id === current.id ? icon('volume') : icon('arrow')}</i></button>`).join('')}</div>
+        </section>
+      </div>
+    </section>`;
+  }
+  openMusicPlayer(playClick = true) {
+    void this.audio.unlock();
+    if (playClick) this.audio.play('click');
+    this.openModal('music-player', this.musicPlayerMarkup());
+  }
+  private refreshMusicPlayer() {
+    if (this.modal !== 'music-player') return;
+    const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+    if (inner) inner.innerHTML = this.musicPlayerMarkup();
   }
   private showSettings() {
     const s = this.store.state;

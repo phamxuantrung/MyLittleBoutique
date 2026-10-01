@@ -11,8 +11,10 @@ const store = new GameStore();
 const audio = new AudioSystem();
 audio.enabled = store.state.sound;
 audio.setMusicVolume(store.state.musicVolume);
+audio.setMusicTrack(store.state.musicTrack);
+if (store.state.music) audio.music(true);
 const ui = new GameUI(store, audio);
-const scene = new ShopScene(store, () => ui.openServe(), uid => ui.selectFurniture(uid), orderId => ui.openOnlineOrder(orderId));
+const scene = new ShopScene(store, () => { audio.play('click'); ui.openServe(); }, uid => ui.selectFurniture(uid), orderId => ui.openOnlineOrder(orderId), () => ui.openMusicPlayer());
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game-canvas',

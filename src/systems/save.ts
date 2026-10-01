@@ -41,7 +41,7 @@ export function initialState(): GameState {
       { uid: 'starter-counter', id: 'counter', x: 4, y: 4, rotation: 0 },
       { ...musicPlayerStarter },
       ...movableDecorStarters.map(item => ({ ...item })),
-    ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: false, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
+    ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, nextDramaDay: 1, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: false, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
     employees: [], staffApplicants: [], recruitmentPost: null, staffLeaveRequests: [],
     shopName: 'My Little Boutique', hasNamedShop: false,
   };
@@ -377,6 +377,12 @@ export function parseSave(raw: string | null): GameState {
           ...(typeof raw.outcome === 'string' ? { outcome: raw.outcome.slice(0, 220) } : {}),
         } satisfies SocialDrama;
       }).filter((drama: SocialDrama | undefined): drama is SocialDrama => !!drama).slice(0, 20);
+    const latestDramaDay = state.dramas.reduce((latest, drama) => Math.max(latest, drama.day), 0);
+    const fallbackNextDramaDay = latestDramaDay ? latestDramaDay + 1 : state.day;
+    state.nextDramaDay = Math.max(
+      latestDramaDay + 1,
+      Math.floor(finite(s.nextDramaDay, fallbackNextDramaDay, 99999)),
+    );
     // Older saves only retain the latest 40 public posts. Use that known
     // history, then keep lifetime totals independently of the feed limit.
     const publicCount = s.shopReviewCount;

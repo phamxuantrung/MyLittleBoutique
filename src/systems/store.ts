@@ -33,6 +33,10 @@ export class GameStore {
     if (!Array.isArray(this.state.dramas)) this.state.dramas = [];
     this.state.dramaHeat = Number.isFinite(this.state.dramaHeat) ? this.state.dramaHeat : 12;
     this.state.dramaTrust = Number.isFinite(this.state.dramaTrust) ? this.state.dramaTrust : 70;
+    if (!Number.isFinite(this.state.nextDramaDay)) {
+      const latestDramaDay = this.state.dramas.reduce((latest, drama) => Math.max(latest, drama.day), 0);
+      this.state.nextDramaDay = latestDramaDay ? latestDramaDay + 1 : this.state.day;
+    }
     this.ensureDayCustomers();
   }
   subscribe(fn: (event: GameEvent) => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
@@ -183,6 +187,8 @@ export class GameStore {
     if (this.state.dramas.some(item => item.id === drama.id)) return false;
     this.state.dramas.unshift({ ...drama, createdAt: drama.createdAt ?? Date.now() });
     this.state.dramas = this.state.dramas.slice(0, 20);
+    const interval = Math.floor(Math.max(0, Math.min(.999999, this.random())) * 7) + 1;
+    this.state.nextDramaDay = Math.max(this.state.day, drama.day) + interval;
     this.commit();
     this.toast('Boutique Buzz vừa có drama mới. Vào bảng tin để hóng!');
     return true;

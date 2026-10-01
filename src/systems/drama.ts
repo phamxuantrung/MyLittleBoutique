@@ -118,7 +118,7 @@ function parseDrama(value: unknown, context: DramaRequest): SocialDrama | undefi
 
 export async function requestSocialDrama(context: DramaRequest): Promise<SocialDrama> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 6500);
+  const timeout = window.setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch('/api/drama', {
       method: 'POST',
@@ -126,9 +126,14 @@ export async function requestSocialDrama(context: DramaRequest): Promise<SocialD
       body: JSON.stringify(context),
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`Drama API ${response.status}`);
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      console.warn(`Drama AI unavailable (${response.status})`, detail.slice(0, 300));
+      throw new Error(`Drama API ${response.status}`);
+    }
     return parseDrama(await response.json(), context) ?? fallbackDrama(context);
-  } catch {
+  } catch (error) {
+    console.warn('Using fallback drama because the AI request failed', error);
     return fallbackDrama(context);
   } finally {
     window.clearTimeout(timeout);
@@ -159,7 +164,7 @@ export function fallbackReplyEvaluation(reply: string): DramaReplyEvaluation {
 export async function requestDramaReplyEvaluation(drama: Pick<SocialDrama, 'title' | 'post' | 'comments' | 'threadReplies'>, reply: string): Promise<DramaReplyEvaluation> {
   const fallback = fallbackReplyEvaluation(reply);
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 6500);
+  const timeout = window.setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch('/api/drama-reply', {
       method: 'POST',

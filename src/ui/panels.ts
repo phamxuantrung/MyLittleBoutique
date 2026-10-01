@@ -841,11 +841,11 @@ function socialActivityOrder(s: GameState) {
   ];
   entries.sort((a, b) => {
     if (a.day !== b.day) return b.day - a.day;
+    if (a.kind !== b.kind) return a.kind === 'drama' ? -1 : 1;
     const aTimed = typeof a.createdAt === 'number' && Number.isFinite(a.createdAt);
     const bTimed = typeof b.createdAt === 'number' && Number.isFinite(b.createdAt);
     if (aTimed && bTimed && a.createdAt !== b.createdAt) return b.createdAt! - a.createdAt!;
     if (aTimed !== bTimed) return aTimed ? -1 : 1;
-    if (a.kind !== b.kind) return a.kind === 'review' ? -1 : 1;
     return a.index - b.index;
   });
   return new Map(entries.map((entry, index) => [`${entry.kind}:${entry.id}`, index + 1]));
@@ -881,7 +881,7 @@ function socialDramaFeed(s: GameState, activityOrder: Map<string, number>) {
       const hasConversation = conversation.length > 0;
       const likes = 120 + drama.day * 17 + Math.round((s.dramaHeat || 0) * 2.6);
       const replies = comments.length + conversation.length * 2;
-      return `<article class="boutique-drama-card ${hasConversation ? 'is-discussing' : 'is-live'}" data-drama-card="${escapeHtml(drama.id)}" style="order:${activityOrder.get(`drama:${drama.id}`) ?? 1}">
+      return `<article class="boutique-drama-card ${hasConversation ? 'is-discussing' : 'is-live'}" data-drama-card="${escapeHtml(drama.id)}" data-drama-source="${drama.source === 'ai' ? 'ai' : 'fallback'}" style="order:${activityOrder.get(`drama:${drama.id}`) ?? 1}">
         <div class="thread-discussion-body">
         <div class="thread-post-layout">
           <aside class="thread-author-rail"><span class="thread-avatar is-character-avatar">${threadAvatar(drama.authorName, drama.authorHandle)}</span><i></i></aside>

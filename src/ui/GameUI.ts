@@ -3169,6 +3169,8 @@ export class GameUI {
   private queueSaleDrama(result: import('../types').SaleResult) {
     const state = this.store.state;
     const dramas = Array.isArray(state.dramas) ? state.dramas : [];
+    const nextDramaDay = Number.isFinite(state.nextDramaDay) ? state.nextDramaDay : state.day;
+    if (state.day < nextDramaDay) return;
     if (this.dramaRequestDay === state.day || dramas.some(drama => drama.day === state.day)) return;
     this.dramaRequestDay = state.day;
     const context = dramaRequestFromSale(state, result);

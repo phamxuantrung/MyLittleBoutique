@@ -27010,6 +27010,21 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
 }
 
 /* Compact left-side community drawer. */
+.social-drawer-backdrop {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(64, 30, 52, .08);
+  box-shadow: none;
+  cursor: default;
+}
+
 #content-panel:has(.social-drawer-panel) {
   inset: 0 auto 0 0 !important;
   width: clamp(310px, 38vw, 420px) !important;
@@ -27023,6 +27038,8 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
 }
 
 #content-panel:has(.social-drawer-panel)>.social-profile-page {
+  position: relative;
+  z-index: 1;
   width: 100% !important;
   height: 100% !important;
   min-height: 100% !important;
@@ -31822,6 +31839,171 @@ dialog.dialog-campaign .dialog-inner {
   }
 }
 
+/* Opening and rotate screens share the app's pink, cream and plum palette. */
+dialog.dialog-name-shop:has(.game-intro-screen),
+dialog.dialog-name-shop:has(.game-intro-screen)::backdrop {
+  background: #fff4f9;
+}
+
+.game-intro-screen {
+  --intro-cream: #fffaf4;
+  --intro-peach: #f7a8bd;
+  --intro-pink: var(--primary-green);
+  --intro-violet: var(--accent-lilac);
+  color: var(--ink-900);
+  background:
+    radial-gradient(circle at 78% 36%, rgba(184, 144, 240, .22), transparent 28%),
+    radial-gradient(circle at 13% 10%, rgba(240, 120, 152, .19), transparent 31%),
+    linear-gradient(135deg, #fffdf9 0%, #fff2f8 48%, #f7efff 100%);
+}
+
+.game-intro-screen::before {
+  opacity: .46;
+  background-image:
+    linear-gradient(rgba(212, 66, 154, .09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 66, 154, .09) 1px, transparent 1px);
+}
+
+.game-intro-aurora { opacity: .14; }
+.intro-aurora-one { background: #f07898; }
+.intro-aurora-two { background: #b890f0; }
+.game-intro-grain { opacity: .018; }
+
+.game-intro-monogram {
+  border-color: #f2bfdc;
+  color: #fff;
+  background: linear-gradient(145deg, #ef72b5, #d4429a 58%, #a66be2);
+  box-shadow: 0 6px 0 #b83282, 0 12px 25px rgba(190, 58, 139, .18);
+}
+
+.game-intro-brand b { color: #a76f91; }
+.game-intro-brand strong { color: var(--ink-900); }
+.game-intro-kicker { color: #c63883; }
+.game-intro-kicker i { background: linear-gradient(90deg, transparent, #dd6da9); }
+.game-intro-kicker i:last-child { background: linear-gradient(90deg, #dd6da9, transparent); }
+
+.game-intro-copy h1 {
+  color: #4b2748;
+  text-shadow: 0 10px 32px rgba(130, 61, 108, .13);
+}
+
+.game-intro-copy h1 em {
+  background-image: linear-gradient(90deg, #d4429a, #ed7896 48%, #9368d3 94%);
+  font-size: 1.08em;
+  line-height: 1.08;
+  letter-spacing: .01em;
+  word-spacing: .16em;
+}
+
+.game-intro-copy>p { color: #805c74; }
+.game-intro-features .icon {
+  color: #d4429a;
+  filter: drop-shadow(0 3px 5px rgba(212, 66, 154, .2));
+}
+.game-intro-features b { color: #573047; }
+.game-intro-features small { color: #9b7689; }
+.game-intro-showcase::before { background: rgba(102, 46, 84, .16); }
+
+.game-intro-start {
+  border-color: rgba(225, 164, 200, .72);
+  background: rgba(255, 255, 255, .76);
+  box-shadow: 0 16px 36px rgba(132, 65, 108, .14), inset 0 1px rgba(255, 255, 255, .9);
+}
+
+.game-intro-start-copy span { color: #c63883; }
+.game-intro-start-copy strong { color: #573047; }
+.game-intro-name-field {
+  border-color: #edc8dd;
+  background: #fffafd;
+  box-shadow: inset 0 1px 2px rgba(104, 48, 85, .04);
+}
+.game-intro-name-field:focus-within {
+  border-color: #d4429a;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(212, 66, 154, .12);
+}
+.game-intro-name-field>.icon { color: #c63883; }
+.game-intro-name-field .shop-name-text-input { color: #4b2748; }
+.game-intro-name-field .shop-name-text-input::placeholder { color: #b28ca4; }
+.game-intro-name-field small { color: #b28ca4; }
+
+.game-intro-play {
+  color: #fff;
+  background: linear-gradient(145deg, #ea62aa, #d4429a 58%, #bd3488);
+  box-shadow: 0 5px 0 #9f286f, 0 13px 27px rgba(190, 49, 132, .22), inset 0 1px rgba(255, 255, 255, .45);
+}
+.game-intro-play:hover {
+  box-shadow: 0 6px 0 #9f286f, 0 18px 34px rgba(190, 49, 132, .28), inset 0 1px rgba(255, 255, 255, .55);
+}
+.game-intro-suggestions>span { color: #a9829a; }
+.game-intro-suggestions button { color: #865d77; }
+.game-intro-suggestions button:hover { color: #c63883; border-color: #d4429a; }
+.game-intro-footer { color: #aa819a; }
+.game-intro-footer span { color: #d56ba6; }
+
+@media (max-width: 640px),
+(max-height: 600px) and (max-width: 900px) {
+  .game-intro-features li {
+    border-color: rgba(212, 66, 154, .16);
+    background: rgba(255, 255, 255, .62);
+  }
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+  .landscape-banner {
+    --rotate-cream: #fffaf4;
+    color: var(--ink-900);
+    background:
+      radial-gradient(circle at 52% 35%, rgba(184, 144, 240, .2), transparent 30%),
+      radial-gradient(circle at 8% 5%, rgba(240, 120, 152, .2), transparent 33%),
+      linear-gradient(155deg, #fffdf9 0%, #fff1f7 58%, #f5edff 100%);
+  }
+
+  .landscape-banner::before {
+    opacity: .34;
+    background-image: radial-gradient(rgba(212, 66, 154, .32) .7px, transparent .7px);
+  }
+
+  .rotate-brand>span {
+    color: #fff;
+    background: linear-gradient(145deg, #eb6caf, #d4429a 60%, #a66be2);
+    box-shadow: 0 5px 0 #b83282, 0 11px 21px rgba(190, 58, 139, .18);
+  }
+  .rotate-brand b { color: #a76f91; }
+  .rotate-brand strong { color: #4b2748; }
+  .rotate-orbit {
+    border-color: rgba(212, 66, 154, .19);
+    box-shadow: 0 0 0 22px rgba(212, 66, 154, .035), 0 0 65px rgba(184, 144, 240, .2);
+  }
+  .rotate-phone {
+    border-color: #d96aa6;
+    background: rgba(255, 255, 255, .82);
+    box-shadow: inset 0 0 0 5px rgba(240, 216, 236, .62), 0 18px 38px rgba(116, 55, 96, .2);
+  }
+  .rotate-phone::before { background: #c85a98; }
+  .rotate-phone::after {
+    background: linear-gradient(145deg, #ffdce9, #ef8abb 55%, #b890f0);
+    box-shadow: inset 0 1px rgba(255, 255, 255, .72);
+  }
+  .rotate-phone>i { background: rgba(255, 255, 255, .38); }
+  .rotate-phone>b { color: #fff; }
+  .rotate-arrow {
+    border-color: #ebc4db;
+    color: #c63883;
+    background: rgba(255, 255, 255, .82);
+    box-shadow: 0 4px 0 #ddb1ca, 0 10px 22px rgba(116, 55, 96, .12);
+  }
+  .rotate-star {
+    color: #dc9e25;
+    text-shadow: 0 0 12px rgba(240, 184, 64, .34);
+  }
+  .rotate-eyebrow { color: #c63883; }
+  .banner-title { color: #4b2748; }
+  .banner-text { color: #805c74; }
+  .rotate-status { color: #a17791; }
+  .rotate-status i { background: linear-gradient(90deg, transparent, rgba(212, 66, 154, .52)); }
+}
+
 /* Personal tailoring workshop — level 8+. */
 .dock-btn-atelier {
   left: auto !important;
@@ -31953,7 +32135,7 @@ dialog.dialog-atelier-result{width:min(500px,calc(100vw - 22px));padding:0;borde
 
   .online-care-cluster {
     width: 44px !important;
-    gap: 5px !important;
+    gap: 8px !important;
   }
 
   .coc-square-btn,
@@ -31978,28 +32160,36 @@ dialog.dialog-atelier-result{width:min(500px,calc(100vw - 22px));padding:0;borde
 
   #customer-card:has(.preparation-welcome),
   .preparation-welcome {
-    width: 76px !important;
-    max-width: 76px !important;
+    width: 70px !important;
+    max-width: 70px !important;
   }
 
   .preparation-welcome .welcome-actions .btn-primary.open-shop-hud-button,
   .dock-btn-import {
-    width: 76px !important;
-    min-width: 76px !important;
-    max-width: 76px !important;
-    height: 76px !important;
-    min-height: 76px !important;
+    width: 70px !important;
+    min-width: 70px !important;
+    max-width: 70px !important;
+    height: 70px !important;
+    min-height: 70px !important;
+  }
+
+  .dock-btn-import .dock-icon-bubble,
+  .open-shop-hud-button .icon {
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    min-height: 32px !important;
   }
 
   .settings-hud-button,
   .finance-hud-button,
   .hud-edge-button {
-    bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 82px) !important;
+    bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 78px) !important;
   }
 
   .land-expand-fab,
   .campaign-hud-button {
-    bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 132px) !important;
+    bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 130px) !important;
   }
 
   .dock-btn-decor,
@@ -32008,21 +32198,21 @@ dialog.dialog-atelier-result{width:min(500px,calc(100vw - 22px));padding:0;borde
   }
 
   .dock-btn-social {
-    bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 186px) !important;
+    bottom: calc(max(8px, var(--mobile-safe-bottom, 8px)) + 182px) !important;
   }
 
   .dock-btn-stock {
-    right: calc(max(8px, var(--mobile-safe-right, 8px)) + 84px) !important;
+    right: calc(max(8px, var(--mobile-safe-right, 8px)) + 78px) !important;
   }
 
   .dock-btn-atelier {
     left: auto !important;
-    right: calc(max(8px, var(--mobile-safe-right, 8px)) + 136px) !important;
+    right: calc(max(8px, var(--mobile-safe-right, 8px)) + 130px) !important;
     bottom: max(8px, var(--mobile-safe-bottom, 8px)) !important;
   }
 
   .dock-btn-trend {
-    left: calc(max(8px, var(--mobile-safe-left, 8px)) + 84px) !important;
+    left: calc(max(8px, var(--mobile-safe-left, 8px)) + 78px) !important;
   }
 }
 

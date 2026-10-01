@@ -1786,7 +1786,7 @@ export function upgradeModal(s: GameState) {
         </ul>
       </section>
       <aside class="upgrade-checklist">
-        <header><small>ĐIỀU KIỆN · CẤP ${s.level + 1}</small><h3>${canUpgrade ? 'Đã sẵn sàng nâng cấp' : 'Hoàn thành hai mục tiêu'}</h3>${canUpgrade ? `<b class="upgrade-readiness is-ready">${icon('check')} Sẵn sàng</b>` : ''}</header>
+        <header><small>ĐIỀU KIỆN · CẤP ${s.level + 1}</small>${canUpgrade ? `<h3>Đã sẵn sàng nâng cấp</h3><b class="upgrade-readiness is-ready">${icon('check')} Sẵn sàng</b>` : ''}</header>
         <article class="${hasXp ? 'is-met' : ''}"><span>${icon('star')}</span><p><small>Kinh nghiệm</small><strong>${s.xp.toLocaleString('vi-VN')} / ${next.xp.toLocaleString('vi-VN')} XP</strong></p><b>${hasXp ? `${icon('check')} Đã đạt` : `Thiếu ${(next.xp - s.xp).toLocaleString('vi-VN')} XP`}</b><progress max="100" value="${xpPercent}">${xpPercent}%</progress></article>
         <article class="${canAfford ? 'is-met' : ''}"><span>${icon('coin')}</span><p><small>Chi phí nâng cấp</small><strong>${money(next.cost)}</strong><em>Đang có ${money(s.money)}</em></p><b>${canAfford ? `${icon('check')} Đủ tiền` : `Thiếu ${money(next.cost - s.money)}`}</b></article>
         <button class="btn btn-primary upgrade-submit" data-action="upgrade" ${!canUpgrade ? 'disabled' : ''}>${icon('trophy')} Nâng cấp lên Cấp ${s.level + 1} ${icon('arrow')}</button>

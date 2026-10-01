@@ -802,6 +802,10 @@ export class GameUI {
   private action(action: string, id: string, target?: HTMLElement) {
     switch (action) {
       case 'nav': {
+        if (id === 'atelier' && this.store.state.level < ATELIER_UNLOCK_LEVEL) {
+          this.toast(`Xưởng may cá nhân mở khóa ở cấp boutique ${ATELIER_UNLOCK_LEVEL}.`, 'info');
+          return;
+        }
         if (this.store.state.phase === 'open' && (id === 'import' || id === 'decor' || id === 'looks' || id === 'social' || id === 'atelier')) {
           this.toast('Cửa hàng đang mở cửa đón khách! Hãy tập trung tư vấn và bán hàng nhé', 'info');
           return;
@@ -1763,7 +1767,7 @@ export class GameUI {
   navigate(tab: Tab) {
     if (tab !== 'atelier') this.atelierHistoryOpen = false;
     if (tab === 'atelier' && this.store.state.level < ATELIER_UNLOCK_LEVEL) {
-      this.toast('Xưởng may cá nhân mở khóa ở cấp boutique 8.', 'info');
+      this.toast(`Xưởng may cá nhân mở khóa ở cấp boutique ${ATELIER_UNLOCK_LEVEL}.`, 'info');
       return;
     }
     const enteringImport = (tab === 'import' || tab === 'looks') && this.tab !== 'import';
@@ -1836,10 +1840,9 @@ export class GameUI {
     if (!dockNav) return;
     const isOpen = this.store.state.phase === 'open';
     const staffNotices = this.store.state.staffLeaveRequests.length + this.store.state.staffApplicants.length;
-    const unlockedNavItems = navItems.filter(item => item.id !== 'atelier' || this.store.state.level >= ATELIER_UNLOCK_LEVEL);
     const availableItems = isOpen
-      ? unlockedNavItems.filter(n => n.id === 'stock' || n.id === 'trend')
-      : unlockedNavItems;
+      ? navItems.filter(n => n.id === 'stock' || n.id === 'trend')
+      : navItems;
     dockNav.innerHTML = availableItems.map(n => `
       <button data-action="nav" data-id="${n.id}" class="dock-item standalone-dock-btn dock-btn-${n.id}" aria-label="${n.label}">
         <div class="dock-icon-bubble dock-bubble-${n.id}">
@@ -2114,7 +2117,10 @@ export class GameUI {
       contentHtml = atelierPanel(this.store.state, this.atelierSection, this.atelierSelection, this.atelierStyle, this.atelierBatchQtys, this.atelierHistoryOpen);
     }
     if (contentHtml) {
-      panel.innerHTML = `<div class="game-panel-body${this.tab === 'social' ? ' social-profile-page' : ''}">${contentHtml}</div>`;
+      const socialBackdrop = this.tab === 'social'
+        ? '<button type="button" class="social-drawer-backdrop" data-action="nav" data-id="shop" aria-label="Đóng bảng tin"></button>'
+        : '';
+      panel.innerHTML = `${socialBackdrop}<div class="game-panel-body${this.tab === 'social' ? ' social-profile-page' : ''}">${contentHtml}</div>`;
       const restorePanelScroll = () => {
         panel.scrollTop = panelScrollTop;
         const importRail = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid');

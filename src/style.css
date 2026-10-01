@@ -38835,3 +38835,15 @@ dialog.dialog-store-furniture-confirm .dialog-inner { padding: 0; }
   }
   .store-furniture-copy h2 { font-size: 18px; }
 }
+
+/* Keep music volume dragging under the range control on touch screens. */
+input[data-music-volume] {
+  position: relative;
+  z-index: 2;
+  min-height: 24px;
+  margin-block: -9px;
+  touch-action: none !important;
+  pointer-events: auto !important;
+  user-select: none;
+  -webkit-user-select: none;
+}

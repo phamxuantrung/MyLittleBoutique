@@ -383,6 +383,46 @@ export class GameUI {
     };
     document.addEventListener('pointerdown', protectCanvasFromUiPointer, true);
     document.addEventListener('pointerup', protectCanvasFromUiPointer, true);
+    let musicVolumePointer = -1;
+    let musicVolumeInput: HTMLInputElement | undefined;
+    const updateMusicVolumeFromPointer = (input: HTMLInputElement, clientX: number, persist: boolean) => {
+      const bounds = input.getBoundingClientRect();
+      if (bounds.width <= 0) return;
+      const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
+      const volumePercent = Math.round(ratio * 20) * 5;
+      input.value = String(volumePercent);
+      const volume = volumePercent / 100;
+      this.audio.setMusicVolume(volume);
+      const output = input.closest('label')?.querySelector<HTMLOutputElement>('[data-music-volume-value]');
+      if (output) output.value = `${volumePercent}%`;
+      if (persist) this.store.setMusicVolume(volume);
+    };
+    document.addEventListener('pointerdown', event => {
+      const input = (event.target as Element).closest<HTMLInputElement>('input[data-music-volume]');
+      if (!input || event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      musicVolumePointer = event.pointerId;
+      musicVolumeInput = input;
+      input.setPointerCapture?.(event.pointerId);
+      updateMusicVolumeFromPointer(input, event.clientX, false);
+    }, { capture: true, passive: false });
+    document.addEventListener('pointermove', event => {
+      if (event.pointerId !== musicVolumePointer || !musicVolumeInput) return;
+      event.preventDefault();
+      updateMusicVolumeFromPointer(musicVolumeInput, event.clientX, false);
+    }, { capture: true, passive: false });
+    const finishMusicVolumeDrag = (event: PointerEvent) => {
+      if (event.pointerId !== musicVolumePointer || !musicVolumeInput) return;
+      event.preventDefault();
+      const input = musicVolumeInput;
+      updateMusicVolumeFromPointer(input, event.clientX, true);
+      if (input.hasPointerCapture?.(event.pointerId)) input.releasePointerCapture(event.pointerId);
+      musicVolumePointer = -1;
+      musicVolumeInput = undefined;
+    };
+    document.addEventListener('pointerup', finishMusicVolumeDrag, { capture: true, passive: false });
+    document.addEventListener('pointercancel', finishMusicVolumeDrag, { capture: true, passive: false });
     document.querySelector<HTMLElement>('#game-canvas')?.addEventListener('pointerup', event => {
       if (this.tutorialStep !== 3 || !this.tutorialActive()) return;
       event.preventDefault();
@@ -732,7 +772,7 @@ export class GameUI {
       if (target.id === 'music-volume') {
         const volume = Number(target.value) / 100;
         this.audio.setMusicVolume(volume);
-        const output = this.dialog.querySelector<HTMLOutputElement>('#music-volume-value');
+        const output = target.closest('label')?.querySelector<HTMLOutputElement>('[data-music-volume-value]');
         if (output) output.value = `${Math.round(volume * 100)}%`;
       }
       if (target.id === 'customizer-product-name') this.atelierCustomizeName = target.value.slice(0, 32);
@@ -3131,8 +3171,8 @@ export class GameUI {
           </div>
           <label class="music-player-volume ${s.music ? '' : 'is-disabled'}" for="music-volume">
             <span>${icon('volume')}<div><strong>Âm lượng</strong><small>Điều chỉnh trực tiếp</small></div></span>
-            <input id="music-volume" type="range" min="0" max="100" step="5" value="${volume}" aria-label="Âm lượng nhạc">
-            <output id="music-volume-value" for="music-volume">${volume}%</output>
+            <input id="music-volume" data-music-volume type="range" min="0" max="100" step="5" value="${volume}" aria-label="Âm lượng nhạc">
+            <output id="music-volume-value" data-music-volume-value for="music-volume">${volume}%</output>
           </label>
         </div>
         <section class="music-player-library">
@@ -3183,8 +3223,8 @@ export class GameUI {
           </div>
           <label class="game-volume-row ${s.music ? '' : 'is-disabled'}" for="music-volume">
             <span>${icon('volume')}<strong>Âm lượng nhạc</strong></span>
-            <input id="music-volume" type="range" min="0" max="100" step="5" value="${volume}" aria-label="Âm lượng nhạc">
-            <output id="music-volume-value" for="music-volume">${volume}%</output>
+            <input id="music-volume" data-music-volume type="range" min="0" max="100" step="5" value="${volume}" aria-label="Âm lượng nhạc">
+            <output id="music-volume-value" data-music-volume-value for="music-volume">${volume}%</output>
           </label>
         </section>
 

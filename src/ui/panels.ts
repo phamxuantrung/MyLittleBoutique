@@ -1226,9 +1226,8 @@ export function onlineChannelModal(s: GameState) {
   const reachProgress = Math.round(Math.min(100, orderChance / .4 * 100));
   const packingCapacity = [0, 6, 10, 15][Math.max(1, Math.min(3, s.onlinePackingLevel))];
   const packedOrders = s.regularOnlineOrders.filter(order => order.packed);
-  const pendingPacking = s.regularOnlineOrders.filter(order => !order.packed);
   const packingUpgradeCost = s.onlinePackingLevel === 1 ? 350000 : 900000;
-  const stockStaff = s.employees.find(employee => employee.assignment === 'stock' && (!employee.leaveUntilDay || employee.leaveUntilDay < s.day));
+  const stockStaff = activeEmployees(s).find(employee => employee.assignment === 'stock');
   const regularOrdersMarkup = s.regularOnlineOrders.length ? s.regularOnlineOrders.map(order => {
     const orderProducts = order.productIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
     return `<article class="regular-order-card ${order.packed ? 'is-packed' : ''}">
@@ -1262,7 +1261,7 @@ export function onlineChannelModal(s: GameState) {
         <section class="online-regular-board">
           <header class="regular-board-heading"><p><small>ĐƠN THƯỜNG</small><strong>${s.regularOnlineOrders.length}/${packingCapacity} đơn · ${packedOrders.length} kiện sẵn sàng</strong></p><button class="livestream-launch" data-action="livestream-open" ${!s.onlineChannelEnabled || !listed.length || s.phase === 'open' || s.lastLivestreamDay === s.day || s.regularOnlineOrders.length >= packingCapacity ? 'disabled' : ''}>${icon('video')} ${s.lastLivestreamDay === s.day ? 'Đã live hôm nay' : 'Livestream'}</button></header>
           <nav class="regular-board-actions" aria-label="Quản lý đóng gói">
-            <button data-action="regular-pack-all" ${!pendingPacking.length || !stockStaff || s.phase === 'open' ? 'disabled' : ''}>${icon('user')} ${stockStaff ? `${escapeHtml(stockStaff.name)} đóng tất cả` : 'Cần nhân viên kho'}</button>
+            <span class="regular-packing-automation ${stockStaff ? 'is-active' : ''}">${icon(stockStaff ? 'check' : 'user')} ${stockStaff ? `${escapeHtml(stockStaff.name)} tự động đóng gói` : 'Cần nhân viên kho để tự đóng gói'}</span>
             ${s.onlinePackingLevel < 3 ? `<button data-action="packing-upgrade" ${s.phase === 'open' ? 'disabled' : ''}>${icon('arrow')} Nâng cấp ${money(packingUpgradeCost)}</button>` : `<span>${icon('check')} Khu đóng gói tối đa</span>`}
           </nav>
           <section class="regular-orders-list">${regularOrdersMarkup}</section>
@@ -1363,7 +1362,7 @@ export function regularPickupModal(s: GameState) {
   const productCount = packed.reduce((sum, order) => sum + order.productIds.length, 0);
   const net = packed.reduce((sum, order) => sum + Math.max(0, order.price - order.fee), 0);
   return `<section class="regular-pickup-modal">
-    <header><span>${icon('truck')}</span><p><small>SHIPPER TỔNG</small><h2>Bàn giao đơn thường</h2><strong>${packed.length} kiện · ${productCount} sản phẩm</strong></p><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
+    <header><span>${icon('truck')}</span><div class="regular-pickup-heading"><small>SHIPPER TỔNG</small><h2>Bàn giao đơn thường</h2><strong>${packed.length} kiện · ${productCount} sản phẩm</strong></div><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
     <ul>${packed.map(order => `<li><span>${icon('box')}</span><p><strong>${escapeHtml(order.customerHandle)}</strong><small>${order.productIds.map(id => products.find(product => product.id === id)?.name ?? '').filter(Boolean).join(' · ')}</small></p><b>${money(order.price - order.fee)}</b></li>`).join('')}</ul>
     <footer><p><small>THU VỀ SAU PHÍ</small><strong>${money(net)}</strong></p><button data-action="regular-pickup-confirm" ${packed.length ? '' : 'disabled'}>${icon('truck')} Giao ${packed.length} kiện</button></footer>
   </section>`;

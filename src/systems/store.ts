@@ -1,5 +1,5 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
+import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LegacyStoryChoice, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
 import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
@@ -337,7 +337,9 @@ export class GameStore {
       }
     }
     employee.assignment = assignment;
+    const autoPacked = assignment === 'stock' ? this.autoPackRegularOrdersWithStaff() : undefined;
     this.commit();
+    if (autoPacked?.count) this.toast(`${autoPacked.employee.name} đã tự động đóng gói ${autoPacked.count} đơn thường.`);
     return true;
   }
 
@@ -1029,6 +1031,7 @@ export class GameStore {
     this.state.nextArrivalIn = 3 + Math.floor(this.random() * 6);
     this.state.onlineNextOrderIn = 6 + Math.floor(this.random() * 7);
     this.state.regularOnlineNextOrderIn = 4 + Math.floor(this.random() * 5);
+    const autoPacked = this.autoPackRegularOrdersWithStaff();
     this.processVipPickupsOnOpen();
     // Refresh danh sách khách cho ngày mới
     this.dayCustomersKey = -1;
@@ -1036,6 +1039,7 @@ export class GameStore {
     this.commit();
     this.emit({ type: 'customer' });
     this.toast(`Mở cửa ${gameDate(this.state.day)}! ${event.name}: ${event.description}`);
+    if (autoPacked?.count) this.toast(`${autoPacked.employee.name} đã tự động đóng gói ${autoPacked.count} đơn thường.`);
   }
   serve(ids: string[], assistingStaffUid?: string, automatedByStaff = false): SaleResult | undefined {
     const customer = activeCustomer(this.state);
@@ -1362,7 +1366,7 @@ export class GameStore {
       if (s.regularOnlineOrders.length < this.regularOnlineCapacity()) {
         const regularEligible = s.onlineListings.filter(productId => this.onlineWarehouseQuantity(productId) > this.onlineReservedQuantity(productId));
         if (regularEligible.length && this.random() < Math.min(.72, onlineOrderChance(s, regularEligible) * 1.35)) {
-          this.createRegularOnlineOrder(this.pickOnlineBasket(regularEligible), 'storefront');
+          if (this.createRegularOnlineOrder(this.pickOnlineBasket(regularEligible), 'storefront')) this.commit();
         }
       }
     }
@@ -1434,6 +1438,8 @@ export class GameStore {
       packed: false,
       source,
     });
+    const autoPacked = this.autoPackRegularOrdersWithStaff();
+    if (autoPacked?.count) this.toast(`${autoPacked.employee.name} đã tự động đóng gói đơn mới.`);
     return true;
   }
 
@@ -1516,20 +1522,28 @@ export class GameStore {
     return true;
   }
 
+  private autoPackRegularOrdersWithStaff() {
+    const employee = activeEmployees(this.state).find(item => item.assignment === 'stock');
+    if (!employee) return;
+    const pending = this.state.regularOnlineOrders.filter(order => !order.packed
+      && order.productIds.every(id => (this.state.inventory[id] ?? 0) >= 1));
+    if (!pending.length) return;
+    for (const order of pending) order.packed = true;
+    employee.energy = Math.max(0, (employee.energy ?? 100) - Math.min(18, pending.length * 3));
+    return { employee, count: pending.length };
+  }
+
   packAllRegularOrdersWithStaff() {
     const s = this.state;
     if (s.phase === 'open') return false;
-    const employee = activeEmployees(s).find(item => item.assignment === 'stock');
-    if (!employee) {
+    if (!activeEmployees(s).some(item => item.assignment === 'stock')) {
       this.toast('Hãy phân công ít nhất một nhân viên kho để đóng tất cả đơn.', 'error');
       return false;
     }
-    const pending = s.regularOnlineOrders.filter(order => !order.packed);
-    if (!pending.length) return false;
-    for (const order of pending) order.packed = true;
-    employee.energy = Math.max(0, (employee.energy ?? 100) - Math.min(18, pending.length * 3));
+    const autoPacked = this.autoPackRegularOrdersWithStaff();
+    if (!autoPacked) return false;
     this.commit();
-    this.toast(`${employee.name} đã đóng gói ${pending.length} đơn thường.`);
+    this.toast(`${autoPacked.employee.name} đã đóng gói ${autoPacked.count} đơn thường.`);
     return true;
   }
 
@@ -2166,6 +2180,59 @@ export class GameStore {
       : this.state.level === ATELIER_UNLOCK_LEVEL
         ? 'Lên cấp 8! Xưởng may cá nhân và kho nguyên vật liệu đã mở khóa.'
         : `Lên cấp ${this.state.level}! Thêm sản phẩm và nội thất mới đã mở khóa.`);
+  }
+
+  unlockLegacyStory() {
+    const story = this.state.legacyStory;
+    if (this.state.level < levels.length || story.stage !== 'locked') return false;
+    story.stage = 'arrival';
+    story.unlockedDay = this.state.day;
+    this.commit();
+    return true;
+  }
+
+  chooseLegacyStoryResponse(choice: LegacyStoryChoice) {
+    const story = this.state.legacyStory;
+    if (story.stage !== 'arrival' || !['curious', 'dress', 'observe'].includes(choice)) return false;
+    story.firstChoice = choice;
+    if (choice === 'curious') story.trust++;
+    else if (choice === 'dress') { story.trust++; story.suspicion++; }
+    else story.suspicion += 2;
+    story.stage = 'room-search';
+    this.commit();
+    return true;
+  }
+
+  findLegacyRoom() {
+    if (this.state.legacyStory.stage !== 'room-search' || this.state.phase === 'open') return false;
+    this.state.legacyStory.stage = 'room-found';
+    this.commit();
+    this.toast('Đã tìm thấy cánh cửa bị che sau phòng thử đồ.');
+    return true;
+  }
+
+  restoreLegacyRoom() {
+    const story = this.state.legacyStory;
+    const costs = [2000000, 5000000, 8000000, 15000000, 30000000];
+    if (story.stage !== 'room-found' || this.state.phase === 'open' || story.restorationLevel >= costs.length) return false;
+    const cost = costs[story.restorationLevel];
+    if (this.state.money < cost) {
+      this.toast(`Cần ${cost.toLocaleString('vi-VN')}₫ để tiếp tục khôi phục căn phòng.`, 'error');
+      return false;
+    }
+    this.state.money -= cost;
+    this.state.stats.spent += cost;
+    story.restorationLevel++;
+    this.commit();
+    const messages = [
+      'Bụi đã được dọn sạch. Một cuốn nhật ký thiếu trang xuất hiện dưới sàn.',
+      'Tấm gương sáng trở lại và vừa gọi đúng tên bạn.',
+      'Tủ đồ cổ đã mở. Một luồng sáng tím đang rò qua khe cửa.',
+      'Cầu thang lên tầng trên đã được khôi phục.',
+      'Nhà ga bí mật dưới boutique đã thức giấc lúc 00:00.',
+    ];
+    this.toast(messages[story.restorationLevel - 1]);
+    return true;
   }
   startCampaign(id: string) {
     const s = this.state;

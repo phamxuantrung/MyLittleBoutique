@@ -101,4 +101,40 @@ test.describe('manual landscape on phones', () => {
     await session.detach();
     await page.screenshot({ path: 'test-results/landscape-portrait.png' });
   });
+
+  test('cancelled multi-touch gestures do not turn the next furniture drag into zoom', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    const state = preparedState();
+    await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+    await page.goto('/');
+    await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+
+    const start = await canvasPoint(page, 416, 252);
+    const session = await page.context().newCDPSession(page);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [start, { x: start.x + 45, y: start.y + 18 }],
+      });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    }
+
+    await page.touchscreen.tap(start.x, start.y);
+    await page.locator('[data-action="move-start"]').tap();
+    await page.waitForTimeout(200);
+    const end = await canvasPoint(page, 472, 280);
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+    for (let step = 1; step <= 8; step++) {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: start.x + (end.x - start.x) * step / 8, y: start.y + (end.y - start.y) * step / 8 }],
+      });
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(() => page.evaluate(key => {
+      const rack = JSON.parse(localStorage.getItem(key)!).layout.find((item: { uid: string }) => item.uid === 'starter-rack');
+      return [rack.x, rack.y];
+    }, SAVE_KEY)).toEqual([1, 2]);
+    await session.detach();
+  });
 });

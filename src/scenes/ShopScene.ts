@@ -180,6 +180,8 @@ export class ShopScene extends Phaser.Scene {
   private pinchPointerIds: [number, number] | undefined;
   private panPointerId = -1;
   private activeTouchPointerIds = new Set<number>();
+  private activeNativeTouchPointerIds = new Set<number>();
+  private gestureEpoch = 0;
   private isDraggingPiece = false;
   private furnitureGesturePointerId = -1;
   private furnitureDragPointerId = -1;
@@ -253,9 +255,15 @@ export class ShopScene extends Phaser.Scene {
     this.pinchPointerIds = undefined;
     this.panPointerId = -1;
     this.activeTouchPointerIds.clear();
+    this.activeNativeTouchPointerIds.clear();
+    this.gestureEpoch++;
     this.furnitureGesturePointerId = -1;
     this.furnitureDragPointerId = -1;
     this.isDraggingPiece = false;
+    // Phaser documents resetPointers specifically for cases where DOM UI or a
+    // third-party component steals the matching pointer-up event. Without it,
+    // pointer2 can remain down and the next one-finger drag becomes a pinch.
+    this.input?.resetPointers();
     if (wasDraggingPiece) {
       this.dragGhost?.clear();
       for (const piece of this.pieces.values()) {
@@ -455,7 +463,19 @@ export class ShopScene extends Phaser.Scene {
       // reports a mouse pointer.
       const isTouch = nativeEvent?.pointerType === 'touch'
         || (this.coarsePointer && nativeEvent?.pointerType !== 'mouse');
-      if (isTouch) this.activeTouchPointerIds.add(pointer.id);
+      if (isTouch) {
+        // The browser is the source of truth for a new touch sequence. If it
+        // marks this contact primary, any ids still held by Phaser are stale.
+        if (nativeEvent?.isPrimary) {
+          this.activeTouchPointerIds.clear();
+          this.activeNativeTouchPointerIds.clear();
+          this.pinchDist = 0;
+          this.pinchPointerIds = undefined;
+        }
+        this.activeTouchPointerIds.add(pointer.id);
+        this.activeNativeTouchPointerIds.add(nativeEvent?.pointerId ?? pointer.id);
+        this.gestureEpoch++;
+      }
       // An active furniture drag owns the gesture. A stationary furniture
       // touch may still become a deliberate two-finger pinch below.
       if (this.isDraggingPiece) {
@@ -558,7 +578,9 @@ export class ShopScene extends Phaser.Scene {
     };
     this.input.on('pointerup', stopPan);
     this.input.on('pointerupoutside', stopPan);
-    this.input.on('gameout', stopPan);
+    // GAME_OUT does not provide a Phaser Pointer as its first argument. Passing
+    // it to stopPan left old touch ids behind and caused false two-finger zooms.
+    this.input.on('gameout', () => this.releasePointerGesture());
 
     this.input.on('wheel', (pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
       if (this.currentTab !== 'shop' || this.isDraggingPiece || this.furnitureGesturePointerId >= 0) return;
@@ -571,14 +593,32 @@ export class ShopScene extends Phaser.Scene {
     });
     const parent = document.getElementById('game-canvas');
     if (parent) { this.resizeObserver = new ResizeObserver(() => this.scale.refresh()); this.resizeObserver.observe(parent); }
+    const finishNativeTouchGesture = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch' && !this.coarsePointer) return;
+      this.activeNativeTouchPointerIds.delete(event.pointerId);
+      const finishedEpoch = this.gestureEpoch;
+      // Run after Phaser's dragend / pointerup pipeline. If a new finger has
+      // already started, its newer epoch protects it from this cleanup.
+      requestAnimationFrame(() => {
+        if (finishedEpoch === this.gestureEpoch && this.activeNativeTouchPointerIds.size === 0) {
+          this.releasePointerGesture();
+        }
+      });
+    };
     const cancelNativeGesture = () => this.releasePointerGesture();
     this.game.canvas.addEventListener('pointercancel', cancelNativeGesture, { capture: true, passive: true });
+    window.addEventListener('pointerup', finishNativeTouchGesture, { passive: true });
+    window.addEventListener('pointercancel', finishNativeTouchGesture, { passive: true });
     window.addEventListener('blur', cancelNativeGesture, { passive: true });
+    document.addEventListener('visibilitychange', cancelNativeGesture, { passive: true });
     this.events.once('shutdown', () => {
       this.unsubscribe?.();
       this.resizeObserver?.disconnect();
       this.game.canvas.removeEventListener('pointercancel', cancelNativeGesture, true);
+      window.removeEventListener('pointerup', finishNativeTouchGesture);
+      window.removeEventListener('pointercancel', finishNativeTouchGesture);
       window.removeEventListener('blur', cancelNativeGesture);
+      document.removeEventListener('visibilitychange', cancelNativeGesture);
     });
     this.game.events.emit('shop-ready');
   }
@@ -868,14 +908,7 @@ export class ShopScene extends Phaser.Scene {
   setMoveMode(active: boolean, uid?: string) {
     this.edit = active;
     if (!active) {
-      this.isPanning = false;
-      this.pinchDist = 0;
-      this.pinchPointerIds = undefined;
-      this.panPointerId = -1;
-      this.activeTouchPointerIds.clear();
-      this.isDraggingPiece = false;
-      this.furnitureGesturePointerId = -1;
-      this.furnitureDragPointerId = -1;
+      this.releasePointerGesture();
     }
     this.grid?.setVisible(active);
     this.updateLandExpansionButtons();

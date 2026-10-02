@@ -168,7 +168,7 @@ export class GameUI {
     store.subscribe(event => {
       if (event.type === 'change') {
         this.render();
-        if (this.modal === 'serve' && activeVisit(store.state)?.uid !== this.serveVisitId) this.closeModal();
+        if (this.modal === 'serve' && !store.state.activeVisits.some(visit => visit.uid === this.serveVisitId)) this.closeModal();
         if (this.modal === 'quests') this.dialog.querySelector('.dialog-inner')!.innerHTML = questPanel(store.state);
         if (this.modal === 'campaign') this.dialog.querySelector('.dialog-inner')!.innerHTML = campaignModal(store.state, this.campaignGuideForced);
         if (this.modal === 'customer-care') this.dialog.querySelector('.dialog-inner')!.innerHTML = customerCareModal(store.state);
@@ -192,7 +192,7 @@ export class GameUI {
         else if (!this.suppressSuccessToastAudio) audio.play('click');
       }
       if (event.type === 'sale') {
-        if (this.modal === 'serve') this.closeModal();
+        if (this.modal === 'serve' && event.result.visitUid === this.serveVisitId) this.closeModal();
         this.toast(
           event.result.success
             ? event.result.isStaffAssisted
@@ -392,10 +392,60 @@ export class GameUI {
     };
     document.addEventListener('pointerdown', protectCanvasFromUiPointer, true);
     document.addEventListener('pointerup', protectCanvasFromUiPointer, true);
+    const swipeSurfaceSelector = '.outfit-grid';
+    let swipePointerId = -1;
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let swipeSurface: HTMLElement | undefined;
+    let swipeMoved = false;
+    let suppressedSwipeSurface: HTMLElement | undefined;
+    let suppressSwipeClickUntil = 0;
+    document.addEventListener('pointerdown', event => {
+      const surface = (event.target as Element).closest<HTMLElement>(swipeSurfaceSelector);
+      if (!surface || event.button !== 0) return;
+      // A new contact is an intentional new gesture, so it must not inherit
+      // suppression from the synthetic click of the previous swipe.
+      suppressedSwipeSurface = undefined;
+      suppressSwipeClickUntil = 0;
+      swipePointerId = event.pointerId;
+      swipeStartX = event.clientX;
+      swipeStartY = event.clientY;
+      swipeSurface = surface;
+      swipeMoved = false;
+    }, { capture: true, passive: true });
+    document.addEventListener('pointermove', event => {
+      if (event.pointerId !== swipePointerId || !swipeSurface || swipeMoved) return;
+      if (Math.hypot(event.clientX - swipeStartX, event.clientY - swipeStartY) > 9) swipeMoved = true;
+    }, { capture: true, passive: true });
+    const finishSwipePointer = (event: PointerEvent) => {
+      if (event.pointerId !== swipePointerId) return;
+      if (swipeMoved && swipeSurface) {
+        suppressedSwipeSurface = swipeSurface;
+        suppressSwipeClickUntil = performance.now() + 250;
+      }
+      swipePointerId = -1;
+      swipeSurface = undefined;
+      swipeMoved = false;
+    };
+    document.addEventListener('pointerup', finishSwipePointer, { capture: true, passive: true });
+    document.addEventListener('pointercancel', finishSwipePointer, { capture: true, passive: true });
+    document.addEventListener('click', event => {
+      if (performance.now() > suppressSwipeClickUntil || !suppressedSwipeSurface) return;
+      const surface = (event.target as Element).closest<HTMLElement>(swipeSurfaceSelector);
+      if (surface !== suppressedSwipeSurface) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      suppressedSwipeSurface = undefined;
+      suppressSwipeClickUntil = 0;
+      this.earlyClickTarget = undefined;
+    }, true);
     document.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       const target = (event.target as Element).closest<HTMLElement>('[data-action]');
       if (!target || target instanceof HTMLButtonElement && target.disabled || target.closest('input[type="range"]')) return;
+      // Product grids are scrollable. Defer their sound until a real click so
+      // a swipe never produces a click sound on pointerdown.
+      if (target.closest(swipeSurfaceSelector)) return;
       const action = target.dataset.action ?? '';
       const isFinancePayment = this.modal === 'finance' && FINANCE_BALANCE_ACTIONS.has(action);
       if (MONEY_PURCHASE_ACTIONS.has(action) || isFinancePayment) return;
@@ -1575,11 +1625,13 @@ export class GameUI {
           else { this.socialSection = 'recruitment'; this.navigate('social'); }
           break;
       case 'outfit-category':
+        if (!this.ensureServeVisitFocused()) break;
         this.outfitCategory = id;
         this.dialog.querySelector('.dialog-inner')!.innerHTML = serveModal(this.store.state, this.selected, this.outfitCategory);
         this.dialog.querySelector<HTMLButtonElement>(`[data-action="outfit-category"][data-id="${id}"]`)?.focus({ preventScroll: true });
         break;
       case 'outfit-clear':
+        if (!this.ensureServeVisitFocused()) break;
         this.selected = [];
         this.dialog.querySelector('.dialog-inner')!.innerHTML = serveModal(this.store.state, this.selected, this.outfitCategory);
         this.dialog.querySelector<HTMLButtonElement>('[data-action="outfit-category"]')?.focus({ preventScroll: true });
@@ -1615,6 +1667,7 @@ export class GameUI {
         break;
       }
       case 'select-product': {
+        if (!this.ensureServeVisitFocused()) break;
         const { next, replaced } = smartOutfitSelection(this.selected, id);
         if (!this.selected.includes(id) && !validOutfit(next)) {
           this.toast(`Chọn tối đa ${MAX_OUTFIT_ITEMS} món khác loại.`, 'error');
@@ -1636,7 +1689,9 @@ export class GameUI {
         this.dialog.querySelector<HTMLButtonElement>(`[data-action="select-product"][data-id="${id}"]`)?.focus({ preventScroll: true });
         break;
       }
-      case 'serve': this.store.serve(this.selected); break;
+      case 'serve':
+        if (this.ensureServeVisitFocused()) this.store.serve(this.selected);
+        break;
       case 'close-shop':
         this.openModal('close-shop-confirm', `
           <div class="early-close-confirmation">
@@ -2360,8 +2415,11 @@ export class GameUI {
     update();
   }
   private updatePatience() {
-    const s = this.store.state, c = activeCustomer(s);
-    const visit = activeVisit(s);
+    const s = this.store.state;
+    const visit = this.modal === 'serve' && this.serveVisitId
+      ? s.activeVisits.find(candidate => candidate.uid === this.serveVisitId)
+      : activeVisit(s);
+    const c = visit ? lookupCustomer(visit.customerId) : activeCustomer(s);
     const urgentConsultation = this.modal === 'serve' && visit?.uid === this.serveVisitId && visit.patience <= 10;
     this.dialog.classList.toggle('is-patience-urgent', urgentConsultation);
     const label = document.querySelector('#patience-label'); if (label) label.textContent = `${s.patience}s`;
@@ -2512,6 +2570,16 @@ export class GameUI {
     this.outfitCategory = 'all';
     this.openModal('serve', serveModal(this.store.state, this.selected, this.outfitCategory));
     this.updatePatience();
+  }
+  private ensureServeVisitFocused() {
+    if (this.modal !== 'serve' || !this.serveVisitId) return false;
+    const visit = this.store.state.activeVisits.find(candidate => candidate.uid === this.serveVisitId);
+    if (!visit) {
+      this.closeModal();
+      return false;
+    }
+    if (this.store.state.currentVisitId !== visit.uid) this.store.focusCustomer(visit.uid);
+    return true;
   }
   private refreshOnlineChannel() {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');

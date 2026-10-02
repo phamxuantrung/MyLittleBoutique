@@ -70,6 +70,57 @@ test.describe('manual landscape on phones', () => {
     expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).stats.sold, SAVE_KEY)).toBe(1);
   });
 
+  test('another customer checkout does not close the active consultation', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    const state = openState('lily', 'advice');
+    state.activeVisits.push({
+      uid: 'visit-checkout', customerId: 'emma', mode: 'browse', patience: 1, maxPatience: 90,
+    });
+    state.nextArrivalIn = 999;
+    await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+    await page.goto('/');
+    await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    await page.locator('[data-action="sale-visit-open"][data-id="e2e-lily"]').dispatchEvent('click');
+    await expect(page.locator('#game-dialog')).toHaveClass('dialog-serve');
+    await expect(page.locator('#game-dialog')).toContainText('Lily');
+
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).stats.served, SAVE_KEY), { timeout: 5000 }).toBe(1);
+    await expect(page.locator('#game-dialog')).toHaveClass('dialog-serve');
+    await expect(page.locator('#game-dialog')).toContainText('Lily');
+    await page.locator('[data-action="outfit-category"][data-id="tops"]').dispatchEvent('click');
+    await expect(page.locator('#game-dialog')).toContainText('Lily');
+  });
+
+  test('swiping the consultation products does not select an item', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    const state = openState('lily', 'advice');
+    await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+    await page.goto('/');
+    await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+    await page.locator('[data-action="sale-visit-open"][data-id="e2e-lily"]').dispatchEvent('click');
+    const product = page.locator('.outfit-grid [data-action="select-product"]').first();
+    await expect(product).toHaveAttribute('aria-pressed', 'false');
+    const box = await product.boundingBox();
+    expect(box).not.toBeNull();
+    const x = box!.x + box!.width / 2;
+    const startY = box!.y + box!.height * .72;
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: startY }] });
+    for (let step = 1; step <= 6; step++) {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: startY - 54 * step / 6 }],
+      });
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(100);
+    await expect(product).toHaveAttribute('aria-pressed', 'false');
+    await session.detach();
+
+    await product.tap();
+    await expect(page.locator('.outfit-grid [data-action="select-product"]').first()).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('touch dragging moves furniture to the correct floor cell', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     const state = preparedState();

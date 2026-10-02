@@ -34,7 +34,6 @@ export function initialState(): GameState {
     activeSupplierId: 'local', supplierRelations: { local: 10, wholesale: 0, global: 0 },
     returnCases: [], vipAppointments: [], coutureOrder: null, coutureAvailableDay: 1, operationSequence: 0, reputationCrisis: null,
     atelierOwned: false, materialInventory: {}, craftedRecipeIds: [], atelierRecipeCards: [], atelierCraftHistory: [], customProducts: [], tailoringJobs: [], atelierDraft: null,
-    legacyStory: { stage: 'locked', trust: 0, suspicion: 0, restorationLevel: 0 },
     storedFurniture: [],
     layout: [
       { uid: 'starter-rack', id: 'rack', x: 0, y: 2, rotation: 0, displayItems: [] },
@@ -371,7 +370,7 @@ export function parseSave(raw: string | null): GameState {
           title: raw.title.slice(0, 100), post: raw.post.slice(0, 500),
           authorName: typeof raw.authorName === 'string' ? raw.authorName.slice(0, 50) : 'Hội hóng chuyện',
           authorHandle: typeof raw.authorHandle === 'string' ? raw.authorHandle.slice(0, 50) : '@boutique_buzz',
-          comments: Array.isArray(raw.comments) ? raw.comments.filter((value: unknown): value is string => typeof value === 'string').slice(0, 4).map((value: string) => value.slice(0, 180)) : [],
+          comments: Array.isArray(raw.comments) ? raw.comments.filter((value: unknown): value is string => typeof value === 'string').slice(0, 5).map((value: string) => value.slice(0, 180)) : [],
           choices, threadReplies, source: raw.source === 'ai' ? 'ai' : 'fallback',
           ...(typeof raw.resolvedChoiceId === 'string' ? { resolvedChoiceId: raw.resolvedChoiceId.slice(0, 40) } : {}),
           ...(['cute', 'sassy', 'business'].includes(String(raw.resolvedTone)) ? { resolvedTone: raw.resolvedTone as SocialDrama['resolvedTone'] } : {}),
@@ -485,18 +484,6 @@ export function parseSave(raw: string | null): GameState {
     state.musicVolume = finite(s.musicVolume, 0.55, 1);
     state.musicTrack = ['boutique-bloom', 'better-for-you-1', 'die-for-you-remix', 'daffodil-live'].includes(s.musicTrack) ? s.musicTrack : fresh.musicTrack;
     state.tutorialDone = s.tutorialDone === true;
-    if (s.legacyStory && typeof s.legacyStory === 'object') {
-      const validStages = ['locked', 'arrival', 'room-search', 'room-found'];
-      const validChoices = ['curious', 'dress', 'observe'];
-      state.legacyStory = {
-        stage: validStages.includes(s.legacyStory.stage) ? s.legacyStory.stage : 'locked',
-        trust: Math.floor(finite(s.legacyStory.trust, 0, 99)),
-        suspicion: Math.floor(finite(s.legacyStory.suspicion, 0, 99)),
-        restorationLevel: Math.floor(finite(s.legacyStory.restorationLevel, 0, 5)),
-        ...(typeof s.legacyStory.unlockedDay === 'number' ? { unlockedDay: Math.max(1, Math.floor(finite(s.legacyStory.unlockedDay, state.day, 99999))) } : {}),
-        ...(validChoices.includes(s.legacyStory.firstChoice) ? { firstChoice: s.legacyStory.firstChoice } : {}),
-      };
-    }
     state.onlineRating = finite(s.onlineRating, 5, 5);
     state.onlineReviews = Math.floor(finite(s.onlineReviews, 0, 999999));
     state.onlineSales = Math.floor(finite(s.onlineSales, 0, 999999));

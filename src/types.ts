@@ -260,16 +260,6 @@ export interface ActiveBrandCampaign extends BrandCampaign {
   onlineOrders: number;
   status: 'active' | 'ready' | 'failed';
 }
-export type LegacyStoryStage = 'locked' | 'arrival' | 'room-search' | 'room-found';
-export type LegacyStoryChoice = 'curious' | 'dress' | 'observe';
-export interface LegacyStoryState {
-  stage: LegacyStoryStage;
-  trust: number;
-  suspicion: number;
-  restorationLevel: number;
-  unlockedDay?: number;
-  firstChoice?: LegacyStoryChoice;
-}
 export interface GameState {
   version: 1; money: number; xp: number; level: number; reputation: number; reviews: number; followers: number;
   shopReviewTotal: number; shopReviewCount: number;
@@ -298,7 +288,6 @@ export interface GameState {
   operationSequence: number; reputationCrisis: ReputationCrisis | null;
   atelierOwned: boolean; materialInventory: Record<string, number>; craftedRecipeIds: string[]; atelierRecipeCards: string[]; atelierCraftHistory: AtelierCraftHistoryEntry[]; customProducts: CustomProduct[];
   tailoringJobs: TailoringJob[]; atelierDraft: CustomProduct | null;
-  legacyStory: LegacyStoryState;
   shopName: string; hasNamedShop?: boolean;
 }
 export interface SaleResult { success: boolean; score: number; reason: string; total: number; followers: number; viral: boolean; customer: Customer; products: Product[]; isSelfPick?: boolean; isStaffAssisted?: boolean; visitUid?: string; xpEarned?: number; tip?: number; staffName?: string; loyaltyPoints?: number; loyaltyTier?: LoyaltyTier; loyaltyReward?: string; reviewStars?: number; }

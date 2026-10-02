@@ -109,7 +109,7 @@ function parseDrama(value: unknown, context: DramaRequest): SocialDrama | undefi
     post: drama.post.slice(0, 500),
     authorName: typeof drama.authorName === 'string' ? drama.authorName.slice(0, 50) : context.customerName,
     authorHandle: typeof drama.authorHandle === 'string' ? drama.authorHandle.slice(0, 50) : context.customerHandle,
-    comments: drama.comments.filter((comment): comment is string => typeof comment === 'string').slice(0, 4).map(comment => comment.slice(0, 180)),
+    comments: drama.comments.filter((comment): comment is string => typeof comment === 'string').slice(0, 5).map(comment => comment.slice(0, 180)),
     choices: [],
     threadReplies: [],
     source: 'ai',
@@ -172,7 +172,7 @@ export async function requestDramaReplyEvaluation(drama: Pick<SocialDrama, 'titl
       body: JSON.stringify({
         title: drama.title,
         post: drama.post,
-        comments: drama.comments.slice(0, 4),
+        comments: drama.comments.slice(0, 5),
         thread: (Array.isArray(drama.threadReplies) ? drama.threadReplies : []).slice(-8).map(item => ({
           shopText: item.shopText,
           communityAuthorHandle: item.communityAuthorHandle,

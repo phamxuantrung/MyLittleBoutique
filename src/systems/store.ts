@@ -1,5 +1,5 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LegacyStoryChoice, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
+import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
 import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
@@ -2182,58 +2182,6 @@ export class GameStore {
         : `Lên cấp ${this.state.level}! Thêm sản phẩm và nội thất mới đã mở khóa.`);
   }
 
-  unlockLegacyStory() {
-    const story = this.state.legacyStory;
-    if (this.state.level < levels.length || story.stage !== 'locked') return false;
-    story.stage = 'arrival';
-    story.unlockedDay = this.state.day;
-    this.commit();
-    return true;
-  }
-
-  chooseLegacyStoryResponse(choice: LegacyStoryChoice) {
-    const story = this.state.legacyStory;
-    if (story.stage !== 'arrival' || !['curious', 'dress', 'observe'].includes(choice)) return false;
-    story.firstChoice = choice;
-    if (choice === 'curious') story.trust++;
-    else if (choice === 'dress') { story.trust++; story.suspicion++; }
-    else story.suspicion += 2;
-    story.stage = 'room-search';
-    this.commit();
-    return true;
-  }
-
-  findLegacyRoom() {
-    if (this.state.legacyStory.stage !== 'room-search' || this.state.phase === 'open') return false;
-    this.state.legacyStory.stage = 'room-found';
-    this.commit();
-    this.toast('Đã tìm thấy cánh cửa bị che sau phòng thử đồ.');
-    return true;
-  }
-
-  restoreLegacyRoom() {
-    const story = this.state.legacyStory;
-    const costs = [2000000, 5000000, 8000000, 15000000, 30000000];
-    if (story.stage !== 'room-found' || this.state.phase === 'open' || story.restorationLevel >= costs.length) return false;
-    const cost = costs[story.restorationLevel];
-    if (this.state.money < cost) {
-      this.toast(`Cần ${cost.toLocaleString('vi-VN')}₫ để tiếp tục khôi phục căn phòng.`, 'error');
-      return false;
-    }
-    this.state.money -= cost;
-    this.state.stats.spent += cost;
-    story.restorationLevel++;
-    this.commit();
-    const messages = [
-      'Bụi đã được dọn sạch. Một cuốn nhật ký thiếu trang xuất hiện dưới sàn.',
-      'Tấm gương sáng trở lại và vừa gọi đúng tên bạn.',
-      'Tủ đồ cổ đã mở. Một luồng sáng tím đang rò qua khe cửa.',
-      'Cầu thang lên tầng trên đã được khôi phục.',
-      'Nhà ga bí mật dưới boutique đã thức giấc lúc 00:00.',
-    ];
-    this.toast(messages[story.restorationLevel - 1]);
-    return true;
-  }
   startCampaign(id: string) {
     const s = this.state;
     if (s.level < 3) { this.toast('Studio hợp tác mở khóa khi boutique đạt cấp 3.', 'error'); return false; }

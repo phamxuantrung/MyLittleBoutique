@@ -72,6 +72,21 @@ describe('Boutique Buzz drama', () => {
     expect(loaded.dramaTrust).toBe(81);
   });
 
+  it('supports drama posts with anywhere from zero to five initial comments', () => {
+    const state = initialState();
+    const empty = { ...fallbackDrama(context), id: 'no-comments', comments: [] };
+    const five = {
+      ...fallbackDrama(context), id: 'five-comments',
+      comments: ['Ý kiến 1', 'Ý kiến 2', 'Ý kiến 3', 'Ý kiến 4', 'Ý kiến 5'],
+    };
+    state.dramas = [empty, five];
+    const markup = socialPanel(state);
+    expect(markup).toContain('0 câu trả lời');
+    expect(markup).toContain('Ý kiến 5');
+    const loaded = parseSave(JSON.stringify(state));
+    expect(loaded.dramas.map(drama => drama.comments.length)).toEqual([0, 5]);
+  });
+
   it('accepts a free shop reply and evaluates it without AI as a fallback', () => {
     const store = new GameStore(initialState(), new MemorySave());
     const drama = fallbackDrama(context);

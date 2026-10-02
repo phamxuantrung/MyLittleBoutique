@@ -870,9 +870,11 @@ function socialDramaFeed(s: GameState, activityOrder: Map<string, number>) {
     { name: 'Mê Bông', handle: '@me_bong' },
     { name: 'Hân Mood', handle: '@han_mood' },
     { name: 'Lemon Tea', handle: '@lemontea' },
+    { name: 'Bắp Rang', handle: '@bap_rang' },
+    { name: 'Bé Mận', handle: '@be_man' },
   ];
   return dramas.slice(0, 8).map(drama => {
-      const comments = drama.comments.filter(comment => typeof comment === 'string').slice(0, 3);
+      const comments = drama.comments.filter(comment => typeof comment === 'string').slice(0, 5);
       const savedThread = (Array.isArray(drama.threadReplies) ? drama.threadReplies : []).filter(item =>
         !!item && typeof item === 'object'
         && typeof item.shopText === 'string' && typeof item.communityText === 'string'

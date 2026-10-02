@@ -24,7 +24,7 @@ const schema = {
     post: { type: 'string', maxLength: 500 },
     authorName: { type: 'string', maxLength: 50 },
     authorHandle: { type: 'string', maxLength: 50 },
-    comments: { type: 'array', minItems: 3, maxItems: 4, items: { type: 'string', maxLength: 180 } },
+    comments: { type: 'array', minItems: 0, maxItems: 5, items: { type: 'string', maxLength: 180 } },
   },
 };
 
@@ -39,7 +39,7 @@ Mỗi lần phải tạo một tình huống khác biệt rõ rệt. Chọn mộ
 Không lặp lại mô-típ, tiêu đề, câu đùa hoặc cú lật trong recentDramas. Không phải drama nào cũng bênh shop và không phải bài nào cũng kết thúc tích cực.
 
 Giọng Gen Z, dễ hiểu ngay trong 3 giây, có tính hóng chuyện và đủ sức kéo người chơi vào phản hồi. Có thể gắt, chửi bới và combat ở mức 16+, dùng tự nhiên các từ như vãi, quần què, mẹ, ảo ma, toang, khứa, mỏ hỗn, bố đời, hãm hoặc làm ăn chán; không nhồi tục vào mọi câu.
-Các bình luận phải có nhiều phe: ít nhất một người đồng tình với người đăng, một người phản bác hoặc bênh shop, và một người cà khịa khiến cuộc tranh luận nóng hơn. Các tài khoản được phép đáp trả, mỉa mai hoặc chửi nhau ngắn gọn như mạng xã hội thật.
+Số bình luận phải đúng bằng creativeBrief.commentCount, có thể từ 0 đến 5 để feed tự nhiên: bài vừa đăng có thể chưa ai trả lời, bài ít chú ý có thể chỉ có 1–2 ý kiến, còn bài nóng mới có nhiều người tranh luận. Khi có từ 3 bình luận trở lên, tạo nhiều phe gồm người đồng tình, người phản bác hoặc bênh shop và người cà khịa. Các tài khoản được phép đáp trả, mỉa mai hoặc chửi nhau ngắn gọn như mạng xã hội thật.
 Không đe dọa, kích động bạo lực, miệt thị ngoại hình, giới tính, vùng miền, hoàn cảnh hoặc nhóm người; không dùng nội dung tình dục trực diện hay ngôn từ thù ghét.
 
 Drama có một mâu thuẫn chính và có thể có một cú lật. Mọi chi tiết phải dựa vào dữ liệu gameplay; không bịa thêm số tiền, sản phẩm, chính sách hoặc sự cố nghiêm trọng không có trong dữ liệu.
@@ -94,6 +94,7 @@ const creativeBrief = () => ({
   postStructure: pickCreativeAxis(creativeAxes.structure),
   narrativeTurn: pickCreativeAxis(creativeAxes.turn),
   commentDynamic: pickCreativeAxis(creativeAxes.comments),
+  commentCount: Math.floor(Math.random() * 6),
 });
 
 const normalizeForSimilarity = (value: string) => value
@@ -232,7 +233,7 @@ export async function evaluateDramaReply(body: unknown) {
   if (!apiKey) return { status: 503, body: { error: 'AI drama is not configured' } };
   const input = {
     title: value.title.slice(0, 100), post: value.post.slice(0, 500),
-    comments: Array.isArray(value.comments) ? value.comments.filter(item => typeof item === 'string').slice(0, 4) : [],
+    comments: Array.isArray(value.comments) ? value.comments.filter(item => typeof item === 'string').slice(0, 5) : [],
     thread: Array.isArray(value.thread) ? value.thread.filter(item => !!item && typeof item === 'object').slice(-8) : [],
     shopReply: value.reply.trim().slice(0, 180),
   };

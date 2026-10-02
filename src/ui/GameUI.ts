@@ -23,14 +23,13 @@ import { atelierMaterialIllustration, atelierProductPoints } from '../art/atelie
 import type { PanzoomEventDetail, PanzoomObject } from '@panzoom/panzoom';
 import type Moveable from 'moveable';
 import { requestDramaReplyEvaluation, requestSocialDrama } from '../systems/drama';
-import { legacyPrologueModal, legacyRoomModal } from './legacyStory';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
-type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-stock' | 'online-order' | 'regular-order-detail' | 'regular-pickup' | 'livestream' | 'legacy' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
+type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-stock' | 'online-order' | 'regular-order-detail' | 'regular-pickup' | 'livestream' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'atelier-recipe-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
 const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
-const SHOW_DEBUG_BUTTON = true;
+const SHOW_DEBUG_BUTTON = false;
 const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
   const duration = Math.max(1, totalSeconds);
   const remaining = Math.max(0, Math.min(duration, remainingSeconds));
@@ -359,7 +358,6 @@ export class GameUI {
                 <span class="staff-fab-icon land-fab-icon">${icon('hudExpand')}</span><span class="staff-fab-copy"><strong>Mở rộng</strong><small id="land-expand-status">Xem nâng cấp</small></span>
               </button>
               <button id="finance-hud-button" class="finance-hud-button hud-edge-button" data-action="finance-open" aria-label="Tài chính" title="Quản lý tài chính"><span>${icon('hudFinance')}</span><strong>Tài chính</strong><b id="finance-hud-badge" class="coc-badge-pill" hidden></b></button>
-              <button id="legacy-story-button" class="legacy-story-fab" data-action="legacy-open" aria-label="Mở nhật ký bí mật" title="Cánh cửa sau phòng thử đồ" hidden><span>${icon('sparkle')}</span><strong>Bí ẩn</strong><b>!</b></button>
               <button id="debug-button" class="debug-fab" data-action="debug-open" aria-label="Mở công cụ test bug" title="Test bug" hidden>${icon('settings')} Test bug</button>
               <!-- Center Zone: Sub-HUD Tools -->
               <div class="game-center-hud"></div>
@@ -1703,37 +1701,6 @@ export class GameUI {
         this.livestreamEndsAt = 0;
         this.openModal('online', onlineChannelModal(this.store.state));
         break;
-      case 'legacy-open':
-        this.openModal('legacy', this.store.state.legacyStory.stage === 'arrival'
-          ? legacyPrologueModal(this.store.state)
-          : legacyRoomModal(this.store.state));
-        break;
-      case 'legacy-choice':
-        if (id === 'curious' || id === 'dress' || id === 'observe') {
-          this.store.chooseLegacyStoryResponse(id);
-          this.dialog.querySelector('.dialog-inner')!.innerHTML = legacyPrologueModal(this.store.state);
-          this.audio.play('reward');
-        }
-        break;
-      case 'legacy-continue':
-        this.closeModal();
-        if (this.store.state.phase === 'closed') {
-          this.store.nextDay();
-          this.navigate('shop');
-        }
-        break;
-      case 'legacy-find-room':
-        if (this.store.findLegacyRoom()) {
-          this.dialog.querySelector('.dialog-inner')!.innerHTML = legacyRoomModal(this.store.state);
-          this.audio.play('reward');
-        }
-        break;
-      case 'legacy-restore':
-        if (this.store.restoreLegacyRoom()) {
-          this.dialog.querySelector('.dialog-inner')!.innerHTML = legacyRoomModal(this.store.state);
-          this.audio.play('reward');
-        }
-        break;
       case 'debug-open': this.openModal('debug', debugPanel(this.store.state)); break;
       case 'debug-action':
         if (id === 'customer' || id === 'online-order') this.closeModal();
@@ -2220,8 +2187,6 @@ export class GameUI {
     if (landButton) landButton.hidden = hiddenFromShop || this.store.state.phase === 'open';
     const financeButton = document.querySelector<HTMLElement>('#finance-hud-button');
     if (financeButton) financeButton.hidden = hiddenFromShop;
-    const legacyButton = document.querySelector<HTMLElement>('#legacy-story-button');
-    if (legacyButton) legacyButton.hidden = hiddenFromShop || this.store.state.legacyStory.stage === 'locked';
     const debugButton = document.querySelector<HTMLElement>('#debug-button');
     if (debugButton) debugButton.hidden = !SHOW_DEBUG_BUTTON || hiddenFromShop;
   }
@@ -2420,15 +2385,6 @@ export class GameUI {
         badge.title = debtNotices ? `${debtNotices} khoản cần thanh toán` : '';
       }
       financeHudButton.classList.toggle('has-finance-alert', debtNotices > 0);
-    }
-    const legacyButton = document.querySelector<HTMLElement>('#legacy-story-button');
-    if (legacyButton) {
-      const story = s.legacyStory;
-      legacyButton.hidden = story.stage === 'locked' || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || isOpen;
-      const label = legacyButton.querySelector<HTMLElement>('strong');
-      if (label) label.textContent = story.stage === 'arrival' ? '00:00' : story.restorationLevel >= 5 ? 'Nhà ga' : 'Bí ẩn';
-      const badge = legacyButton.querySelector<HTMLElement>('b');
-      if (badge) badge.hidden = story.stage === 'room-found' && story.restorationLevel >= 5;
     }
     const onlineButton = document.querySelector<HTMLElement>('#online-channel-button');
     if (onlineButton) {
@@ -3501,13 +3457,8 @@ export class GameUI {
     this.queueDisplayGuide();
     this.queueCampaignUnlock();
     if (advanceAfterSummary) {
-      if (this.store.state.level >= levels.length && this.store.state.legacyStory.stage === 'locked' && this.store.unlockLegacyStory()) {
-        this.openModal('legacy', legacyPrologueModal(this.store.state));
-        this.audio.play('reward');
-      } else {
-        this.store.nextDay();
-        this.navigate('shop');
-      }
+      this.store.nextDay();
+      this.navigate('shop');
     } else if (returnToSummary) {
       this.openModal('summary', summaryModal(this.store.state));
     }

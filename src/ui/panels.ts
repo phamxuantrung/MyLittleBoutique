@@ -1354,7 +1354,7 @@ export function regularOrderDetailModal(s: GameState, orderId: string) {
         <p>${icon('clock')} Tạo ngày ${String(order.createdDay).padStart(2, '0')} · hạn xử lý ngày ${String(order.dueDay).padStart(2, '0')}</p>
       </aside>
     </div>
-    <footer><button class="regular-order-detail-cancel" data-action="regular-cancel" data-id="${order.id}" ${s.phase === 'open' ? 'disabled' : ''}>${icon('close')} Hủy đơn</button>${order.packed ? `<button data-action="regular-order-back">${icon('check')} Đã đóng gói · Quay lại</button>` : `<button data-action="regular-pack" data-id="${order.id}" ${s.phase === 'open' ? 'disabled' : ''}>${icon('box')} Xác nhận đóng gói</button>`}</footer>
+    <footer><button class="regular-order-detail-cancel" data-action="regular-cancel" data-id="${order.id}" ${s.phase === 'open' ? 'disabled' : ''}>${icon('close')} Hủy đơn</button>${order.packed ? `<button data-action="regular-order-back">${icon('check')} Đã đóng gói · Quay lại</button>` : `<button class="regular-order-pack" data-action="regular-pack" data-id="${order.id}" ${s.phase === 'open' ? 'disabled' : ''}>${icon('box')} Xác nhận đóng gói</button>`}</footer>
   </section>`;
 }
 

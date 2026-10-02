@@ -413,7 +413,7 @@ export class GameUI {
     };
     document.addEventListener('pointerdown', protectCanvasFromUiPointer, true);
     document.addEventListener('pointerup', protectCanvasFromUiPointer, true);
-    const swipeSurfaceSelector = '.outfit-grid, .livestream-product-grid, .livestream-pin-list, .online-stock-grid';
+    const swipeSurfaceSelector = '.outfit-grid, .livestream-product-grid, .livestream-pin-list, .online-stock-grid, .storefront-product-grid, .regular-orders-list';
     let swipePointerId = -1;
     let swipeStartX = 0;
     let swipeStartY = 0;
@@ -2911,8 +2911,18 @@ export class GameUI {
     const intentGap = Math.max(3200, 7000 - Math.min(3500, this.livestreamStats.viewers * 22));
     this.livestreamNextIntentAt = Date.now() + intentGap + Math.random() * 1800;
     this.livestreamNextCommentAt = Math.min(this.livestreamNextCommentAt, Date.now() + 700);
-    this.syncLivestreamFeed();
-    this.audio.play(this.livestreamResult.orderCreated ? 'sale' : 'click');
+    if (this.livestreamResult.orderCreated) {
+      // The order reserves its products immediately. Rebuild the live product
+      // list now so its available quantity changes in the same frame as the
+      // successful-sale sound instead of waiting for the next comment/intent.
+      this.refreshLivestream();
+      requestAnimationFrame(() => {
+        if (this.modal === 'livestream') this.audio.play('sale');
+      });
+    } else {
+      this.syncLivestreamFeed();
+      this.audio.play('click');
+    }
   }
   private livestreamResponseAge() {
     return this.livestreamIntentStartedAt ? Math.max(0, (Date.now() - this.livestreamIntentStartedAt) / 1000) : 0;

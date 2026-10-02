@@ -44700,3 +44700,19 @@ dialog.dialog-regular-order-detail .regular-order-detail-summary > p .icon {
     line-height: 1.25 !important;
   }
 }
+/* Make the regular-order packing action distinct from the completed state. */
+.regular-order-detail > footer .regular-order-pack {
+  color: #fff;
+  background: linear-gradient(180deg, #ee4f9b, #cf2f79);
+  box-shadow: 0 4px 0 #9f245d, 0 8px 14px rgba(178, 42, 108, .18);
+}
+
+.regular-order-detail > footer .regular-order-pack:hover {
+  background: linear-gradient(180deg, #f560a8, #d93682);
+}
+
+.regular-order-detail > footer .regular-order-pack:disabled {
+  color: #a98b9b;
+  background: #eadde4;
+  box-shadow: 0 3px 0 #d6c4ce;
+}

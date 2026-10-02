@@ -40311,3 +40311,93 @@ dialog.dialog-serve[open].is-patience-urgent {
 .drawer-activity-list > .boutique-drama-card {
   flex: 0 0 auto;
 }
+/* Inventory cards must keep all metadata inside their horizontal-rail column. */
+.inventory-panel-shell .inventory-horizontal-rail > .inv-card,
+.inventory-panel-shell .inv-detail,
+.inventory-panel-shell .inv-name-row,
+.inventory-panel-shell .inv-pricing-console,
+.inventory-panel-shell .inv-cost-line,
+.inventory-panel-shell .inv-sell-control,
+.inventory-panel-shell .inv-select-wrapper,
+.inventory-panel-shell .inv-price-field,
+.inventory-panel-shell .inv-profit-row {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.inventory-panel-shell .inv-name-row > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-panel-shell .inv-name-row .item-style-badge {
+  max-width: 52%;
+  flex: 0 1 auto;
+}
+
+.inventory-panel-shell .inv-name-row .item-occasion-tag {
+  max-width: 46%;
+  flex: 0 1 auto;
+  text-align: right;
+}
+
+.game-content-panel .inventory-panel-shell .inv-card h3.product-name {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  line-height: 1.2 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-panel-shell .inv-cost-line {
+  gap: 6px;
+}
+
+.inventory-panel-shell .inv-cost-line > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-panel-shell .inv-cost-line strong {
+  flex: 0 0 auto;
+}
+
+.inventory-panel-shell .inv-profit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 4px;
+}
+
+.inventory-panel-shell .inv-profit-row .profit-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-panel-shell .inv-profit-row :is(.profit-val, .profit-rate) {
+  min-width: 0;
+  margin-left: 0;
+  white-space: nowrap;
+}
+
+.inventory-panel-shell .inv-visual .trend-badge {
+  right: 6px;
+  max-width: calc(100% - 12px);
+  box-sizing: border-box;
+  overflow: hidden;
+  font-size: 8px !important;
+  line-height: 1.15 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

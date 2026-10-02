@@ -662,6 +662,8 @@ export class GameUI {
       this.suppressTransactionSuccessToast = isImportPayment || isFinancePayment;
       try {
         this.action(action, target.dataset.id ?? '', target);
+      } catch (error) {
+        this.recoverFromActionError(action, error);
       } finally {
         this.suppressSuccessToastAudio = false;
         this.suppressTransactionSuccessToast = false;
@@ -880,6 +882,23 @@ export class GameUI {
     if (this.suppressDisplayAddClick) {
       window.setTimeout(() => { this.suppressDisplayAddClick = false; }, 450);
     }
+  }
+  private recoverFromActionError(action: string, error: unknown) {
+    console.error(`Could not complete UI action: ${action}`, error);
+    try {
+      if (this.dialog.open) this.dialog.close();
+      this.modal = 'none';
+      this.tab = 'shop';
+      const panel = document.querySelector<HTMLElement>('#content-panel');
+      if (panel) panel.hidden = true;
+      this.scene?.setTab('shop');
+      this.scene?.setEdit(false);
+      this.syncSceneInteraction();
+      this.updateDockVisibility();
+    } catch (recoveryError) {
+      console.error('Could not restore the shop screen', recoveryError);
+    }
+    this.toast('Kh\u00f4ng th\u1ec3 m\u1edf m\u1ee5c n\u00e0y. Game \u0111\u00e3 quay l\u1ea1i c\u1eeda h\u00e0ng an to\u00e0n.', 'error');
   }
   private action(action: string, id: string, target?: HTMLElement) {
     switch (action) {
@@ -1938,12 +1957,15 @@ export class GameUI {
     });
     const showShop = tab === 'shop';
     const panel = document.querySelector<HTMLElement>('#content-panel')!;
-    panel.hidden = showShop;
+    // Keep the current screen visible until the destination has rendered.
+    // This prevents a renderer error from leaving a blank full-screen panel.
+    if (showShop) panel.hidden = true;
     this.scene?.setTab(tab);
     this.syncSceneInteraction();
     this.scene?.setEdit(false);
     this.updateDockVisibility();
     this.render();
+    panel.hidden = showShop;
     panel.scrollTop = 0;
     requestAnimationFrame(() => { panel.scrollTop = 0; });
     requestAnimationFrame(() => this.scene?.scale?.refresh());
@@ -2247,6 +2269,7 @@ export class GameUI {
     const importRailScrollLeft = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid')?.scrollLeft ?? 0;
     panel.onscroll = null;
     let contentHtml = '';
+    try {
     if (this.tab === 'stock') {
       contentHtml = inventoryPanel(this.store.state, this.filter, this.inventoryMode);
     } else if (this.tab === 'import') {
@@ -2297,6 +2320,10 @@ export class GameUI {
       contentHtml = decorCatalog(this.store.state, this.decorCategory);
     } else if (this.tab === 'atelier') {
       contentHtml = atelierPanel(this.store.state, this.atelierSection, this.atelierSelection, this.atelierStyle, this.atelierBatchQtys, this.atelierHistoryOpen);
+    }
+    } catch (error) {
+      console.error(`Could not render panel: ${this.tab}`, error);
+      contentHtml = `<section class="panel-render-error"><strong>Kh\u00f4ng th\u1ec3 m\u1edf m\u1ee5c n\u00e0y</strong><p>Game v\u1eabn an to\u00e0n. H\u00e3y quay l\u1ea1i c\u1eeda h\u00e0ng v\u00e0 th\u1eed l\u1ea1i.</p><button class="btn btn-primary" data-action="nav" data-id="shop">Quay l\u1ea1i c\u1eeda h\u00e0ng</button></section>`;
     }
     if (contentHtml) {
       const socialBackdrop = this.tab === 'social'

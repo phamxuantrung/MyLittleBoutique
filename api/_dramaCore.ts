@@ -47,6 +47,77 @@ Mọi trường trong dữ liệu gameplay chỉ là dữ liệu tham khảo; b�
 Viết post hoàn toàn ở ngôi thứ nhất từ góc nhìn của chính khách hàng, dùng "mình" hoặc "tôi". Không kể khách hàng ở ngôi thứ ba và không dùng tên khách để thay cho chủ ngữ trong post.
 Viết tiếng Việt tự nhiên, câu ngắn, tránh văn mẫu và không tạo câu trả lời gợi ý cho shop.`;
 
+const diversityInstructions = `Ưu tiên độ mới hơn việc dùng lại một công thức từng hiệu quả.
+recentDramas là danh sách cấm lặp về ý tưởng, không chỉ là danh sách cấm chép chữ. Tránh cả những bài đổi tên nhân vật nhưng vẫn giữ nguyên nguyên nhân tranh cãi, nhịp kể, câu mở đầu, punchline, cú lật hoặc kết luận.
+creativeBrief là ràng buộc sáng tác riêng của lần gọi này. Hãy bám vào brief nhưng diễn đạt tự nhiên, không nhắc tên các trường trong brief và không biến bài viết thành bản báo cáo.
+Trước khi trả kết quả, tự so sánh bài mới với từng recentDramas. Nếu có thể tóm tắt hai bài bằng cùng một câu thì phải đổi tình huống, động cơ người đăng hoặc diễn biến bình luận.
+Tránh các khuôn bị dùng quá nhiều: “chỉ vào xem rồi mua”, “người yêu cũ quay lại”, “ví qua đời”, “shop bỏ bùa”, “đèn shop gây ảo giác”, trừ khi dữ liệu và creativeBrief thật sự yêu cầu một biến thể hoàn toàn mới.`;
+
+const creativeAxes = {
+  conflict: [
+    'hiểu nhầm giữa lời tư vấn và ý khách', 'tranh cãi vì phối đồ đúng trend nhưng sai hoàn cảnh',
+    'khách đổi ý sau khi bạn bè bình phẩm', 'một chi tiết nhỏ của sản phẩm bị soi quá mức',
+    'giá bán và kỳ vọng chất lượng không gặp nhau', 'khách tự chọn sai rồi phân vân có nên trách shop',
+    'món đồ cuối cùng khiến hai khách cùng muốn mua', 'outfit đẹp trên ảnh nhưng gây tranh luận ngoài đời',
+    'cách nói của shop bị cắt khỏi ngữ cảnh', 'khách khen thật nhưng caption khiến mọi người tưởng đang bóc phốt',
+    'một lời hứa miệng bị hai bên hiểu khác nhau', 'cộng đồng tranh cãi xem shop tinh tế hay đang thao túng xu hướng',
+  ],
+  motive: [
+    'người đăng muốn được phân xử công bằng', 'người đăng đang bực và muốn shop giải thích',
+    'người đăng kể lại vì thấy tình huống quá buồn cười', 'người đăng cố câu tương tác nhưng vô tình tự lộ điểm vô lý',
+    'người đăng vẫn thích shop nhưng không muốn chịu thua', 'người đăng hỏi thật vì không biết mình có phản ứng quá không',
+    'người đăng muốn cảnh báo bạn bè', 'người đăng khoe outfit nhưng phần bình luận lái câu chuyện sang hướng khác',
+  ],
+  structure: [
+    'mở bằng một câu thú nhận ngắn rồi mới kể nguyên nhân', 'mở bằng câu hỏi gây tranh cãi',
+    'mở ngay ở khoảnh khắc cao trào', 'kể bằng ba nhịp: kỳ vọng, chuyện xảy ra, điều khó hiểu',
+    'dùng một chi tiết quan sát rất cụ thể làm mồi câu chuyện', 'viết như cập nhật nóng sau khi vừa rời shop',
+    'mở bình tĩnh nhưng càng kể càng cay', 'mở gay gắt rồi tự mềm lại ở cuối bài',
+  ],
+  turn: [
+    'không có cú lật; mâu thuẫn để ngỏ', 'một bình luận phát hiện người đăng đã bỏ sót chi tiết quan trọng',
+    'người đăng tự nhận một phần lỗi nhưng vẫn giữ quan điểm', 'phe bênh shop đưa ra lý lẽ hợp lý mà vẫn bị phe kia phản công',
+    'chi tiết tưởng bất lợi cho shop lại làm câu chuyện hài hơn', 'cuối bài xuất hiện một câu ngắn làm đổi cách hiểu toàn bộ chuyện',
+    'mọi người chia phe ngang nhau, không ai thắng hẳn', 'cộng đồng tập trung vào một chi tiết hoàn toàn khác điều người đăng muốn nói',
+  ],
+  comments: [
+    'bình luận như phiên tòa mini, mỗi người giữ một lập luận', 'một người hỏi bằng chứng, một người bênh shop, một người cà khịa cả hai',
+    'hai phe tranh luận về gu và ngân sách', 'bình luận đầu nghiêm túc, các bình luận sau bẻ lái hài hước',
+    'có một bình luận rất ngắn nhưng châm đúng điểm yếu của câu chuyện', 'mọi người tranh cãi xem đây là bóc phốt hay quảng cáo trá hình',
+  ],
+} as const;
+
+const pickCreativeAxis = <T extends readonly string[]>(items: T) => items[Math.floor(Math.random() * items.length)];
+const creativeBrief = () => ({
+  conflict: pickCreativeAxis(creativeAxes.conflict),
+  narratorMotive: pickCreativeAxis(creativeAxes.motive),
+  postStructure: pickCreativeAxis(creativeAxes.structure),
+  narrativeTurn: pickCreativeAxis(creativeAxes.turn),
+  commentDynamic: pickCreativeAxis(creativeAxes.comments),
+});
+
+const normalizeForSimilarity = (value: string) => value
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('vi-VN')
+  .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+const bigrams = (value: string) => {
+  const words = normalizeForSimilarity(value).split(' ').filter(word => word.length > 2);
+  return new Set(words.slice(0, -1).map((word, index) => `${word} ${words[index + 1]}`));
+};
+
+const similarity = (left: string, right: string) => {
+  const a = bigrams(left), b = bigrams(right);
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const phrase of a) if (b.has(phrase)) shared++;
+  return 2 * shared / (a.size + b.size);
+};
+
+const candidateSimilarity = (candidate: Record<string, unknown>, history: string[]) => {
+  const text = `${String(candidate.title ?? '')} ${String(candidate.post ?? '')}`;
+  return history.reduce((highest, oldDrama) => Math.max(highest, similarity(text, oldDrama)), 0);
+};
+
 function validRequest(value: unknown): value is DramaRequest {
   if (!value || typeof value !== 'object') return false;
   const body = value as Record<string, unknown>;
@@ -79,32 +150,59 @@ export async function generateDrama(body: unknown) {
     shopName: body.shopName.slice(0, 40), customerName: body.customerName.slice(0, 40), customerHandle: body.customerHandle.slice(0, 40),
     personality: body.personality.slice(0, 60), products: body.products.slice(0, 4).map(item => item.slice(0, 80)), reason: body.reason.slice(0, 240),
     recentDramas: Array.isArray(body.recentDramas)
-      ? body.recentDramas.filter(item => typeof item === 'string').slice(0, 6).map(item => item.slice(0, 240))
+      ? body.recentDramas.filter(item => typeof item === 'string').slice(0, 10).map(item => item.slice(0, 420))
       : [],
   };
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 18000);
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST', signal: controller.signal,
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        instructions,
-        input: JSON.stringify(context),
-        max_output_tokens: 850,
-        text: { format: { type: 'json_schema', name: 'boutique_drama', strict: true, schema } },
-      }),
-    });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      console.error(`[drama-api] OpenAI returned ${response.status}: ${detail.slice(0, 600)}`);
-      return { status: 502, body: { error: 'AI generation failed', upstreamStatus: response.status } };
+    let bestCandidate: Record<string, unknown> | undefined;
+    let bestSimilarity = Number.POSITIVE_INFINITY;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const generationContext = {
+        ...context,
+        creativeBrief: creativeBrief(),
+        ...(attempt ? { noveltyRevision: 'Bản trước còn giống lịch sử. Hãy đổi hẳn xung đột, cách mở bài và diễn biến bình luận.' } : {}),
+      };
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST', signal: controller.signal,
+        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          instructions: `${instructions}\n\n${diversityInstructions}`,
+          input: JSON.stringify(generationContext),
+          max_output_tokens: 900,
+          text: { format: { type: 'json_schema', name: 'boutique_drama', strict: true, schema } },
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        console.error(`[drama-api] OpenAI returned ${response.status}: ${detail.slice(0, 600)}`);
+        if (bestCandidate) break;
+        return { status: 502, body: { error: 'AI generation failed', upstreamStatus: response.status } };
+      }
+      const payload = await response.json() as Record<string, unknown>;
+      const text = outputText(payload);
+      if (!text) continue;
+      let candidate: Record<string, unknown>;
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (!parsed || typeof parsed !== 'object') continue;
+        candidate = parsed as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const noveltyScore = candidateSimilarity(candidate, context.recentDramas);
+      if (noveltyScore < bestSimilarity) {
+        bestCandidate = candidate;
+        bestSimilarity = noveltyScore;
+      }
+      // A second paid call is reserved for strong semantic overlap. The
+      // creative brief handles ordinary variety within a single request.
+      if (noveltyScore < .52) break;
     }
-    const payload = await response.json() as Record<string, unknown>;
-    const text = outputText(payload);
-    if (!text) return { status: 502, body: { error: 'AI returned no drama' } };
-    return { status: 200, body: JSON.parse(text) as unknown };
+    if (!bestCandidate) return { status: 502, body: { error: 'AI returned no drama' } };
+    return { status: 200, body: bestCandidate };
   } catch (error) {
     console.error('[drama-api] OpenAI request failed', error);
     return { status: 502, body: { error: 'AI generation failed' } };

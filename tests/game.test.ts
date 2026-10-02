@@ -66,6 +66,22 @@ describe('inventory and economy', () => {
     expect(store.state.onlineOrders).toHaveLength(1);
     expect(store.state.onlineOrders[0].productId).toBe('baby-tee');
   });
+  it('can create an automatic online order containing several different products', () => {
+    const state = initialState(); stockStarter(state);
+    state.inventory['baby-tee'] = 3;
+    state.inventory.jeans = 3;
+    state.inventory.ribbon = 3;
+    state.followers = 500;
+    state.onlineListings = ['baby-tee', 'jeans', 'ribbon'];
+    state.onlineChannelEnabled = true;
+    const store = new GameStore(state, new MemorySave(), () => 0);
+    store.openShop();
+    store.state.onlineNextOrderIn = 0;
+    store.tick();
+    expect(store.state.onlineOrders).toHaveLength(1);
+    expect(store.state.onlineOrders[0].productIds).toHaveLength(3);
+    expect(new Set(store.state.onlineOrders[0].productIds)).toEqual(new Set(['baby-tee', 'jeans', 'ribbon']));
+  });
   it('allows every stocked product to be listed online without a slot limit', () => {
     const state = initialState();
     for (const product of products) state.inventory[product.id] = 1;

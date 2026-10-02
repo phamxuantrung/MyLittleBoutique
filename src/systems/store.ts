@@ -1349,11 +1349,19 @@ export class GameStore {
     if (!eligible.length) return;
     const orderChance = onlineOrderChance(s, eligible);
     if (this.random() >= orderChance) return;
-    const weighted = eligible.map(id => ({ id, weight: onlineProductDemandWeight(s, products.find(product => product.id === id)!) }));
-    const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
-    let roll = this.random() * totalWeight;
-    const productId = weighted.find(item => (roll -= item.weight) <= 0)?.id ?? weighted[weighted.length - 1].id;
-    this.createOnlineOrder(productId);
+    const candidates = eligible.map(id => ({ id, weight: onlineProductDemandWeight(s, products.find(product => product.id === id)!) }));
+    const sizeRoll = this.random();
+    const requestedSize = sizeRoll < .18 ? 3 : sizeRoll < .58 ? 2 : 1;
+    const basketSize = Math.min(requestedSize, candidates.length);
+    const productIds: string[] = [];
+    while (productIds.length < basketSize && candidates.length) {
+      const totalWeight = candidates.reduce((sum, item) => sum + item.weight, 0);
+      let roll = this.random() * totalWeight;
+      let selectedIndex = candidates.findIndex(item => (roll -= item.weight) <= 0);
+      if (selectedIndex < 0) selectedIndex = candidates.length - 1;
+      productIds.push(candidates.splice(selectedIndex, 1)[0].id);
+    }
+    this.createOnlineOrder(productIds);
   }
 
   private createOnlineOrder(productIds: string | string[]) {

@@ -466,7 +466,15 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
     <!-- The near upright sits in front of the hanging clothes. -->
     <path d="M151 106V217" stroke="#4a2d5a" stroke-width="8" stroke-linecap="round"/>
     <path d="M151 106V217" stroke="url(#coutureGold)" stroke-width="4.5" stroke-linecap="round"/>
-    <path d="M20 192L43 203M139 211L162 222" stroke="#4a2d5a" stroke-width="8" stroke-linecap="round"/><path d="M21 191L42 201M140 210L161 220" stroke="#d7a45a" stroke-width="4" stroke-linecap="round"/>
+    <!-- Floor stabilisers use the opposite isometric axis (-26.565deg),
+         centred directly beneath each upright. -->
+    <path d="M18 202L44 189M138 224L164 211" stroke="#4a2d5a" stroke-width="8" stroke-linecap="round"/>
+    <path d="M19 200.5L43 188.5M139 222.5L163 210.5" stroke="#d7a45a" stroke-width="4" stroke-linecap="round"/>
+    <path d="M21 198.8L41 188.8M141 220.8L161 210.8" stroke="#ffe4a3" stroke-width="1.2" stroke-linecap="round" opacity=".85"/>
+    <g fill="#d7a45a" stroke="#4a2d5a" stroke-width="1.4">
+      <circle cx="18" cy="202" r="3.1"/><circle cx="44" cy="189" r="3.1"/>
+      <circle cx="138" cy="224" r="3.1"/><circle cx="164" cy="211" r="3.1"/>
+    </g>
     <circle cx="31" cy="90" r="5" fill="#fff1bd" stroke="#4a2d5a" stroke-width="1.5"/><circle cx="150" cy="149" r="5" fill="#fff1bd" stroke="#4a2d5a" stroke-width="1.5"/>
   `, 180, 230);
   if (art === 'jewel-shoe-wall') return wrap(`

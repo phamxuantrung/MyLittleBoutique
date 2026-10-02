@@ -733,11 +733,7 @@ export class GameUI {
         this.audio.setMusicVolume(volume);
       }
       if (target.id === 'stock-sort') { this.sort = target.value; this.renderPanel(); }
-      if (target.dataset.price) {
-        const rawPrice = target.value.trim();
-        const price = Number(rawPrice.replace(/[^0-9]/g, ''));
-        if (rawPrice && this.store.setPrice(target.dataset.price, price)) this.renderPanel();
-      }
+      if (target instanceof HTMLInputElement && target.matches('.inv-price-input[data-price]')) this.commitInventoryPrice(target);
       if (target.id === 'decor-select') this.selectFurniture(target.value || undefined);
       if (target.matches('.product-import-qty-input')) {
         const input = target;
@@ -884,6 +880,10 @@ export class GameUI {
     });
     document.addEventListener('focusout', event => {
       const target = event.target as HTMLElement;
+      if (target instanceof HTMLInputElement && target.matches('.inv-price-input[data-price]')) {
+        this.commitInventoryPrice(target);
+        return;
+      }
       if (!target.matches('.fixture-title-edit')) return;
       const uid = target.dataset.fixture ?? '';
       const defaultName = target.dataset.defaultName ?? '';
@@ -2321,7 +2321,8 @@ export class GameUI {
   private renderPanel() {
     const panel = document.querySelector<HTMLElement>('#content-panel')!;
     const panelScrollTop = panel.scrollTop;
-    const importRailScrollLeft = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid')?.scrollLeft ?? 0;
+    const horizontalRail = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid, .inventory-horizontal-rail');
+    const horizontalRailScrollLeft = horizontalRail?.scrollLeft ?? 0;
     panel.onscroll = null;
     let contentHtml = '';
     try {
@@ -2387,8 +2388,8 @@ export class GameUI {
       panel.innerHTML = `${socialBackdrop}<div class="game-panel-body${this.tab === 'social' ? ' social-profile-page' : ''}">${contentHtml}</div>`;
       const restorePanelScroll = () => {
         panel.scrollTop = panelScrollTop;
-        const importRail = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid');
-        if (importRail) importRail.scrollLeft = importRailScrollLeft;
+        const rail = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid, .inventory-horizontal-rail');
+        if (rail) rail.scrollLeft = horizontalRailScrollLeft;
       };
       restorePanelScroll();
       requestAnimationFrame(restorePanelScroll);
@@ -2584,17 +2585,38 @@ export class GameUI {
   private refreshOnlineChannel() {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
     if (!inner) return;
-    const stockScroll = inner.querySelector<HTMLElement>('.online-dashboard-stock-list')?.scrollTop ?? 0;
-    const storefrontScroll = inner.querySelector<HTMLElement>('.storefront-product-grid')?.scrollTop ?? 0;
+    const stockList = inner.querySelector<HTMLElement>('.online-dashboard-stock-list');
+    const storefrontGrid = inner.querySelector<HTMLElement>('.storefront-product-grid');
+    const dashboard = inner.querySelector<HTMLElement>('.online-dashboard');
+    const stockScroll = { left: stockList?.scrollLeft ?? 0, top: stockList?.scrollTop ?? 0 };
+    const storefrontScroll = { left: storefrontGrid?.scrollLeft ?? 0, top: storefrontGrid?.scrollTop ?? 0 };
+    const dashboardScrollTop = dashboard?.scrollTop ?? 0;
     inner.innerHTML = onlineChannelModal(this.store.state);
     const restoreScroll = () => {
       const stock = inner.querySelector<HTMLElement>('.online-dashboard-stock-list');
       const storefront = inner.querySelector<HTMLElement>('.storefront-product-grid');
-      if (stock) stock.scrollTop = stockScroll;
-      if (storefront) storefront.scrollTop = storefrontScroll;
+      const nextDashboard = inner.querySelector<HTMLElement>('.online-dashboard');
+      if (stock) stock.scrollTo(stockScroll.left, stockScroll.top);
+      if (storefront) storefront.scrollTo(storefrontScroll.left, storefrontScroll.top);
+      if (nextDashboard) nextDashboard.scrollTop = dashboardScrollTop;
     };
     restoreScroll();
     requestAnimationFrame(restoreScroll);
+  }
+  private commitInventoryPrice(input: HTMLInputElement) {
+    const productId = input.dataset.price ?? '';
+    const rawPrice = input.value.trim();
+    const digits = rawPrice.replace(/[^0-9]/g, '').slice(0, 9);
+    const product = products.find(item => item.id === productId);
+    if (!product || !digits) {
+      if (product) input.value = (this.store.state.prices[productId] ?? product.sellPrice).toLocaleString('vi-VN');
+      return false;
+    }
+    const price = Number(digits);
+    const currentPrice = this.store.state.prices[productId] ?? product.sellPrice;
+    input.value = price.toLocaleString('vi-VN');
+    if (price === currentPrice) return true;
+    return this.store.setPrice(productId, price);
   }
   private atelierCanvasPoint(canvas: HTMLElement, event: PointerEvent) {
     return this.atelierCanvasClientPoint(canvas, event.clientX, event.clientY);

@@ -78,8 +78,8 @@ export function dramaRequestFromSale(state: GameState, result: SaleResult): Dram
     heat: state.dramaHeat,
     trust: state.dramaTrust,
     recentDramas: (Array.isArray(state.dramas) ? state.dramas : [])
-      .slice(0, 6)
-      .map(drama => `${drama.title}: ${drama.post}`.slice(0, 240)),
+      .slice(0, 10)
+      .map(drama => `${drama.title}: ${drama.post}`.slice(0, 420)),
   };
 }
 
@@ -118,7 +118,7 @@ function parseDrama(value: unknown, context: DramaRequest): SocialDrama | undefi
 
 export async function requestSocialDrama(context: DramaRequest): Promise<SocialDrama> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12_000);
+  const timeout = window.setTimeout(() => controller.abort(), 20_000);
   try {
     const response = await fetch('/api/drama', {
       method: 'POST',

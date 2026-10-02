@@ -2,18 +2,18 @@ import { customers, furniture, levels, products } from '../data/catalog';
 import { looks } from '../data/fashion';
 import type { GameStore } from '../systems/store';
 import { MUSIC_TRACKS, type AudioSystem } from '../systems/audio';
-import { activeCustomer, activeVisit, buyPrice, currentEvent, currentTrend, DAY_DURATION, dailyRent, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, landExpansion, landSize, landTier, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
+import { activeCustomer, activeVisit, buyPrice, currentEvent, currentTrend, DAY_DURATION, dailyRent, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, isTrending, landExpansion, landSize, landTier, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
 import { defaultFilters } from '../systems/catalog';
 import { icon } from './icons';
 import { characterSvg, courierSvg, ownerPortrait, productSvg } from '../art/svg';
 import { isWallFurnitureId } from '../systems/rules';
 import { compact, compactMoney, escapeHtml, furnitureImage, money, productImage } from './format';
-import { boutiqueProfileModal, campaignModal, debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, nameShopModal, onlineChannelModal, onlineOrderModal, questPanel, serveModal, socialPanel, staffManagementModal, summaryModal, supplierSelectionPanel, trendPanel, upgradeModal } from './panels';
+import { boutiqueProfileModal, campaignModal, debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, livestreamModal, livestreamRequest, nameShopModal, onlineChannelModal, onlineOrderModal, onlineStockModal, questPanel, regularOrderDetailModal, regularPickupModal, serveModal, socialPanel, staffManagementModal, summaryModal, supplierSelectionPanel, trendPanel, upgradeModal } from './panels';
 import type { ShopScene } from '../scenes/ShopScene';
 import { DISPLAY_GUIDE_SEEN, displayGuideModal, needsDisplayGuide } from './displayGuide';
 import { CAMPAIGN_GUIDE_SEEN } from '../systems/campaigns';
 import { customerCareModal } from './operationsPanel';
-import type { ArrivedOrderSummary, ProductDesignBrushTip, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SocialDrama, StaffAssignment, Style, SupplierId } from '../types';
+import type { ArrivedOrderSummary, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, ProductDesignBrushTip, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SocialDrama, StaffAssignment, Style, SupplierId } from '../types';
 import { supplierFor, suppliers } from '../systems/operations';
 import { gameCalendarDate } from '../systems/calendar';
 import { lookupCustomer } from '../systems/customerGen';
@@ -25,10 +25,11 @@ import type Moveable from 'moveable';
 import { requestDramaReplyEvaluation, requestSocialDrama } from '../systems/drama';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
-type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-order' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
+type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'debt-warning' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-stock' | 'online-order' | 'regular-order-detail' | 'regular-pickup' | 'livestream' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'atelier-recipe-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
 const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
+const SHOW_DEBUG_BUTTON = false;
 const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
   const duration = Math.max(1, totalSeconds);
   const remaining = Math.max(0, Math.min(duration, remainingSeconds));
@@ -127,6 +128,7 @@ export class GameUI {
   private tutorialRetry = 0;
   private displayGuideTimer = 0;
   private onlineOrderId = '';
+  private regularOrderId = '';
   private pendingDisplayUpgradeUid = '';
   private campaignGuideForced = false;
   private campaignGuideTimer = 0;
@@ -136,6 +138,22 @@ export class GameUI {
   private catalogSearchTimer = 0;
   private composingCatalogSearch = false;
   private onlineHandoverProductIds: string[] = [];
+  private livestreamPoolIds: string[] = [];
+  private livestreamRound = 0;
+  private livestreamSelectedIds: string[] = [];
+  private livestreamDiscount = 0;
+  private livestreamResult?: LivestreamRoundResult;
+  private livestreamStats: LivestreamSessionStats = { viewers: 0, peakViewers: 0, likes: 0, orders: 0, intents: 0, revenue: 0, followers: 0 };
+  private livestreamDuration = 0;
+  private livestreamRemaining = 0;
+  private livestreamEndsAt = 0;
+  private livestreamComments: LivestreamComment[] = [];
+  private livestreamActiveRequest?: LivestreamRequest;
+  private livestreamIntentResolved = false;
+  private livestreamIntentStartedAt = 0;
+  private livestreamNextCommentAt = 0;
+  private livestreamNextIntentAt = 0;
+  private livestreamCommentSequence = 0;
   private serveVisitId = '';
   private pendingDayDramaDay = 0;
   private pendingDayDrama?: Promise<SocialDrama>;
@@ -178,7 +196,9 @@ export class GameUI {
         }
         if (this.modal === 'staff') this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(store.state, this.staffDetailUid);
         if (this.modal === 'online') this.refreshOnlineChannel();
+        if (this.modal === 'online-stock') this.refreshOnlineStock();
         if (this.modal === 'online-order') this.refreshOnlineOrder();
+        if (this.modal === 'regular-order-detail') this.refreshRegularOrderDetail();
         if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(store.state, this.financeSection);
         if (this.modal === 'debug') this.dialog.querySelector('.dialog-inner')!.innerHTML = debugPanel(store.state);
         this.queueTutorialCue();
@@ -219,7 +239,7 @@ export class GameUI {
       }
     });
     setInterval(() => {
-      const modalPausesSale = !['none', 'serve', 'online-order', 'campaign'].includes(this.modal);
+      const modalPausesSale = !['none', 'serve', 'online-order', 'regular-pickup', 'campaign'].includes(this.modal);
       const paused = document.hidden || this.moveMode || this.tab !== 'shop' || modalPausesSale;
       if (!paused && this.store.state.phase === 'open') {
         this.saleTickProgress += this.saleSpeed / 4;
@@ -229,6 +249,7 @@ export class GameUI {
         }
       }
       this.updatePatience();
+      this.updateLivestreamClock();
     }, 250);
     window.addEventListener('pagehide', () => store.save.write(store.state));
     document.addEventListener('visibilitychange', () => { if (document.hidden) store.save.write(store.state); });
@@ -280,11 +301,10 @@ export class GameUI {
             <div class="shop-profile-hud coc-profile-hud">
               <button class="level-capsule coc-level-box" data-action="upgrade-open" title="Nâng cấp boutique" aria-label="Cấp boutique 1">
                 <span class="coc-profile-avatar">${ownerPortrait(46)}</span>
-                <strong class="level-title coc-level-num" id="shop-level-pill">01</strong>
               </button>
               <div class="coc-bar-column">
                 <button class="shop-profile-main coc-name-btn" data-action="home" aria-label="Mở trang cá nhân boutique" title="Trang cá nhân boutique">
-                  <strong id="shop-hud-name">My Little Boutique</strong>
+                  <strong id="shop-hud-name">My Little Boutique</strong><small id="shop-hud-level">· Cấp 1</small>
                 </button>
                 <div class="coc-exp-bar-track" data-action="upgrade-open" title="Kinh nghiệm boutique">
                   <div class="coc-exp-bar-fill" id="shop-hud-exp-bar">
@@ -337,6 +357,7 @@ export class GameUI {
                 <span class="staff-fab-icon land-fab-icon">${icon('hudExpand')}</span><span class="staff-fab-copy"><strong>Mở rộng</strong><small id="land-expand-status">Xem nâng cấp</small></span>
               </button>
               <button id="finance-hud-button" class="finance-hud-button hud-edge-button" data-action="finance-open" aria-label="Tài chính" title="Quản lý tài chính"><span>${icon('hudFinance')}</span><strong>Tài chính</strong><b id="finance-hud-badge" class="coc-badge-pill" hidden></b></button>
+              <button id="debug-button" class="debug-fab" data-action="debug-open" aria-label="Mở công cụ test bug" title="Test bug" hidden>${icon('settings')} Test bug</button>
               <!-- Center Zone: Sub-HUD Tools -->
               <div class="game-center-hud"></div>
 
@@ -392,7 +413,7 @@ export class GameUI {
     };
     document.addEventListener('pointerdown', protectCanvasFromUiPointer, true);
     document.addEventListener('pointerup', protectCanvasFromUiPointer, true);
-    const swipeSurfaceSelector = '.outfit-grid';
+    const swipeSurfaceSelector = '.outfit-grid, .livestream-product-grid, .livestream-pin-list, .online-stock-grid';
     let swipePointerId = -1;
     let swipeStartX = 0;
     let swipeStartY = 0;
@@ -727,6 +748,7 @@ export class GameUI {
     });
     document.addEventListener('change', event => {
       const target = event.target as HTMLInputElement | HTMLSelectElement;
+      if (target.id === 'loan-amount-input' && !target.value.replace(/\D/g, '')) target.value = '0';
       if (target.id === 'music-volume') {
         const volume = Number(target.value) / 100;
         this.store.setMusicVolume(volume);
@@ -824,6 +846,21 @@ export class GameUI {
     });
     document.addEventListener('input', event => {
       const target = event.target as HTMLInputElement;
+      if (target.id === 'loan-amount-input') {
+        const caret = target.selectionStart ?? target.value.length;
+        const digitsBeforeCaret = target.value.slice(0, caret).replace(/\D/g, '').length;
+        const digits = target.value.replace(/\D/g, '').slice(0, 9);
+        const formatted = digits ? Number(digits).toLocaleString('vi-VN') : '';
+        target.value = formatted;
+
+        let nextCaret = 0;
+        let seenDigits = 0;
+        while (nextCaret < formatted.length && seenDigits < digitsBeforeCaret) {
+          if (/\d/.test(formatted[nextCaret])) seenDigits++;
+          nextCaret++;
+        }
+        target.setSelectionRange(nextCaret, nextCaret);
+      }
       if (target.matches('.inv-price-input[data-price]')) {
         const caret = target.selectionStart ?? target.value.length;
         const digitsBeforeCaret = target.value.slice(0, caret).replace(/\D/g, '').length;
@@ -1550,6 +1587,8 @@ export class GameUI {
       case 'couture-advance': this.store.advanceCouture(target?.dataset.value as 'safe' | 'premium'); break;
       case 'couture-deliver': this.store.deliverCouture(); break;
       case 'online-open': this.openModal('online', onlineChannelModal(this.store.state)); break;
+      case 'online-stock-open': this.openModal('online-stock', onlineStockModal(this.store.state)); break;
+      case 'online-stock-back': this.openModal('online', onlineChannelModal(this.store.state)); break;
       case 'online-list': this.store.listOnlineProduct(id); break;
       case 'online-unlist': this.store.removeOnlineProduct(id); break;
       case 'online-toggle': this.store.toggleOnlineChannel(); break;
@@ -1573,10 +1612,114 @@ export class GameUI {
         if (this.store.cancelOnlineOrder(id)) this.closeModal();
         break;
       }
+      case 'regular-order-open':
+        this.regularOrderId = id;
+        this.openModal('regular-order-detail', regularOrderDetailModal(this.store.state, id));
+        break;
+      case 'regular-order-back': this.openModal('online', onlineChannelModal(this.store.state)); break;
+      case 'regular-pack': this.store.packRegularOnlineOrder(id); break;
+      case 'regular-cancel':
+        if (this.store.cancelRegularOnlineOrder(id) && this.modal === 'regular-order-detail') this.openModal('online', onlineChannelModal(this.store.state));
+        break;
+      case 'regular-pack-all': this.store.packAllRegularOrdersWithStaff(); break;
+      case 'packing-upgrade': this.store.upgradeOnlinePacking(); break;
+      case 'regular-pickup-open': this.openModal('regular-pickup', regularPickupModal(this.store.state)); break;
+      case 'regular-pickup-confirm':
+        if (this.store.fulfillPackedRegularOrders()) this.closeModal();
+        break;
+      case 'livestream-open': {
+        this.livestreamPoolIds = [];
+        this.livestreamRound = 0;
+        this.livestreamSelectedIds = [];
+        this.livestreamDiscount = 0;
+        this.livestreamResult = undefined;
+        const startingViewers = this.initialLivestreamViewers();
+        this.livestreamStats = { viewers: startingViewers, peakViewers: startingViewers, likes: 0, orders: 0, intents: 0, revenue: 0, followers: 0 };
+        this.livestreamDuration = Math.max(1, Math.ceil(dayDuration(this.store.state) / 3));
+        this.livestreamRemaining = this.livestreamDuration;
+        this.livestreamEndsAt = 0;
+        this.livestreamComments = [];
+        this.livestreamActiveRequest = undefined;
+        this.openModal('livestream', livestreamModal(this.store.state, this.livestreamPoolIds));
+        break;
+      }
+      case 'livestream-pool-select': {
+        this.livestreamPoolIds = this.livestreamPoolIds.includes(id)
+          ? this.livestreamPoolIds.filter(productId => productId !== id)
+          : [...this.livestreamPoolIds, id];
+        this.refreshLivestream();
+        break;
+      }
+      case 'livestream-start':
+        if (this.livestreamPoolIds.length >= 1 && this.store.beginLivestream()) {
+          this.livestreamRound = 1;
+          this.livestreamSelectedIds = [];
+          this.livestreamDiscount = 0;
+          this.livestreamResult = undefined;
+          this.livestreamDuration = Math.max(1, Math.ceil(dayDuration(this.store.state) / 3));
+          this.livestreamRemaining = this.livestreamDuration;
+          this.livestreamEndsAt = Date.now() + this.livestreamDuration * 1000;
+          this.livestreamComments = [];
+          this.livestreamActiveRequest = livestreamRequest(this.store.state, this.livestreamPoolIds, this.livestreamRound);
+          this.livestreamIntentResolved = false;
+          this.livestreamIntentStartedAt = Date.now();
+          this.livestreamNextCommentAt = Date.now() + 500;
+          this.livestreamNextIntentAt = 0;
+          this.pushLivestreamComment(this.livestreamActiveRequest.handle, this.livestreamActiveRequest.question, 'intent');
+          this.refreshLivestream();
+        }
+        break;
+      case 'livestream-round-select': {
+        this.livestreamSelectedIds = this.livestreamSelectedIds[0] === id ? [] : [id];
+        this.refreshLivestream();
+        break;
+      }
+      case 'livestream-discount':
+        this.livestreamDiscount = Math.max(0, Math.min(.15, Number(target?.dataset.value) || 0));
+        this.refreshLivestream();
+        break;
+      case 'livestream-submit': {
+        this.resolveLivestreamIntent();
+        break;
+      }
+      case 'livestream-next':
+        if (this.livestreamRemaining <= 0) { this.refreshLivestream(); break; }
+        this.livestreamRound++;
+        this.livestreamSelectedIds = [];
+        this.livestreamDiscount = 0;
+        this.livestreamResult = undefined;
+        this.refreshLivestream();
+        break;
+      case 'livestream-end':
+        this.livestreamEndsAt = 0;
+        this.livestreamRemaining = 0;
+        this.livestreamResult = undefined;
+        this.refreshLivestream();
+        break;
+      case 'livestream-finish':
+        this.livestreamEndsAt = 0;
+        this.openModal('online', onlineChannelModal(this.store.state));
+        break;
       case 'debug-open': this.openModal('debug', debugPanel(this.store.state)); break;
       case 'debug-action':
         if (id === 'customer' || id === 'online-order') this.closeModal();
-        this.store.debug(id);
+        if (this.store.debug(id)) {
+          if (id === 'online-stock') this.openModal('online-stock', onlineStockModal(this.store.state));
+          if (id === 'regular-order') this.openModal('online', onlineChannelModal(this.store.state));
+          if (id === 'livestream-reset') {
+            this.livestreamPoolIds = [];
+            this.livestreamRound = 0;
+            this.livestreamSelectedIds = [];
+            this.livestreamDiscount = 0;
+            this.livestreamResult = undefined;
+            const startingViewers = this.initialLivestreamViewers();
+            this.livestreamStats = { viewers: startingViewers, peakViewers: startingViewers, likes: 0, orders: 0, intents: 0, revenue: 0, followers: 0 };
+            this.livestreamDuration = Math.max(1, Math.ceil(dayDuration(this.store.state) / 3));
+            this.livestreamRemaining = this.livestreamDuration;
+            this.livestreamEndsAt = 0;
+            this.openModal('livestream', livestreamModal(this.store.state, this.livestreamPoolIds));
+          }
+        }
         break;
       case 'social-section':
         if (id === 'feed' || id === 'recruitment') {
@@ -1733,7 +1876,8 @@ export class GameUI {
         break;
       case 'take-loan': {
         const input = this.dialog.querySelector<HTMLInputElement>('#loan-amount-input');
-        this.store.takeLoan(Number(input?.value));
+        const amount = Number(input?.value.replace(/\D/g, '') || 0);
+        this.store.takeLoan(amount);
         if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
         break;
       }
@@ -2042,6 +2186,8 @@ export class GameUI {
     if (landButton) landButton.hidden = hiddenFromShop || this.store.state.phase === 'open';
     const financeButton = document.querySelector<HTMLElement>('#finance-hud-button');
     if (financeButton) financeButton.hidden = hiddenFromShop;
+    const debugButton = document.querySelector<HTMLElement>('#debug-button');
+    if (debugButton) debugButton.hidden = !SHOW_DEBUG_BUTTON || hiddenFromShop;
   }
   private updateDockVisibility() {
     const isMainShop = this.tab === 'shop' && this.modal === 'none' && !this.moveMode;
@@ -2116,11 +2262,9 @@ export class GameUI {
       soundBtn.innerHTML = icon(s.sound ? 'volume' : 'mute');
       soundBtn.setAttribute('aria-pressed', String(s.sound));
     }
-    const pill = document.querySelector('#shop-level-pill');
-    if (pill) {
-      pill.textContent = String(s.level);
-      pill.closest('.level-capsule')?.setAttribute('aria-label', `Cấp boutique ${s.level}`);
-    }
+    const profileLevel = document.querySelector<HTMLElement>('#shop-hud-level');
+    if (profileLevel) profileLevel.textContent = `· Cấp ${s.level}`;
+    document.querySelector('.level-capsule')?.setAttribute('aria-label', `Cấp boutique ${s.level}`);
 
     const timerVal = s.dayTimer ?? DAY_DURATION;
     const shiftDuration = dayDuration(s);
@@ -2153,12 +2297,18 @@ export class GameUI {
         </button>
       </span>`;
     }).join('');
-    const courierCards = s.onlineOrders.map((order, index) => `<span class="sale-card-aura is-courier-aura"><button class="sale-character-card is-customer is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn online ${index + 1}">
+    const courierCards = s.onlineOrders.map((order, index) => `<span class="sale-card-aura is-courier-aura"><button class="sale-character-card is-customer is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn hỏa tốc ${index + 1}">
       <strong class="sale-card-name">Shipper ${String(index + 1).padStart(2, '0')}</strong>
       <span class="sale-character-art">${courierSvg(order.courierVariant)}</span>
       <div class="sale-card-countdown sale-card-delivery">${icon('bag')}<span>Giao</span></div>
     </button></span>`).join('');
-    interactionBar.innerHTML = customerCards + courierCards;
+    const packedRegularCount = s.regularOnlineOrders.filter(order => order.packed).length;
+    const regularCourierCard = packedRegularCount ? `<span class="sale-card-aura is-courier-aura is-regular-pickup"><button class="sale-character-card is-customer is-courier" data-action="regular-pickup-open" aria-label="Bàn giao ${packedRegularCount} đơn thường">
+      <strong class="sale-card-name">Shipper tổng</strong>
+      <span class="sale-character-art">${courierSvg(2)}</span>
+      <div class="sale-card-countdown sale-card-delivery">${icon('box')}<span>${packedRegularCount} kiện</span></div>
+    </button></span>` : '';
+    interactionBar.innerHTML = customerCards + courierCards + regularCourierCard;
     interactionBar.hidden = !isOpen || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || !interactionBar.childElementCount;
     document.querySelector('#shop-status')!.innerHTML = '';
 
@@ -2243,8 +2393,14 @@ export class GameUI {
       const status = onlineButton.querySelector<HTMLElement>('#online-fab-status');
       if (status) status.textContent = !s.onlineChannelEnabled ? 'Đang tạm đóng' : s.onlineOrders.length ? `${s.onlineOrders.length} shipper đang chờ` : s.onlineListings.length ? `${s.onlineListings.length} mẫu đang bán` : 'Chưa đăng hàng';
       const badge = onlineButton.querySelector<HTMLElement>('#online-fab-badge');
-      if (badge) { badge.hidden = s.onlineOrders.length === 0; badge.textContent = String(s.onlineOrders.length); }
+      if (badge) {
+        const onlineNoticeCount = s.onlineOrders.length + s.regularOnlineOrders.filter(order => !order.packed).length;
+        badge.hidden = onlineNoticeCount === 0;
+        badge.textContent = String(onlineNoticeCount);
+      }
     }
+    const debugButton = document.querySelector<HTMLElement>('#debug-button');
+    if (debugButton) debugButton.hidden = !SHOW_DEBUG_BUTTON || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || isOpen;
     const landButton = document.querySelector<HTMLButtonElement>('#land-expand-button');
     if (landButton) {
       const expansion = nextLandExpansion(s);
@@ -2585,23 +2741,190 @@ export class GameUI {
   private refreshOnlineChannel() {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
     if (!inner) return;
-    const stockList = inner.querySelector<HTMLElement>('.online-dashboard-stock-list');
     const storefrontGrid = inner.querySelector<HTMLElement>('.storefront-product-grid');
     const dashboard = inner.querySelector<HTMLElement>('.online-dashboard');
-    const stockScroll = { left: stockList?.scrollLeft ?? 0, top: stockList?.scrollTop ?? 0 };
     const storefrontScroll = { left: storefrontGrid?.scrollLeft ?? 0, top: storefrontGrid?.scrollTop ?? 0 };
     const dashboardScrollTop = dashboard?.scrollTop ?? 0;
     inner.innerHTML = onlineChannelModal(this.store.state);
     const restoreScroll = () => {
-      const stock = inner.querySelector<HTMLElement>('.online-dashboard-stock-list');
       const storefront = inner.querySelector<HTMLElement>('.storefront-product-grid');
       const nextDashboard = inner.querySelector<HTMLElement>('.online-dashboard');
-      if (stock) stock.scrollTo(stockScroll.left, stockScroll.top);
       if (storefront) storefront.scrollTo(storefrontScroll.left, storefrontScroll.top);
       if (nextDashboard) nextDashboard.scrollTop = dashboardScrollTop;
     };
     restoreScroll();
     requestAnimationFrame(restoreScroll);
+  }
+  private refreshOnlineStock() {
+    const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+    if (!inner) return;
+    const list = inner.querySelector<HTMLElement>('.online-stock-grid');
+    const scrollTop = list?.scrollTop ?? 0;
+    const scrollLeft = list?.scrollLeft ?? 0;
+    inner.innerHTML = onlineStockModal(this.store.state);
+    const restoreScroll = () => {
+      const nextList = inner.querySelector<HTMLElement>('.online-stock-grid');
+      if (nextList) nextList.scrollTo(scrollLeft, scrollTop);
+    };
+    restoreScroll();
+    requestAnimationFrame(restoreScroll);
+  }
+  private refreshLivestream() {
+    if (this.modal !== 'livestream') return;
+    const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+    if (!inner) return;
+    const oldList = inner.querySelector<HTMLElement>('.livestream-pin-list');
+    const productScroll = oldList?.scrollTop ?? 0;
+    const oldRail = inner.querySelector<HTMLElement>('.livestream-product-grid');
+    const railScrollLeft = oldRail?.scrollLeft ?? 0;
+    const oldFeed = inner.querySelector<HTMLElement>('.livestream-feed');
+    const feedScrollTop = oldFeed?.scrollTop ?? 0;
+    const feedScrollHeight = oldFeed?.scrollHeight ?? 0;
+    const followLatestComment = !oldFeed || feedScrollHeight - feedScrollTop - oldFeed.clientHeight < 24;
+    const request = this.livestreamActiveRequest ?? (this.livestreamRound ? livestreamRequest(this.store.state, this.livestreamPoolIds, this.livestreamRound) : undefined);
+    const pinnedChance = request && this.livestreamSelectedIds[0]
+      ? this.store.previewLivestreamProduct(this.livestreamSelectedIds[0], request, this.livestreamDiscount, this.livestreamResponseAge()).conversionChance
+      : 0;
+    inner.innerHTML = livestreamModal(this.store.state, this.livestreamPoolIds, this.livestreamRound, this.livestreamSelectedIds, this.livestreamDiscount, this.livestreamResult, this.livestreamStats, this.livestreamRemaining, this.livestreamDuration, this.livestreamComments, request, pinnedChance);
+    const nextList = inner.querySelector<HTMLElement>('.livestream-pin-list');
+    if (nextList) nextList.scrollTop = productScroll;
+    const restoreRailScroll = () => {
+      const nextRail = inner.querySelector<HTMLElement>('.livestream-product-grid');
+      if (nextRail) nextRail.scrollLeft = railScrollLeft;
+    };
+    const restoreFeedScroll = () => {
+      const nextFeed = inner.querySelector<HTMLElement>('.livestream-feed');
+      if (!nextFeed) return;
+      nextFeed.scrollTop = followLatestComment
+        ? nextFeed.scrollHeight
+        : feedScrollTop;
+    };
+    restoreRailScroll();
+    restoreFeedScroll();
+    requestAnimationFrame(() => {
+      restoreRailScroll();
+      restoreFeedScroll();
+    });
+  }
+  private updateLivestreamClock() {
+    if (this.modal !== 'livestream' || this.livestreamRound < 1 || !this.livestreamEndsAt) return;
+    const now = Date.now();
+    const remaining = Math.max(0, Math.ceil((this.livestreamEndsAt - now) / 1000));
+    if (remaining !== this.livestreamRemaining) {
+      this.livestreamRemaining = remaining;
+      const clock = this.dialog.querySelector<HTMLElement>('.livestream-time strong');
+      const progress = this.dialog.querySelector<HTMLElement>('.livestream-time-track b');
+      if (clock) clock.textContent = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
+      if (progress) progress.style.width = `${Math.max(0, Math.min(100, remaining / Math.max(1, this.livestreamDuration) * 100))}%`;
+      this.syncLivestreamChance();
+    }
+    if (remaining) this.advanceLivestreamFeed(now);
+    if (!remaining) {
+      this.livestreamEndsAt = 0;
+      this.livestreamResult = undefined;
+      this.refreshLivestream();
+      this.audio.play('reward');
+    }
+  }
+  private initialLivestreamViewers() {
+    const s = this.store.state;
+    return Math.max(8, Math.round(s.followers * .04 + s.reputation * 7 + s.onlineRating * 5 + s.onlineReviews * 1.2));
+  }
+  private pushLivestreamComment(handle: string, text: string, kind: LivestreamComment['kind']) {
+    this.livestreamCommentSequence++;
+    this.livestreamComments.push({ id: `live-comment-${this.livestreamCommentSequence}`, handle, text, kind });
+    if (this.livestreamComments.length > 40) this.livestreamComments.splice(0, this.livestreamComments.length - 40);
+  }
+  private syncLivestreamFeed() {
+    const feed = this.dialog.querySelector<HTMLElement>('.livestream-feed');
+    if (feed) {
+      const oldHeight = feed.scrollHeight;
+      const oldTop = feed.scrollTop;
+      const stickToLatest = oldHeight - oldTop - feed.clientHeight < 24;
+      feed.innerHTML = this.livestreamComments.map(comment => `<div class="livestream-feed-comment is-${comment.kind}"><span>${escapeHtml(comment.handle.replace('@', '').charAt(0).toUpperCase() || '?')}</span><p><strong>${escapeHtml(comment.handle)}</strong> ${escapeHtml(comment.text)}</p></div>`).join('');
+      feed.scrollTop = stickToLatest ? feed.scrollHeight : oldTop;
+    }
+    const heading = this.dialog.querySelector<HTMLElement>('.livestream-studio-header h2');
+    if (heading) heading.textContent = `${compact(this.livestreamStats.viewers)} đang xem`;
+    const vitalSpans = this.dialog.querySelectorAll<HTMLElement>('.livestream-vitals > span');
+    if (vitalSpans[0]) vitalSpans[0].innerHTML = `${icon('heart')} ${compact(this.livestreamStats.likes)}`;
+    if (vitalSpans[1]) vitalSpans[1].innerHTML = `${icon('bag')} ${this.livestreamStats.orders} đơn`;
+    if (vitalSpans[2]) vitalSpans[2].textContent = `${this.livestreamStats.intents ? Math.round(this.livestreamStats.orders / this.livestreamStats.intents * 100) : 0}% chốt`;
+    const viewerBadge = this.dialog.querySelector<HTMLElement>('.livestream-video-top b');
+    if (viewerBadge) viewerBadge.innerHTML = `${icon('users')} ${compact(this.livestreamStats.viewers)}`;
+  }
+  private advanceLivestreamFeed(now: number) {
+    if (!this.livestreamActiveRequest) return;
+    if (!this.livestreamIntentResolved && this.livestreamSelectedIds.length && now - this.livestreamIntentStartedAt >= 2600) {
+      this.resolveLivestreamIntent();
+    }
+    if (this.livestreamIntentResolved && this.livestreamNextIntentAt && now >= this.livestreamNextIntentAt) {
+      this.livestreamRound++;
+      this.livestreamActiveRequest = livestreamRequest(this.store.state, this.livestreamPoolIds, this.livestreamRound);
+      this.livestreamIntentResolved = false;
+      this.livestreamIntentStartedAt = now;
+      this.livestreamNextIntentAt = 0;
+      this.pushLivestreamComment(this.livestreamActiveRequest.handle, this.livestreamActiveRequest.question, 'intent');
+      this.refreshLivestream();
+      return;
+    }
+    if (now < this.livestreamNextCommentAt) return;
+    const chatter = [
+      ['@mit.uot', 'Chị chủ nay xinh quá trời'], ['@camcam', 'Em vào ngắm thôi chứ ví đang khóc'],
+      ['@be.tho', 'Shop live tới mấy giờ vậy ạ'], ['@ngoc.daily', 'Ai mới vào thả tim cho shop đi'],
+      ['@meomeo', 'Đèn live màu xinh ghê'], ['@tui.la.ai', 'Có ai vừa đi học về giống tui không'],
+      ['@banhbao', 'Nói chuyện cuốn quá quên luôn giờ ngủ'], ['@linh.wears', 'Shop quay gần chất vải xem với'],
+      ['@gau.bong', 'Xin vía hôm nay săn được đồ đẹp'], ['@an.nhien', 'Mạng em lag mà vẫn cố xem nè'],
+    ];
+    const filler = chatter[Math.floor(Math.random() * chatter.length)];
+    this.pushLivestreamComment(filler[0], filler[1], 'chat');
+    const pinned = products.find(product => product.id === this.livestreamSelectedIds[0]);
+    const hotMomentum = pinned ? (isTrending(this.store.state, pinned) ? 2 : -1) : -2;
+    const saleMomentum = Math.min(4, this.livestreamStats.orders) - (this.livestreamStats.intents > 1 && !this.livestreamStats.orders ? 2 : 0);
+    const luck = currentEvent(this.store.state).extra > 0 ? 1 : 0;
+    const randomSwing = Math.floor(Math.random() * 7) - 3;
+    const viewerCeiling = Math.max(80, Math.round(this.store.state.followers * .4 + this.store.state.reputation * 22 + this.livestreamStats.orders * 45));
+    this.livestreamStats.viewers = Math.max(3, Math.min(viewerCeiling, this.livestreamStats.viewers + hotMomentum + saleMomentum + luck + randomSwing));
+    this.livestreamStats.peakViewers = Math.max(this.livestreamStats.peakViewers, this.livestreamStats.viewers);
+    this.livestreamStats.likes += Math.max(1, Math.round(this.livestreamStats.viewers / 18));
+    const baseDelay = Math.max(2200, Math.min(7200, 7800 - Math.log10(this.livestreamStats.viewers + 1) * 1750));
+    this.livestreamNextCommentAt = now + baseDelay * (.78 + Math.random() * .65);
+    this.syncLivestreamFeed();
+  }
+  private resolveLivestreamIntent() {
+    if (this.livestreamIntentResolved || !this.livestreamActiveRequest || !this.livestreamSelectedIds[0]) return;
+    this.livestreamIntentResolved = true;
+    this.livestreamResult = this.store.resolveLivestreamRound([this.livestreamSelectedIds[0]], this.livestreamActiveRequest, this.livestreamDiscount, this.livestreamResponseAge());
+    this.livestreamStats.intents++;
+    this.livestreamStats.viewers = Math.max(3, this.livestreamStats.viewers + this.livestreamResult.viewersDelta);
+    this.livestreamStats.peakViewers = Math.max(this.livestreamStats.peakViewers, this.livestreamStats.viewers);
+    this.livestreamStats.likes += this.livestreamResult.likesGain;
+    this.livestreamStats.followers += this.livestreamResult.followerGain;
+    if (this.livestreamResult.orderCreated) {
+      this.livestreamStats.orders++;
+      this.livestreamStats.revenue += this.livestreamResult.total;
+      this.pushLivestreamComment(this.livestreamActiveRequest.handle, 'Em chốt mẫu đang ghim nha shop!', 'sale');
+      this.pushLivestreamComment('@hethong', 'Đã có khách đặt hàng thành công', 'system');
+    } else {
+      this.pushLivestreamComment(this.livestreamActiveRequest.handle, 'Để em suy nghĩ thêm nha shop.', 'chat');
+    }
+    const intentGap = Math.max(3200, 7000 - Math.min(3500, this.livestreamStats.viewers * 22));
+    this.livestreamNextIntentAt = Date.now() + intentGap + Math.random() * 1800;
+    this.livestreamNextCommentAt = Math.min(this.livestreamNextCommentAt, Date.now() + 700);
+    this.syncLivestreamFeed();
+    this.audio.play(this.livestreamResult.orderCreated ? 'sale' : 'click');
+  }
+  private livestreamResponseAge() {
+    return this.livestreamIntentStartedAt ? Math.max(0, (Date.now() - this.livestreamIntentStartedAt) / 1000) : 0;
+  }
+  private syncLivestreamChance() {
+    if (!this.livestreamActiveRequest || !this.livestreamSelectedIds[0] || this.livestreamIntentResolved) return;
+    const chance = this.store.previewLivestreamProduct(this.livestreamSelectedIds[0], this.livestreamActiveRequest, this.livestreamDiscount, this.livestreamResponseAge()).conversionChance;
+    const percent = Math.round(chance * 100);
+    const pinLabel = this.dialog.querySelector<HTMLElement>('.livestream-video-pin small > b');
+    const footerValue = this.dialog.querySelector<HTMLElement>('.livestream-pin-footer strong');
+    if (pinLabel) pinLabel.textContent = `${percent}% chốt`;
+    if (footerValue) footerValue.textContent = `${percent}%`;
   }
   private commitInventoryPrice(input: HTMLInputElement) {
     const productId = input.dataset.price ?? '';
@@ -2893,6 +3216,15 @@ export class GameUI {
     };
     restoreScroll();
     requestAnimationFrame(restoreScroll);
+  }
+  private refreshRegularOrderDetail() {
+    const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+    if (!inner) return;
+    if (!this.store.state.regularOnlineOrders.some(order => order.id === this.regularOrderId)) {
+      this.openModal('online', onlineChannelModal(this.store.state));
+      return;
+    }
+    inner.innerHTML = regularOrderDetailModal(this.store.state, this.regularOrderId);
   }
   openOnlineOrder(orderId: string) {
     if (!this.store.state.onlineOrders.some(order => order.id === orderId)) return;

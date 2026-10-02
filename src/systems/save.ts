@@ -1,5 +1,5 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { ActiveBrandCampaign, AtelierCraftHistoryEntry, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, CustomProduct, DayStats, GameState, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, ReputationCrisis, ReturnCase, SocialDrama, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, TailoringJob, VipAppointment } from '../types';
+import type { ActiveBrandCampaign, AtelierCraftHistoryEntry, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, CustomProduct, DayStats, GameState, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, RegularOnlineOrder, ReputationCrisis, ReturnCase, SocialDrama, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, TailoringJob, VipAppointment } from '../types';
 import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, displayLevel, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, STAFF_SALARY_MIN } from './rules';
 import { generateDayCustomers, lookupCustomer, registerCustomer } from './customerGen';
 import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProducts } from '../data/atelier';
@@ -28,6 +28,7 @@ export function initialState(): GameState {
     inventory: {}, prices: {},
     pendingOrders: [], pendingMaterialOrders: [],
     onlineListings: [], onlineOrders: [], onlineNextOrderIn: 8, onlineChannelEnabled: false,
+    regularOnlineOrders: [], regularOnlineNextOrderIn: 5, onlinePackingLevel: 1, lastLivestreamDay: 0,
     onlineRating: 5, onlineReviews: 0, onlineSales: 0,
     campaignSeason: 1, industryReputation: 0, activeCampaign: null, campaignAvailableDay: 1, completedCampaigns: [],
     activeSupplierId: 'local', supplierRelations: { local: 10, wholesale: 0, global: 0 },
@@ -487,6 +488,9 @@ export function parseSave(raw: string | null): GameState {
     state.onlineReviews = Math.floor(finite(s.onlineReviews, 0, 999999));
     state.onlineSales = Math.floor(finite(s.onlineSales, 0, 999999));
     state.onlineNextOrderIn = Math.floor(finite(s.onlineNextOrderIn, 8, 60));
+    state.regularOnlineNextOrderIn = Math.floor(finite(s.regularOnlineNextOrderIn, 5, 60));
+    state.onlinePackingLevel = Math.max(1, Math.min(3, Math.floor(finite(s.onlinePackingLevel, 1, 3))));
+    state.lastLivestreamDay = Math.floor(finite(s.lastLivestreamDay, 0, 99999));
     state.onlineChannelEnabled = typeof s.onlineChannelEnabled === 'boolean'
       ? s.onlineChannelEnabled
       : fresh.onlineChannelEnabled;
@@ -593,6 +597,23 @@ export function parseSave(raw: string | null): GameState {
         courierVariant: Math.max(0, Math.min(2, order.courierVariant)),
       })).slice(0, 5);
     }
+    state.regularOnlineOrders = Array.isArray(s.regularOnlineOrders) ? s.regularOnlineOrders.filter((raw: unknown): raw is RegularOnlineOrder => {
+      if (!raw || typeof raw !== 'object') return false;
+      const order = raw as RegularOnlineOrder;
+      return typeof order.id === 'string' && Array.isArray(order.productIds) && order.productIds.length > 0
+        && order.productIds.every(id => typeof id === 'string' && products.some(product => product.id === id))
+        && typeof order.customerName === 'string' && typeof order.customerHandle === 'string'
+        && Number.isFinite(order.price) && order.price > 0 && Number.isFinite(order.fee) && order.fee >= 0
+        && Number.isSafeInteger(order.createdDay) && Number.isSafeInteger(order.dueDay);
+    }).map((order: RegularOnlineOrder) => ({
+      id: order.id.slice(0, 100),
+      productIds: order.productIds.filter((id, index, all) => all.indexOf(id) === index).slice(0, 6),
+      customerName: order.customerName.slice(0, 40), customerHandle: order.customerHandle.slice(0, 40),
+      price: Math.round(order.price), fee: Math.round(order.fee),
+      createdDay: Math.max(1, order.createdDay), dueDay: Math.max(order.createdDay, order.dueDay),
+      packed: order.packed === true,
+      source: order.source === 'livestream' ? 'livestream' : 'storefront',
+    })).filter((order: RegularOnlineOrder) => order.productIds.length > 0).slice(0, [0, 6, 10, 15][state.onlinePackingLevel]) : [];
     // Pending international orders
     state.pendingOrders = [];
     if (Array.isArray(s.pendingOrders)) {

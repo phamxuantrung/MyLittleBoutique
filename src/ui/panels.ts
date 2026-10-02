@@ -2,8 +2,8 @@ import { courierSvg, ownerPortrait } from '../art/svg';
 import { shopReviewStats } from '../systems/reviews';
 import { categories, customers, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
-import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
-import type { Furniture, GameState, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
+import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
+import type { Furniture, GameState, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
 import { avatarImage, compact, escapeHtml, furnitureImage, money, productImage, staffImage } from './format';
 import { icon } from './icons';
 import { CAMPAIGN_GUIDE_SEEN, campaignOffers, campaignRank, categoryNames, styleNames } from '../systems/campaigns';
@@ -76,7 +76,6 @@ export function campaignModal(s: GameState, forceGuide = false) {
       return `<article class="campaign-offer campaign-offer-${index + 1}"><div class="campaign-offer-number">0${index + 1}</div><span class="campaign-client">${escapeHtml(offer.client)}</span><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.description)}</p><div class="campaign-offer-focus">${icon(offer.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}</div><ul><li>${offer.targetUnits} sản phẩm đúng brief</li><li>${money(offer.targetRevenue)} doanh thu</li>${offer.targetOnline ? `<li>${offer.targetOnline} đơn online</li>` : ''}<li>${offer.durationDays} ngày thực hiện</li></ul><div class="campaign-offer-reward"><small>THƯỞNG</small><strong>${money(offer.rewardMoney)} · ${offer.rewardXp} XP</strong><span>+${offer.prestigeReward} danh tiếng ngành</span></div><button class="btn btn-primary" data-action="campaign-start" data-id="${offer.id}" ${s.phase === 'open' ? 'disabled' : ''}>Nhận brief ${icon('arrow')}</button></article>`;
     }).join('')}</div>${s.phase === 'open' ? '<p class="campaign-open-note">Hãy đóng cửa sau ngày bán để nhận một brief mới.</p>' : ''}</div>`;
 }
-
 export function questPanel(s: GameState) {
   const quests = [
     { id: 'sales', label: 'Bán 3 món đồ', desc: 'Tư vấn hoặc bán lẻ sản phẩm cho khách ghé tiệm', count: s.stats.sold, target: 3, art: 'bag', rewardMoney: 35000, rewardXp: 10 },
@@ -479,6 +478,9 @@ export function debugPanel(s: GameState) {
     <section class="debug-section debug-feature-section">
       <div class="debug-section-title"><span>TÍNH NĂNG VẬN HÀNH MỚI</span><small>Tạo toàn bộ tình huống để kiểm tra ngay</small></div>
       <button class="debug-customer-button debug-feature-seed" data-action="debug-action" data-id="advanced-features">${icon('shield')} <span><strong>Fake dữ liệu tính năng mới</strong><small>Cấp 5 · nhân viên · đổi trả · VIP · couture · khủng hoảng · hai đơn đang giao</small></span>${icon('arrow')}</button>
+      <button class="debug-customer-button debug-online-stock-test" data-action="debug-action" data-id="online-stock">${icon('box')} <span><strong>Test kho bán hàng online</strong><small>Chuẩn bị hàng và mở modal thêm sản phẩm mới</small></span>${icon('arrow')}</button>
+      <button class="debug-customer-button debug-livestream-test" data-action="debug-action" data-id="livestream-reset">${icon('video')} <span><strong>Khôi phục phiên livestream</strong><small>Mở lại lượt live hôm nay và chuẩn bị 6 sản phẩm</small></span>${icon('arrow')}</button>
+      <button class="debug-customer-button debug-regular-order-test" data-action="debug-action" data-id="regular-order">${icon('bag')} <span><strong>Tạo đơn hàng thường ảo</strong><small>Tạo đơn storefront có tồn kho để thử đóng gói</small></span>${icon('arrow')}</button>
     </section>
     <section class="debug-section debug-atelier-section">
       <div class="debug-section-title"><span>XƯỞNG MAY CÁ NHÂN</span><small>${atelierOwnershipLabel} · ${atelierMaterialCount} vật liệu · ${s.customProducts.length} bản thiết kế · ${s.tailoringJobs.length} đơn đang may</small></div>
@@ -1212,16 +1214,30 @@ const onlineOrderProductIds = (order: OnlineOrder) => order.productIds?.length ?
 
 export function onlineChannelModal(s: GameState) {
   const listed = s.onlineListings.map(id => products.find(product => product.id === id)).filter(Boolean) as typeof products;
-  const warehouse = products.filter(product => Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id)) > 0);
+  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
+    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
   const eligibleListings = listed.filter(product => {
-    const reserved = s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(product.id)).length;
-    return Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id)) > reserved;
+    return Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id)) > reservedFor(product.id);
   });
   const orderChance = onlineOrderChance(s, eligibleListings.map(product => product.id));
   const chancePercent = Math.round(orderChance * 1000) / 10;
   const reachReady = orderChance >= .04;
   const reachLabel = orderChance < .01 ? 'Gần như chưa có lượt mua' : orderChance < .05 ? 'Có lượt xem, rất ít đơn' : orderChance < .16 ? 'Bắt đầu ra đơn' : orderChance < .34 ? 'Kênh đang tăng trưởng' : 'Nhu cầu đang rất tốt';
   const reachProgress = Math.round(Math.min(100, orderChance / .4 * 100));
+  const packingCapacity = [0, 6, 10, 15][Math.max(1, Math.min(3, s.onlinePackingLevel))];
+  const packedOrders = s.regularOnlineOrders.filter(order => order.packed);
+  const pendingPacking = s.regularOnlineOrders.filter(order => !order.packed);
+  const packingUpgradeCost = s.onlinePackingLevel === 1 ? 350000 : 900000;
+  const stockStaff = s.employees.find(employee => employee.assignment === 'stock' && (!employee.leaveUntilDay || employee.leaveUntilDay < s.day));
+  const regularOrdersMarkup = s.regularOnlineOrders.length ? s.regularOnlineOrders.map(order => {
+    const orderProducts = order.productIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
+    return `<article class="regular-order-card ${order.packed ? 'is-packed' : ''}">
+      <button class="regular-order-card-hitbox" data-action="regular-order-open" data-id="${order.id}" aria-label="Xem chi tiết đơn của ${escapeHtml(order.customerHandle)}"></button>
+      <header><span>${order.source === 'livestream' ? icon('video') : icon('globe')}</span><p><strong>${escapeHtml(order.customerHandle)}</strong><small>${order.source === 'livestream' ? 'Từ livestream' : 'Từ gian hàng'} · hạn ngày ${String(order.dueDay).padStart(2, '0')}</small></p></header>
+      <ul>${orderProducts.map(product => `<li>${productImage(product)}<span>${escapeHtml(product.name)}</span></li>`).join('')}</ul>
+      <footer><p><strong>${money(order.price - order.fee)}</strong><span>${order.productIds.length} sản phẩm</span></p><i>${icon('arrow')}</i></footer>
+    </article>`;
+  }).join('') : `<section class="regular-orders-empty">${icon('box')}<strong>Chưa có đơn thường</strong><small>Đơn vẫn tự đến khi kênh mở. Livestream giúp tăng thêm lượt đặt.</small></section>`;
   return `<div class="online-channel-modal">
     <div class="online-workspace">
       <section class="online-storefront-preview">
@@ -1229,7 +1245,7 @@ export function onlineChannelModal(s: GameState) {
         <div class="storefront-promo"><div><small>NEW COLLECTION</small><strong>Chọn một món thật hợp gu bạn</strong><span>Giao từ boutique trong ngày</span></div>${icon('bag')}</div>
         <div class="storefront-products-heading"><div><small>SẢN PHẨM</small><strong>${listed.length} mẫu đang bán</strong></div><span>${icon('filter')} Mới nhất</span></div>
         <div class="online-listing-grid storefront-product-grid">${listed.length ? listed.map(product => {
-          const available = Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id));
+          const available = Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id) - reservedFor(product.id));
           return `<article class="online-product-card is-listed"><span class="online-product-photo">${productImage(product)}<i>${escapeHtml(product.style)}</i></span><div class="online-product-info"><strong>${escapeHtml(product.name)}</strong><b>${money(s.prices[product.id] ?? product.sellPrice)}</b><small>${available ? `Còn ${available} sản phẩm` : 'Tạm hết hàng'}</small></div><button data-action="online-unlist" data-id="${product.id}" ${s.phase === 'open' ? 'disabled' : ''} aria-label="Gỡ ${escapeHtml(product.name)}" title="Gỡ khỏi gian hàng">${icon('close')}</button></article>`;
         }).join('') : `<div class="online-empty"><span>${icon('globe')}</span><strong>Gian hàng đang trống</strong><small>Chọn sản phẩm ở dashboard để bắt đầu bán online.</small></div>`}</div>
       </section>
@@ -1238,17 +1254,54 @@ export function onlineChannelModal(s: GameState) {
         <header class="online-dashboard-header"><div><small>QUẢN LÝ KÊNH</small><h2>Dashboard online</h2></div><div class="online-dashboard-header-actions"><span>${s.onlineChannelEnabled ? 'Đang hoạt động' : 'Đang tạm đóng'}</span><button class="staff-modal-close online-channel-close" data-action="close-modal" aria-label="Đóng kênh bán hàng online">${icon('close')}</button></div></header>
         <div class="online-dashboard-metrics"><div><span>${icon('star')}</span><small>Đánh giá</small><strong>${s.onlineRating.toFixed(1)}</strong></div><div><span>${icon('user')}</span><small>Follower</small><strong>${compact(s.followers)}</strong></div><div><span>${icon('truck')}</span><small>Đã giao</small><strong>${s.onlineSales}</strong></div></div>
         <div class="online-dashboard-reach ${reachReady ? 'is-ready' : ''}"><div><small>${reachLabel}</small><strong>${chancePercent}% mỗi lượt kiểm tra</strong></div><div class="online-dashboard-reach-track"><b style="width:${reachProgress}%"></b></div><span>Xét điểm kênh, số review, uy tín shop, follower, giá bán và độ đa dạng sản phẩm.</span></div>
-        <div class="online-dashboard-stock"><div class="dashboard-block-heading"><div><small>KHO HÀNG</small><strong>Chọn sản phẩm để đăng</strong></div><span>${warehouse.length} mẫu</span></div>
-          <div class="online-dashboard-stock-list">${warehouse.length ? warehouse.map(product => {
-            const available = Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id));
-            const isListed = s.onlineListings.includes(product.id);
-            return `<button class="online-dashboard-stock-item ${isListed ? 'is-listed' : ''}" data-action="online-list" data-id="${product.id}" ${isListed || s.phase === 'open' ? 'disabled' : ''}><b class="online-stock-quantity">×${available}</b><span>${productImage(product)}</span><div><small>${escapeHtml(product.style)}</small><strong>${escapeHtml(product.name)}</strong><em>${money(s.prices[product.id] ?? product.sellPrice)}</em></div><i>${isListed ? icon('check') : icon('plus')}</i></button>`;
-          }).join('') : `<div class="online-empty"><span>${icon('box')}</span><strong>Kho chưa có hàng sẵn sàng</strong><small>Nhập thêm hàng hoặc cất bớt sản phẩm khỏi kệ.</small></div>`}</div>
-        </div>
-        <footer class="online-dashboard-note">${icon('coin')} Phí nền tảng 14% mỗi đơn thành công.</footer>
+        <button class="online-stock-launch" data-action="online-stock-open">
+          <span class="online-stock-launch-icon">${icon('box')}<i>${icon('plus')}</i></span>
+          <span class="online-stock-launch-copy"><small>KHO SẢN PHẨM</small><strong>Thêm sản phẩm vào gian hàng</strong><em>Chọn hàng trong kho để đăng bán online</em></span>
+          <b><span>${listed.length} đang bán</span>${icon('arrow')}</b>
+        </button>
+        <section class="online-regular-board">
+          <header class="regular-board-heading"><p><small>ĐƠN THƯỜNG</small><strong>${s.regularOnlineOrders.length}/${packingCapacity} đơn · ${packedOrders.length} kiện sẵn sàng</strong></p><button class="livestream-launch" data-action="livestream-open" ${!s.onlineChannelEnabled || !listed.length || s.phase === 'open' || s.lastLivestreamDay === s.day || s.regularOnlineOrders.length >= packingCapacity ? 'disabled' : ''}>${icon('video')} ${s.lastLivestreamDay === s.day ? 'Đã live hôm nay' : 'Livestream'}</button></header>
+          <nav class="regular-board-actions" aria-label="Quản lý đóng gói">
+            <button data-action="regular-pack-all" ${!pendingPacking.length || !stockStaff || s.phase === 'open' ? 'disabled' : ''}>${icon('user')} ${stockStaff ? `${escapeHtml(stockStaff.name)} đóng tất cả` : 'Cần nhân viên kho'}</button>
+            ${s.onlinePackingLevel < 3 ? `<button data-action="packing-upgrade" ${s.phase === 'open' ? 'disabled' : ''}>${icon('arrow')} Nâng cấp ${money(packingUpgradeCost)}</button>` : `<span>${icon('check')} Khu đóng gói tối đa</span>`}
+          </nav>
+          <section class="regular-orders-list">${regularOrdersMarkup}</section>
+        </section>
+        <footer class="online-dashboard-note">${icon('coin')} Phí đơn thường 8% · đơn hỏa tốc 14%.</footer>
       </section>
     </div>
   </div>`;
+}
+
+export function onlineStockModal(s: GameState) {
+  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
+    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
+  const warehouse = products.map(product => ({
+    product,
+    available: Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id) - reservedFor(product.id)),
+  })).filter(item => item.available > 0 || s.onlineListings.includes(item.product.id));
+  const listedCount = warehouse.filter(item => s.onlineListings.includes(item.product.id)).length;
+  const canEdit = s.phase !== 'open';
+  return `<section class="online-stock-modal">
+    <header class="online-stock-header">
+      <button class="online-stock-back" data-action="online-stock-back" aria-label="Quay lại kênh online">${icon('arrow')}</button>
+      <span class="online-stock-header-icon">${icon('box')}</span>
+      <div><small>KÊNH BÁN HÀNG ONLINE</small><h2>Chọn sản phẩm để đăng</h2></div>
+    </header>
+    <div class="online-stock-summary">
+      <span><b>${warehouse.length}</b><small>Mẫu có trong kho</small></span>
+      <span><b>${listedCount}</b><small>Đang bán online</small></span>
+      ${canEdit ? '<em>Chạm vào dấu + để đăng bán</em>' : `<em>${icon('lock')} Chỉ chỉnh sửa trước khi mở cửa</em>`}
+    </div>
+    <div class="online-stock-grid">${warehouse.length ? warehouse.map(({ product, available }) => {
+      const isListed = s.onlineListings.includes(product.id);
+      return `<article class="online-stock-card online-product-card ${isListed ? 'is-listed' : ''}">
+        <span class="online-stock-card-photo online-product-photo">${productImage(product)}<i>${escapeHtml(product.style)}</i><b>×${available}</b></span>
+        <div class="online-product-info"><strong>${escapeHtml(product.name)}</strong><b>${money(s.prices[product.id] ?? product.sellPrice)}</b><small>${isListed ? 'Đang bán trên gian hàng' : `Còn ${available} sản phẩm trong kho`}</small></div>
+        <button data-action="${isListed ? 'online-unlist' : 'online-list'}" data-id="${product.id}" ${!canEdit ? 'disabled' : ''} aria-label="${isListed ? 'Gỡ' : 'Đăng'} ${escapeHtml(product.name)}" title="${isListed ? 'Gỡ khỏi gian hàng' : 'Thêm vào gian hàng'}">${icon(isListed ? 'check' : 'plus')}</button>
+      </article>`;
+    }).join('') : `<div class="online-stock-empty">${icon('box')}<strong>Kho chưa có hàng sẵn sàng</strong><small>Nhập thêm hàng hoặc cất bớt sản phẩm khỏi kệ để đăng bán.</small></div>`}</div>
+  </section>`;
 }
 
 export function onlineOrderModal(s: GameState, orderId: string, selectedProductIds: string[] = []) {
@@ -1256,7 +1309,9 @@ export function onlineOrderModal(s: GameState, orderId: string, selectedProductI
   if (!order) return onlineChannelModal(s);
   const requestedIds = onlineOrderProductIds(order);
   const requestedProducts = requestedIds.map(id => products.find(item => item.id === id)).filter((product): product is Product => !!product);
-  const handoverQuantity = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - s.onlineOrders.filter(candidate => candidate.id !== orderId && onlineOrderProductIds(candidate).includes(productId)).length);
+  const handoverQuantity = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0)
+    - s.onlineOrders.filter(candidate => candidate.id !== orderId && onlineOrderProductIds(candidate).includes(productId)).length
+    - s.regularOnlineOrders.filter(candidate => candidate.productIds.includes(productId)).length);
   const warehouse = products.filter(product => (s.inventory[product.id] ?? 0) > 0);
   const selectedProducts = selectedProductIds.map(id => warehouse.find(product => product.id === id && handoverQuantity(product.id) > 0)).filter((product): product is Product => !!product);
   const readyToShip = selectedProducts.length === requestedProducts.length;
@@ -1268,7 +1323,7 @@ export function onlineOrderModal(s: GameState, orderId: string, selectedProductI
       <div class="handover-requested"><span class="handover-requested-images">${requestedProducts.map(product => productImage(product)).join('')}</span><div><small>${requestedProducts.length} SẢN PHẨM CẦN GIAO</small><strong>${requestedProducts.map(product => escapeHtml(product.name)).join(' · ')}</strong></div></div>
     </aside>
     <section class="handover-consultation-right studio-col-right">
-      <section class="handover-consultation-request consultation-request"><div class="consultation-request-copy"><span class="eyebrow">${icon('truck')} GIAO ĐƠN ONLINE</span><p>Chọn đúng ${requestedProducts.length} món khách đã đặt để bàn giao cho shipper.</p></div><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></section>
+      <section class="handover-consultation-request consultation-request"><div class="consultation-request-copy"><span class="eyebrow">${icon('truck')} GIAO ĐƠN HỎA TỐC</span><p>Chọn đúng ${requestedProducts.length} món khách đã đặt để bàn giao cho shipper.</p></div><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></section>
       <div class="online-handover-grid outfit-grid">${warehouse.length ? warehouse.map(product => {
       const available = handoverQuantity(product.id);
       const selected = selectedProductIds.includes(product.id);
@@ -1277,6 +1332,181 @@ export function onlineOrderModal(s: GameState, orderId: string, selectedProductI
       <footer class="handover-actions studio-checkout-dock"><button class="handover-cancel" data-action="online-cancel-order" data-id="${order.id}">${icon('close')} Hủy đơn</button><div><span>Đã chọn <strong>${selectedProducts.length}/${requestedProducts.length} món</strong></span><button class="handover-submit studio-serve-btn ${readyToShip ? 'is-ready' : 'is-empty'}" data-action="online-hand-over" data-order="${order.id}" ${readyToShip ? '' : 'disabled'}><span class="serve-btn-icon-wrap">${icon('truck')}</span><span class="serve-btn-copy"><strong class="serve-btn-label">${readyToShip ? 'Giao cho shipper' : 'Chưa đủ sản phẩm'}</strong><small>${selectedProducts.length}/${requestedProducts.length} món đã chọn</small></span><span class="serve-btn-arrow">${icon('arrow')}</span></button></div></footer>
     </section>
   </div>`;
+}
+
+export function regularOrderDetailModal(s: GameState, orderId: string) {
+  const order = s.regularOnlineOrders.find(item => item.id === orderId);
+  if (!order) return onlineChannelModal(s);
+  const orderProducts = order.productIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
+  const listPrice = order.price;
+  const net = Math.max(0, order.price - order.fee);
+  return `<section class="regular-order-detail">
+    <header>
+      <button class="regular-order-detail-back" data-action="regular-order-back" aria-label="Quay lại Dashboard">${icon('arrow')}</button>
+      <span>${order.source === 'livestream' ? icon('video') : icon('globe')}</span>
+      <div><small>${order.source === 'livestream' ? 'ĐƠN TỪ LIVESTREAM' : 'ĐƠN TỪ GIAN HÀNG'}</small><h2>${escapeHtml(order.customerHandle)}</h2></div>
+    </header>
+    <div class="regular-order-detail-body">
+      <section class="regular-order-detail-products"><div><small>SẢN PHẨM KHÁCH ĐẶT</small><strong>${orderProducts.length} món</strong></div>${orderProducts.map(product => `<article><span>${productImage(product)}</span><p><small>${escapeHtml(product.style)}</small><strong>${escapeHtml(product.name)}</strong><em>${money(s.prices[product.id] ?? product.sellPrice)}</em></p><b>${icon('check')}</b></article>`).join('')}</section>
+      <aside class="regular-order-detail-summary">
+        <small>CHI TIẾT THANH TOÁN</small>
+        <dl><div><dt>Khách thanh toán</dt><dd>${money(listPrice)}</dd></div><div><dt>Phí sàn 8%</dt><dd>−${money(order.fee)}</dd></div><div><dt>Shop nhận</dt><dd>${money(net)}</dd></div></dl>
+        <p>${icon('clock')} Tạo ngày ${String(order.createdDay).padStart(2, '0')} · hạn xử lý ngày ${String(order.dueDay).padStart(2, '0')}</p>
+      </aside>
+    </div>
+    <footer><button class="regular-order-detail-cancel" data-action="regular-cancel" data-id="${order.id}" ${s.phase === 'open' ? 'disabled' : ''}>${icon('close')} Hủy đơn</button>${order.packed ? `<button data-action="regular-order-back">${icon('check')} Đã đóng gói · Quay lại</button>` : `<button data-action="regular-pack" data-id="${order.id}" ${s.phase === 'open' ? 'disabled' : ''}>${icon('box')} Xác nhận đóng gói</button>`}</footer>
+  </section>`;
+}
+
+export function regularPickupModal(s: GameState) {
+  const packed = s.regularOnlineOrders.filter(order => order.packed);
+  const productCount = packed.reduce((sum, order) => sum + order.productIds.length, 0);
+  const net = packed.reduce((sum, order) => sum + Math.max(0, order.price - order.fee), 0);
+  return `<section class="regular-pickup-modal">
+    <header><span>${icon('truck')}</span><p><small>SHIPPER TỔNG</small><h2>Bàn giao đơn thường</h2><strong>${packed.length} kiện · ${productCount} sản phẩm</strong></p><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
+    <ul>${packed.map(order => `<li><span>${icon('box')}</span><p><strong>${escapeHtml(order.customerHandle)}</strong><small>${order.productIds.map(id => products.find(product => product.id === id)?.name ?? '').filter(Boolean).join(' · ')}</small></p><b>${money(order.price - order.fee)}</b></li>`).join('')}</ul>
+    <footer><p><small>THU VỀ SAU PHÍ</small><strong>${money(net)}</strong></p><button data-action="regular-pickup-confirm" ${packed.length ? '' : 'disabled'}>${icon('truck')} Giao ${packed.length} kiện</button></footer>
+  </section>`;
+}
+
+export function livestreamRequest(s: GameState, poolIds: string[], round: number): LivestreamRequest {
+  const pool = poolIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
+  const target = pool[(Math.max(1, round) - 1) % Math.max(1, pool.length)] ?? products[0];
+  const base = sellPrice(s, target);
+  const occasions = ['đi concert', 'hẹn hò cuối tuần', 'đi cà phê với bạn', 'dự sinh nhật', 'đi làm ngày đầu', 'du lịch cuối tuần', 'chụp ảnh kỷ yếu', 'đi tiệc tối', 'mặc hằng ngày', 'tặng bạn thân', 'đi xem phim', 'đổi phong cách'];
+  const names = ['Miu', 'Bông', 'Hân', 'Nhi', 'Vy', 'An', 'Mây', 'Thư', 'Linh', 'Cam', 'Na', 'Trâm'];
+  const handles = ['@miu.daily', '@bong.closet', '@han.mood', '@nhi.wears', '@vy.pick', '@an.onair', '@may.maccute', '@thu.studio', '@linh.oi', '@cam.cam', '@na.shopping', '@tram.closet'];
+  const index = (Math.max(1, round) + s.day * 3 - 4) % names.length;
+  const maxItems = 1;
+  const budget = Math.max(base, Math.round(base * 1.2 / 10000) * 10000);
+  const categoryLabel = categoryNames[target.category as keyof typeof categoryNames] ?? target.category;
+  const questions = [
+    `Shop ơi, em đang tìm ${categoryLabel} gu ${target.style} để ${occasions[index]}, tầm ${money(budget)} có mẫu nào hợp không?`,
+    `Mẫu ${categoryLabel} nào kiểu ${target.style} đang đáng mua nhất vậy shop? Em có khoảng ${money(budget)}.`,
+    `Em mới vào live, shop ghim giúp một mẫu ${categoryLabel} để ${occasions[index]} với. Ngân sách dưới ${money(budget)} nha.`,
+    `Có ${categoryLabel} màu ${target.colorName} nào xinh không shop? Đúng gu ${target.style} là em chốt luôn á.`,
+    `Shop tư vấn em một món ${categoryLabel} mặc ${occasions[index]} được với, giá khoảng ${money(budget)} đổ lại ạ.`,
+    `Em cần mua gấp ${categoryLabel} phong cách ${target.style}. Mẫu nào ổn trong tầm ${money(budget)} thì ghim em xem nha.`,
+    `Tầm ${money(budget)} thì nên chốt mẫu ${categoryLabel} nào shop? Em thích kiểu ${target.style}, dễ mặc một chút.`,
+    `Shop có mẫu nào giống vibe ${target.style} để ${occasions[index]} không? Ghim đúng ${categoryLabel} là em xem giá liền.`,
+    `Em mua tặng bạn, bạn em mê ${target.style}. Shop chọn giúp ${categoryLabel} khoảng ${money(budget)} nha.`,
+    `Mẫu ${categoryLabel} nào lên hình đẹp nhất vậy shop? Em cần để ${occasions[index]}, ngân sách ${money(budget)}.`,
+    `Nếu có voucher thì ${categoryLabel} gu ${target.style} nào đáng chốt nhất ạ? Em không muốn vượt ${money(budget)}.`,
+    `Ai mua ${categoryLabel} bên shop rồi cho em xin review với. Shop ghim mẫu ${target.style} tầm ${money(budget)} nha.`,
+  ];
+  const intentStrengths = [.02, 0, .03, .12, .02, .1, 0, .04, .05, .03, -.02, -.08];
+  const discountSensitivities = [.15, .05, .2, 0, .15, 0, .1, .05, .12, .08, .65, .18];
+  return {
+    style: target.style,
+    category: target.category,
+    budget,
+    maxItems,
+    handle: handles[index],
+    displayName: names[index],
+    occasion: occasions[index],
+    question: questions[index],
+    intentStrength: intentStrengths[index],
+    discountSensitivity: discountSensitivities[index],
+  };
+}
+
+export function legacyLivestreamModal(s: GameState, poolIds: string[], round = 0, selectedIds: string[] = [], discount = 0, result?: LivestreamRoundResult, session?: LivestreamSessionStats, remainingSeconds = 0, durationSeconds = 0) {
+  const listed = s.onlineListings.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
+  const capacity = [0, 6, 10, 15][Math.max(1, Math.min(3, s.onlinePackingLevel))];
+  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
+    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
+  const availableFor = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - displayedQuantity(s, productId) - reservedFor(productId));
+  if (!round) return `<section class="livestream-modal livestream-setup">
+    <header><span class="live-dot">LIVE</span><div><small>PHÒNG LIVE CỦA ${escapeHtml(s.shopName)}</small><h2>Chuẩn bị giỏ hàng livestream</h2></div><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
+    <div class="livestream-setup-facts"><span>${icon('users')} Khách hỏi trực tiếp</span><span>${icon('box')} Chốt đơn sẽ giữ tồn kho</span><span>${icon('coin')} Phí sàn 8%</span></div>
+    <section class="livestream-product-grid">${listed.map(product => {
+      const available = availableFor(product.id);
+      return `<button class="livestream-product ${poolIds.includes(product.id) ? 'is-selected' : ''} ${available < 1 ? 'is-sold-out' : ''}" data-action="livestream-pool-select" data-id="${product.id}" aria-pressed="${poolIds.includes(product.id)}" ${available < 1 ? 'disabled' : ''}>${isTrending(s, product) ? '<span class="livestream-trend-tag">TREND</span>' : ''}${productImage(product)}<strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.style)}</small><span class="livestream-product-price">${money(sellPrice(s, product))}</span><em>${available ? `Còn ${available}` : 'Hết hàng'}</em></button>`;
+    }).join('')}</section>
+    <footer><span>Không giới hạn mẫu · thời lượng ${Math.ceil(dayDuration(s) / 3)} giây</span><button data-action="livestream-start" ${poolIds.length < 1 ? 'disabled' : ''}>${icon('video')} Lên sóng</button></footer>
+  </section>`;
+
+  const request = livestreamRequest(s, poolIds, round);
+  const selectedProducts = selectedIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
+  const liveTotal = Math.round(selectedProducts.reduce((sum, product) => sum + sellPrice(s, product), 0) * (1 - discount));
+  const liveStats = session ?? { viewers: Math.max(18, s.followers), peakViewers: Math.max(18, s.followers), likes: 0, orders: 0, revenue: 0, followers: 0 };
+  const clockLabel = `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+  if (remainingSeconds <= 0) return `<section class="livestream-modal livestream-session livestream-ended">
+    <header><span class="live-dot">ĐÃ KẾT THÚC</span><div><small>TỔNG KẾT PHIÊN LIVE</small><h2>${escapeHtml(s.shopName)}</h2></div></header>
+    <section class="livestream-final-stats"><div>${icon('users')}<small>Đỉnh người xem</small><strong>${compact(liveStats.peakViewers)}</strong></div><div>${icon('heart')}<small>Lượt thích</small><strong>${compact(liveStats.likes)}</strong></div><div>${icon('bag')}<small>Đơn đã chốt</small><strong>${liveStats.orders}</strong></div><div>${icon('coin')}<small>Doanh thu</small><strong>${money(liveStats.revenue)}</strong></div></section>
+    <p class="livestream-final-note">Phiên live đã mang về <strong>+${liveStats.followers} follower</strong>. Các đơn vừa chốt đang nằm trong danh sách đơn thường và cần được đóng gói.</p>
+    <footer><span>${poolIds.length} sản phẩm đã xuất hiện trong live</span><button data-action="livestream-finish">${icon('arrow')} Xem đơn hàng</button></footer>
+  </section>`;
+  return `<section class="livestream-modal livestream-session">
+    <header><span class="live-dot">● LIVE</span><div><small>BÌNH LUẬN ${round}</small><h2>${compact(liveStats.viewers)} đang xem</h2></div><nav class="livestream-vitals"><span>${icon('heart')} ${compact(liveStats.likes)}</span><span>${icon('bag')} ${liveStats.orders} đơn</span><button data-action="livestream-end">Kết thúc</button></nav></header>
+    <div class="livestream-time"><span><i>●</i><small>Thời gian còn lại</small><strong>${clockLabel}</strong></span><button data-action="livestream-end">Kết thúc live</button></div>
+    <blockquote class="livestream-comment"><span>${escapeHtml(request.displayName.charAt(0))}</span><div><strong>${escapeHtml(request.displayName)} <small>${escapeHtml(request.handle)}</small></strong><p>${escapeHtml(request.question)}</p><em>Ưu tiên ${escapeHtml(categoryNames[request.category as keyof typeof categoryNames] ?? request.category)} · tối đa ${request.maxItems} món</em></div></blockquote>
+    ${result ? `<section class="livestream-result ${result.orderCreated ? 'is-success' : ''}"><span>${result.orderCreated ? icon('check') : icon('heart')}</span><p><strong>${result.orderCreated ? 'Khách đã thanh toán' : 'Khách chưa hoàn tất đơn'}</strong><small>${escapeHtml(result.reason)}</small><em>Phù hợp ${result.score}% · khả năng chốt ${Math.round(result.conversionChance * 100)}% · ${result.viewersDelta >= 0 ? '+' : ''}${result.viewersDelta} người xem</em></p></section>` : `
+      <section class="livestream-product-grid">${poolIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product).map(product => {
+        const available = availableFor(product.id);
+        return `<button class="livestream-product ${selectedIds.includes(product.id) ? 'is-selected' : ''} ${available < 1 ? 'is-sold-out' : ''}" data-action="livestream-round-select" data-id="${product.id}" aria-pressed="${selectedIds.includes(product.id)}" ${available < 1 ? 'disabled' : ''}>${productImage(product)}<strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.style)} · ${money(sellPrice(s, product))}</small><em>${available ? `Còn ${available}` : 'Hết hàng'}</em></button>`;
+      }).join('')}</section>
+      <nav class="livestream-discounts" aria-label="Voucher livestream">${[0, .05, .1, .15].map(value => `<button class="${discount === value ? 'is-selected' : ''}" data-action="livestream-discount" data-value="${value}">${value ? `Voucher -${Math.round(value * 100)}%` : 'Không giảm'}</button>`).join('')}</nav>
+    `}
+    <footer><p><small>${result?.orderCreated ? `THU SAU PHÍ ${money(Math.max(0, result.total - result.fee))}` : 'GIÁ KHÁCH THANH TOÁN'}</small><strong>${money(result?.total ?? liveTotal)}</strong>${!result && discount > 0 ? `<em>Giá gốc ${money(selectedProducts.reduce((sum, product) => sum + sellPrice(s, product), 0))}</em>` : ''}</p>${result ? `<button data-action="livestream-next">Đọc bình luận tiếp ${icon('arrow')}</button>` : `<button data-action="livestream-submit" ${!selectedIds.length || selectedIds.length > request.maxItems ? 'disabled' : ''}>${icon('bag')} Ghim sản phẩm & chốt</button>`}</footer>
+  </section>`;
+}
+
+export function livestreamModal(
+  s: GameState,
+  poolIds: string[],
+  round = 0,
+  selectedIds: string[] = [],
+  discount = 0,
+  result?: LivestreamRoundResult,
+  session?: LivestreamSessionStats,
+  remainingSeconds = 0,
+  _durationSeconds = 0,
+  comments: LivestreamComment[] = [],
+  _activeRequest?: LivestreamRequest,
+  pinnedChance = 0,
+) {
+  if (!round) return legacyLivestreamModal(s, poolIds, round, selectedIds, discount, result, session, remainingSeconds, _durationSeconds);
+  const liveStats = session ?? { viewers: Math.max(18, s.followers), peakViewers: Math.max(18, s.followers), likes: 0, orders: 0, intents: 0, revenue: 0, followers: 0 };
+  const pinnedId = selectedIds[0] ?? '';
+  const pinned = products.find(product => product.id === pinnedId);
+  const conversionRate = liveStats.intents ? Math.round(liveStats.orders / liveStats.intents * 100) : 0;
+  const clockLabel = `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
+    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
+  const availableFor = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - displayedQuantity(s, productId) - reservedFor(productId));
+  if (remainingSeconds <= 0) return `<section class="livestream-modal livestream-session livestream-ended">
+    <header class="livestream-summary-header"><div><small>TỔNG KẾT PHIÊN LIVE</small><h2>${escapeHtml(s.shopName)}</h2></div></header>
+    <section class="livestream-final-stats"><div>${icon('users')}<small>Đỉnh người xem</small><strong>${compact(liveStats.peakViewers)}</strong></div><div>${icon('heart')}<small>Lượt thích</small><strong>${compact(liveStats.likes)}</strong></div><div>${icon('bag')}<small>Đơn đã chốt</small><strong>${liveStats.orders}</strong></div><div>${icon('chart')}<small>Tỷ lệ chốt</small><strong>${conversionRate}%</strong></div><div>${icon('coin')}<small>Doanh thu</small><strong>${money(liveStats.revenue)}</strong></div></section>
+    <p class="livestream-final-note">Phiên live mang về <strong>+${liveStats.followers} follower</strong>. Các đơn đã chốt nằm trong danh sách đơn thường và cần được đóng gói.</p>
+    <footer><span>${liveStats.intents} nhu cầu mua đã xuất hiện trong phiên</span><button data-action="livestream-finish">${icon('arrow')} Xem đơn hàng</button></footer>
+  </section>`;
+  const productCards = poolIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product).map(product => {
+    const available = availableFor(product.id);
+    const isPinned = product.id === pinnedId;
+    return `<button class="livestream-pin-card ${isPinned ? 'is-pinned' : ''} ${available < 1 ? 'is-sold-out' : ''}" data-action="livestream-round-select" data-id="${product.id}" aria-pressed="${isPinned}" ${available < 1 ? 'disabled' : ''}>
+      <span class="livestream-pin-image">${productImage(product)}</span><span class="livestream-pin-copy"><strong>${escapeHtml(product.name)}${isTrending(s, product) ? '<i class="livestream-inline-trend">TREND</i>' : ''}</strong><small>${escapeHtml(product.style)} · ${money(sellPrice(s, product))}</small><em>${available ? `Còn ${available}` : 'Hết hàng'}</em></span><b>${isPinned ? 'ĐANG GHIM' : 'GHIM'}</b>
+    </button>`;
+  }).join('');
+  const feed = comments.map(comment => `<div class="livestream-feed-comment is-${comment.kind}"><span>${escapeHtml(comment.handle.replace('@', '').charAt(0).toUpperCase() || '?')}</span><p><strong>${escapeHtml(comment.handle)}</strong> ${escapeHtml(comment.text)}</p></div>`).join('');
+  return `<section class="livestream-modal livestream-session livestream-studio">
+    <div class="livestream-two-pane">
+      <section class="livestream-video-pane">
+        <div class="livestream-video-stage">
+          <div class="livestream-video-top"><span>LIVE</span><b>${icon('users')} ${compact(liveStats.viewers)}</b></div>
+          <div class="livestream-time livestream-video-clock"><small>CÒN LẠI</small><strong>${clockLabel}</strong></div>
+          <button class="livestream-video-end" data-action="livestream-end">Kết thúc live</button>
+          ${pinned ? `<div class="livestream-video-pin"><span>${productImage(pinned)}</span><p><small><i>ĐANG GHIM</i><b>${Math.round(pinnedChance * 100)}% chốt</b></small><strong>${escapeHtml(pinned.name)}</strong><em>${money(Math.round(sellPrice(s, pinned) * (1 - discount)))}</em></p><span class="livestream-pin-bag">${icon('bag')}</span></div>` : `<div class="livestream-video-pin is-empty">Chọn một sản phẩm bên phải để ghim</div>`}
+          <div class="livestream-feed" aria-live="polite">${feed}</div>
+        </div>
+      </section>
+      <aside class="livestream-product-pane">
+        <header><div><small>SẢN PHẨM ONLINE</small><h3>Chọn món để ghim</h3></div><span>${poolIds.length} mẫu</span></header>
+        <div class="livestream-pin-list">${productCards}</div>
+        <footer class="livestream-pin-footer"><p><small>TỶ LỆ CHỐT MÓN ĐANG GHIM</small><strong>${pinned ? `${Math.round(pinnedChance * 100)}%` : '—'}</strong></p><nav aria-label="Voucher livestream">${[0, .05, .1, .15].map(value => `<button class="${discount === value ? 'is-selected' : ''}" data-action="livestream-discount" data-value="${value}">${value ? `-${Math.round(value * 100)}%` : 'Giá gốc'}</button>`).join('')}</nav></footer>
+      </aside>
+    </div>
+  </section>`;
 }
 
 export function serveModal(s: GameState, selected: string[], category = 'all') {
@@ -1719,7 +1949,6 @@ export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' 
   const balance = s.loan?.balance ?? 0;
   const remaining = Math.max(0, LOAN_MAX - borrowed);
   const minimum = Math.min(LOAN_MIN, remaining);
-  const suggested = Math.min(700000, remaining);
   const canBorrow = s.phase !== 'open' && remaining > 0;
   const installment = s.loan?.paymentDue ?? 0;
   const rentPerDay = dailyRent(s);
@@ -1737,7 +1966,7 @@ export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' 
   const loanContent = `<section class="finance-tab-card finance-loan-box">
     <div class="finance-tab-summary"><span>Dư nợ vay <b>${money(balance)}</b></span><span>Kỳ cần trả <b>${money(installment)}</b></span><span>Quá hạn <b>${s.loanOverdueDays}/7 ngày</b></span><span>Hạn mức còn lại <b>${money(remaining)}</b></span></div>
     <div class="finance-section-title"><div><span class="eyebrow">VỐN KINH DOANH</span><h3>Vay thêm vốn</h3></div><span class="finance-rate">${(LOAN_DAILY_RATE * 100).toFixed(1)}%/ngày</span></div>
-    <div class="finance-loan-control"><label for="loan-amount-input">Số tiền muốn vay</label><div><input id="loan-amount-input" type="number" min="${minimum}" max="${remaining}" step="10000" value="${suggested}" ${canBorrow ? '' : 'disabled'} aria-label="Số tiền muốn vay"><span>₫</span></div></div>
+    <div class="finance-loan-control"><label for="loan-amount-input">Số tiền muốn vay</label><div><input id="loan-amount-input" type="text" inputmode="numeric" autocomplete="off" value="0" data-min="${minimum}" data-max="${remaining}" ${canBorrow ? '' : 'disabled'} aria-label="Số tiền muốn vay"><span>₫</span></div></div>
     <div class="finance-tab-actions"><button class="btn btn-primary finance-borrow-btn" data-action="take-loan" ${canBorrow ? '' : 'disabled'}>Nhận khoản vay</button><button class="btn btn-secondary" data-action="pay-loan" ${installment <= 0 || s.money < installment || s.phase === 'open' ? 'disabled' : ''}>Trả kỳ vay · ${money(installment)}</button></div>
     <div class="finance-terms"><span>Lãi <b>${(LOAN_DAILY_RATE * 100).toFixed(1)}%/ngày</b></span><span>Kỳ trả <b>${(LOAN_PAYMENT_RATE * 100).toFixed(0)}% vốn/ngày</b></span><span>Đã vay <b>${money(borrowed)}</b></span></div>
   </section>`;

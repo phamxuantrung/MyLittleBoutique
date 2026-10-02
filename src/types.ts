@@ -165,6 +165,57 @@ export interface OnlineOrder {
   productIds?: string[];
   price: number; fee: number; createdDay: number; courierVariant: number;
 }
+export interface RegularOnlineOrder {
+  id: string;
+  productIds: string[];
+  customerName: string;
+  customerHandle: string;
+  price: number;
+  fee: number;
+  createdDay: number;
+  dueDay: number;
+  packed: boolean;
+  source: 'storefront' | 'livestream';
+}
+export interface LivestreamRequest {
+  handle: string;
+  displayName: string;
+  style: string;
+  category: string;
+  budget: number;
+  maxItems: number;
+  occasion: string;
+  question: string;
+  intentStrength: number;
+  discountSensitivity: number;
+}
+export interface LivestreamRoundResult {
+  score: number;
+  orderCreated: boolean;
+  followerGain: number;
+  total: number;
+  listTotal: number;
+  fee: number;
+  conversionChance: number;
+  viewersDelta: number;
+  likesGain: number;
+  reason: string;
+}
+export interface LivestreamSessionStats {
+  viewers: number;
+  peakViewers: number;
+  likes: number;
+  orders: number;
+  intents: number;
+  revenue: number;
+  followers: number;
+}
+export interface LivestreamComment {
+  id: string;
+  handle: string;
+  text: string;
+  kind: 'chat' | 'intent' | 'sale' | 'system';
+}
 export interface CustomerVisit {
   uid: string;
   customerId: string;
@@ -226,6 +277,7 @@ export interface GameState {
   pendingOrders: PendingOrder[];
   pendingMaterialOrders: PendingMaterialOrder[];
   onlineListings: string[]; onlineOrders: OnlineOrder[]; onlineNextOrderIn: number; onlineChannelEnabled: boolean;
+  regularOnlineOrders: RegularOnlineOrder[]; regularOnlineNextOrderIn: number; onlinePackingLevel: number; lastLivestreamDay: number;
   onlineRating: number; onlineReviews: number; onlineSales: number;
   stats: DayStats; posts: SocialPost[]; dramas: SocialDrama[]; dramaHeat: number; dramaTrust: number; nextDramaDay: number; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; musicTrack: string; tutorialDone: boolean;
   employees: StaffMember[]; staffApplicants: StaffCandidate[]; recruitmentPost: RecruitmentPost | null; staffLeaveRequests: StaffLeaveRequest[];

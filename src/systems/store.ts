@@ -1,5 +1,5 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
+import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
 import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
@@ -789,7 +789,7 @@ export class GameStore {
       this.toast('Không thể xóa bản thiết kế đang nằm trên chuyền may.', 'error');
       return false;
     }
-    if (s.onlineOrders.some(order => order.productId === productId || order.productIds?.includes(productId))) {
+    if (s.onlineOrders.some(order => order.productId === productId || order.productIds?.includes(productId)) || s.regularOnlineOrders.some(order => order.productIds.includes(productId))) {
       this.toast('Hãy giao xong đơn online chứa sản phẩm này trước khi xóa.', 'error');
       return false;
     }
@@ -1028,6 +1028,7 @@ export class GameStore {
     this.state.patience = 0;
     this.state.nextArrivalIn = 3 + Math.floor(this.random() * 6);
     this.state.onlineNextOrderIn = 6 + Math.floor(this.random() * 7);
+    this.state.regularOnlineNextOrderIn = 4 + Math.floor(this.random() * 5);
     this.processVipPickupsOnOpen();
     // Refresh danh sách khách cho ngày mới
     this.dayCustomersKey = -1;
@@ -1330,7 +1331,9 @@ export class GameStore {
   }
 
   private onlineReservedQuantity(productId: string, exceptOrderId = '') {
-    return this.state.onlineOrders.reduce((total, order) => total + (order.id !== exceptOrderId && this.onlineOrderProductIds(order).includes(productId) ? 1 : 0), 0);
+    const express = this.state.onlineOrders.reduce((total, order) => total + (order.id !== exceptOrderId && this.onlineOrderProductIds(order).includes(productId) ? 1 : 0), 0);
+    const regular = this.state.regularOnlineOrders.reduce((total, order) => total + (order.productIds.includes(productId) ? 1 : 0), 0);
+    return express + regular;
   }
 
   private onlineHandOverQuantity(productId: string, orderId: string) {
@@ -1339,16 +1342,34 @@ export class GameStore {
 
   private processOnlineChannel() {
     const s = this.state;
-    if (!s.onlineChannelEnabled || !s.onlineListings.length || s.onlineOrders.length >= 5) return;
-    s.onlineNextOrderIn = Math.max(0, s.onlineNextOrderIn - 1);
-    if (s.onlineNextOrderIn > 0) return;
-    s.onlineNextOrderIn = 7 + Math.floor(this.random() * 8);
-    const eligible = s.onlineListings.filter(productId => {
-      return this.onlineWarehouseQuantity(productId) > this.onlineReservedQuantity(productId);
-    });
-    if (!eligible.length) return;
-    const orderChance = onlineOrderChance(s, eligible);
-    if (this.random() >= orderChance) return;
+    if (!s.onlineChannelEnabled || !s.onlineListings.length) return;
+
+    // Express orders keep the original real-time courier flow and get first
+    // claim on their tick. Regular demand is evaluated independently below.
+    if (s.onlineOrders.length < 5) {
+      s.onlineNextOrderIn = Math.max(0, s.onlineNextOrderIn - 1);
+      if (!s.onlineNextOrderIn) {
+        s.onlineNextOrderIn = 7 + Math.floor(this.random() * 8);
+        const expressEligible = s.onlineListings.filter(productId => this.onlineWarehouseQuantity(productId) > this.onlineReservedQuantity(productId));
+        const expressChance = Math.min(.36, onlineOrderChance(s, expressEligible) * .42);
+        if (expressEligible.length && this.random() < expressChance) this.createOnlineOrder(this.pickOnlineBasket(expressEligible));
+      }
+    }
+
+    s.regularOnlineNextOrderIn = Math.max(0, s.regularOnlineNextOrderIn - 1);
+    if (!s.regularOnlineNextOrderIn) {
+      s.regularOnlineNextOrderIn = 5 + Math.floor(this.random() * 7);
+      if (s.regularOnlineOrders.length < this.regularOnlineCapacity()) {
+        const regularEligible = s.onlineListings.filter(productId => this.onlineWarehouseQuantity(productId) > this.onlineReservedQuantity(productId));
+        if (regularEligible.length && this.random() < Math.min(.72, onlineOrderChance(s, regularEligible) * 1.35)) {
+          this.createRegularOnlineOrder(this.pickOnlineBasket(regularEligible), 'storefront');
+        }
+      }
+    }
+  }
+
+  private pickOnlineBasket(eligible: string[]) {
+    const s = this.state;
     const candidates = eligible.map(id => ({ id, weight: onlineProductDemandWeight(s, products.find(product => product.id === id)!) }));
     const sizeRoll = this.random();
     const requestedSize = sizeRoll < .18 ? 3 : sizeRoll < .58 ? 2 : 1;
@@ -1361,7 +1382,7 @@ export class GameStore {
       if (selectedIndex < 0) selectedIndex = candidates.length - 1;
       productIds.push(candidates.splice(selectedIndex, 1)[0].id);
     }
-    this.createOnlineOrder(productIds);
+    return productIds;
   }
 
   private createOnlineOrder(productIds: string | string[]) {
@@ -1381,7 +1402,196 @@ export class GameStore {
     };
     s.onlineOrders.push(order);
     this.commit();
-    this.toast(`Có đơn online mới! Shipper đang chờ lấy ${orderedProducts.length} sản phẩm.`);
+    this.toast(`Có đơn hỏa tốc mới! Shipper đang chờ lấy ${orderedProducts.length} sản phẩm.`);
+    return true;
+  }
+
+  regularOnlineCapacity() {
+    return [0, 6, 10, 15][Math.max(1, Math.min(3, this.state.onlinePackingLevel))];
+  }
+
+  private createRegularOnlineOrder(productIds: string[], source: 'storefront' | 'livestream', discount = 0) {
+    const s = this.state;
+    const ids = [...new Set(productIds)].slice(0, 6);
+    const orderedProducts = ids.map(id => products.find(item => item.id === id)).filter((product): product is Product => !!product);
+    if (!s.onlineChannelEnabled || !orderedProducts.length || orderedProducts.length !== ids.length || s.regularOnlineOrders.length >= this.regularOnlineCapacity()
+      || ids.some(id => this.onlineWarehouseQuantity(id) <= this.onlineReservedQuantity(id))) return false;
+    const listPrice = orderedProducts.reduce((total, product) => total + sellPrice(s, product), 0);
+    const price = Math.max(1, Math.round(listPrice * (1 - Math.max(0, Math.min(.25, discount)))));
+    const fee = Math.max(1000, Math.round(price * .08));
+    const firstNames = ['An', 'Linh', 'Nhi', 'Vy', 'Hân', 'Thư', 'Ngân', 'Mai', 'Châu', 'Trâm'];
+    const suffixes = ['closet', 'daily', 'wears', 'style', 'mood', 'studio'];
+    const customerName = firstNames[Math.floor(this.random() * firstNames.length)];
+    s.regularOnlineOrders.push({
+      id: `regular-${s.day}-${Date.now().toString(36)}-${Math.floor(this.random() * 1e6).toString(36)}`,
+      productIds: ids,
+      customerName,
+      customerHandle: `@${customerName.toLowerCase()}_${suffixes[Math.floor(this.random() * suffixes.length)]}`,
+      price,
+      fee,
+      createdDay: s.day,
+      dueDay: s.day + 1,
+      packed: false,
+      source,
+    });
+    return true;
+  }
+
+  beginLivestream() {
+    const s = this.state;
+    if (s.phase === 'open' || !s.onlineChannelEnabled || !s.onlineListings.length || s.lastLivestreamDay === s.day) return false;
+    if (s.regularOnlineOrders.length >= this.regularOnlineCapacity()) {
+      this.toast('Hàng chờ đơn thường đã đầy. Hãy giao bớt đơn trước khi livestream.', 'error');
+      return false;
+    }
+    s.lastLivestreamDay = s.day;
+    this.commit();
+    return true;
+  }
+
+  resolveLivestreamRound(productIds: string[], request: LivestreamRequest, discount: number, responseDelaySeconds = 0): LivestreamRoundResult {
+    const s = this.state;
+    const selected = [...new Set(productIds)].slice(0, 1).map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
+    const listTotal = selected.reduce((sum, product) => sum + sellPrice(s, product), 0);
+    const total = Math.round(listTotal * (1 - discount));
+    const fee = Math.max(1000, Math.round(total * .08));
+    const stockAvailable = selected.length > 0 && selected.every(product => this.onlineWarehouseQuantity(product.id) > this.onlineReservedQuantity(product.id));
+    const styleMatch = selected.some(product => product.style === request.style || product.secondaryStyles?.includes(request.style as Style));
+    const categoryMatch = selected.some(product => product.category === request.category);
+    const budgetRatio = request.budget > 0 ? total / request.budget : 2;
+    const budgetScore = budgetRatio <= 1 ? 22 : budgetRatio <= 1.08 ? 10 : budgetRatio <= 1.18 ? 3 : 0;
+    const trendBonus = selected.some(product => isTrending(s, product)) ? 12 : 0;
+    const eventLuck = currentEvent(s).extra > 0 ? 5 : currentEvent(s).discount < 1 ? 3 : 0;
+    const score = Math.max(0, Math.min(100, (styleMatch ? 34 : 0) + (categoryMatch ? 26 : 0) + 10 + budgetScore + trendBonus + eventLuck));
+    const channelTrust = Math.max(0, Math.min(.12, (s.onlineRating - 3) * .045 + Math.log10(Math.max(10, s.followers)) * .015));
+    const responsePenalty = Math.min(.45, Math.max(0, responseDelaySeconds - 4) * .035);
+    const intentStrength = Math.max(-.12, Math.min(.15, request.intentStrength ?? 0));
+    const discountImpact = discount * (.75 + Math.max(0, Math.min(.8, request.discountSensitivity ?? 0)));
+    const conversionChance = Math.max(.03, Math.min(.92, .04 + score * .0072 + discountImpact + channelTrust + intentStrength - responsePenalty));
+    const orderCreated = stockAvailable && selected.length === 1 && this.random() < conversionChance
+      && this.createRegularOnlineOrder(selected.map(product => product.id), 'livestream', discount);
+    const viewersDelta = Math.round((score - 52) / 7) + (orderCreated ? 9 : -2);
+    const likesGain = Math.max(1, Math.round(score / 7) + (discount > 0 ? 4 : 0));
+    const followerGain = Math.max(0, Math.round((score - 25) / 18)) + (orderCreated ? 2 : 0);
+    s.followers += followerGain;
+    s.stats.followers += followerGain;
+    const reason = !stockAvailable ? 'Sản phẩm vừa hết lượng có thể bán'
+      : budgetRatio > 1.18 ? 'Tổng giá vượt khá xa ngân sách'
+          : !styleMatch ? 'Sản phẩm ghim chưa đúng phong cách khách hỏi'
+            : !categoryMatch ? 'Thiếu đúng loại sản phẩm khách cần'
+              : orderCreated ? 'Khách đã nhập địa chỉ và xác nhận thanh toán' : 'Khách còn do dự nên chưa hoàn tất thanh toán';
+    this.commit();
+    return { score, orderCreated, followerGain, total, listTotal, fee, conversionChance, viewersDelta, likesGain, reason };
+  }
+
+  previewLivestreamProduct(productId: string, request: LivestreamRequest, discount: number, responseDelaySeconds = 0) {
+    const product = products.find(item => item.id === productId);
+    if (!product) return { score: 0, conversionChance: 0 };
+    const total = Math.round(sellPrice(this.state, product) * (1 - discount));
+    const styleMatch = product.style === request.style || product.secondaryStyles?.includes(request.style as Style);
+    const categoryMatch = product.category === request.category;
+    const budgetRatio = request.budget > 0 ? total / request.budget : 2;
+    const budgetScore = budgetRatio <= 1 ? 22 : budgetRatio <= 1.08 ? 10 : budgetRatio <= 1.18 ? 3 : 0;
+    const trendBonus = isTrending(this.state, product) ? 12 : 0;
+    const eventLuck = currentEvent(this.state).extra > 0 ? 5 : currentEvent(this.state).discount < 1 ? 3 : 0;
+    const score = Math.max(0, Math.min(100, (styleMatch ? 34 : 0) + (categoryMatch ? 26 : 0) + 10 + budgetScore + trendBonus + eventLuck));
+    const channelTrust = Math.max(0, Math.min(.12, (this.state.onlineRating - 3) * .045 + Math.log10(Math.max(10, this.state.followers)) * .015));
+    const responsePenalty = Math.min(.45, Math.max(0, responseDelaySeconds - 4) * .035);
+    const intentStrength = Math.max(-.12, Math.min(.15, request.intentStrength ?? 0));
+    const discountImpact = discount * (.75 + Math.max(0, Math.min(.8, request.discountSensitivity ?? 0)));
+    return { score, conversionChance: Math.max(.03, Math.min(.92, .04 + score * .0072 + discountImpact + channelTrust + intentStrength - responsePenalty)) };
+  }
+
+  packRegularOnlineOrder(orderId: string) {
+    const s = this.state;
+    const order = s.regularOnlineOrders.find(item => item.id === orderId);
+    if (!order || s.phase === 'open' || order.packed) return false;
+    if (order.productIds.some(id => (s.inventory[id] ?? 0) < 1)) {
+      this.toast('Kho không còn đủ sản phẩm đã giữ cho đơn này.', 'error');
+      return false;
+    }
+    order.packed = true;
+    this.commit();
+    this.toast(`Đã đóng gói đơn của ${order.customerHandle}.`);
+    return true;
+  }
+
+  packAllRegularOrdersWithStaff() {
+    const s = this.state;
+    if (s.phase === 'open') return false;
+    const employee = activeEmployees(s).find(item => item.assignment === 'stock');
+    if (!employee) {
+      this.toast('Hãy phân công ít nhất một nhân viên kho để đóng tất cả đơn.', 'error');
+      return false;
+    }
+    const pending = s.regularOnlineOrders.filter(order => !order.packed);
+    if (!pending.length) return false;
+    for (const order of pending) order.packed = true;
+    employee.energy = Math.max(0, (employee.energy ?? 100) - Math.min(18, pending.length * 3));
+    this.commit();
+    this.toast(`${employee.name} đã đóng gói ${pending.length} đơn thường.`);
+    return true;
+  }
+
+  upgradeOnlinePacking() {
+    const s = this.state;
+    if (s.phase === 'open' || s.onlinePackingLevel >= 3) return false;
+    const cost = s.onlinePackingLevel === 1 ? 350000 : 900000;
+    if (s.money < cost) {
+      this.toast(`Cần ${cost.toLocaleString('vi-VN')}₫ để nâng khu đóng gói.`, 'error');
+      return false;
+    }
+    s.money -= cost;
+    s.stats.spent += cost;
+    s.onlinePackingLevel++;
+    this.commit();
+    this.toast(`Khu đóng gói đã lên cấp ${s.onlinePackingLevel}.`);
+    return true;
+  }
+
+  fulfillPackedRegularOrders() {
+    const s = this.state;
+    if (s.phase !== 'open') return false;
+    const packed = s.regularOnlineOrders.filter(order => order.packed);
+    if (!packed.length) return false;
+    let netTotal = 0;
+    let itemCount = 0;
+    for (const order of packed) {
+      const orderProducts = order.productIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
+      for (const product of orderProducts) {
+        s.inventory[product.id] = Math.max(0, (s.inventory[product.id] ?? 0) - 1);
+        s.stats.soldProducts ??= {};
+        s.stats.soldProducts[product.id] = (s.stats.soldProducts[product.id] ?? 0) + 1;
+      }
+      const net = Math.max(0, order.price - order.fee);
+      netTotal += net;
+      itemCount += orderProducts.length;
+      s.stats.costOfGoods += orderProducts.reduce((sum, product) => sum + buyPrice(s, product), 0);
+      s.onlineSales++;
+      s.stats.served++;
+      s.stats.happy++;
+      s.xp += 3;
+      this.progressCampaign(orderProducts, order.price, true);
+      this.recordAdvancedSale(orderProducts, order.price, order.customerName);
+    }
+    s.money += netTotal;
+    s.stats.revenue += netTotal;
+    s.stats.sold += itemCount;
+    s.regularOnlineOrders = s.regularOnlineOrders.filter(order => !order.packed);
+    const stars = this.applyOnlineReview(4.5, .45);
+    this.commit();
+    this.toast(`Shipper tổng đã nhận ${packed.length} kiện · +${netTotal.toLocaleString('vi-VN')}₫ · ${stars.toFixed(1)} sao.`);
+    return true;
+  }
+
+  cancelRegularOnlineOrder(orderId: string) {
+    const s = this.state;
+    const order = s.regularOnlineOrders.find(item => item.id === orderId);
+    if (!order || s.phase === 'open') return false;
+    s.regularOnlineOrders = s.regularOnlineOrders.filter(item => item.id !== orderId);
+    this.applyOnlineReview(3, .35);
+    this.commit();
+    this.toast('Đã hủy đơn thường. Đánh giá online bị ảnh hưởng nhẹ.', 'error');
     return true;
   }
 
@@ -1392,6 +1602,7 @@ export class GameStore {
     if (this.onlineWarehouseQuantity(productId) < 1) { this.toast('Sản phẩm này không còn trong kho để đăng bán.', 'error'); return false; }
     if (s.onlineListings.includes(productId)) return false;
     s.onlineListings.push(productId);
+    s.onlineChannelEnabled = true;
     this.commit(); this.toast(`Đã đăng ${product.name} lên kênh online.`); return true;
   }
 
@@ -1717,6 +1928,7 @@ export class GameStore {
   nextDay() {
     if (this.state.phase !== 'closed' || this.state.gameOverReason) return;
     this.state.day++;
+    this.expireRegularOnlineOrders();
     this.expireCampaignIfNeeded();
     this.state.phase = 'preparation';
     this.state.customerIndex = 0;
@@ -1735,6 +1947,14 @@ export class GameStore {
     this.processAdvancedOperationsNewDay();
     this.commit();
     this.toast(`Chào ${gameDate(this.state.day)}! Khám phá xu hướng mới và chuẩn bị shop nhé.`);
+  }
+
+  private expireRegularOnlineOrders() {
+    const expired = this.state.regularOnlineOrders.filter(order => order.dueDay < this.state.day);
+    if (!expired.length) return;
+    this.state.regularOnlineOrders = this.state.regularOnlineOrders.filter(order => order.dueDay >= this.state.day);
+    for (const _order of expired) this.applyOnlineReview(2, .45);
+    this.toast(`${expired.length} đơn thường đã quá hạn và bị hủy. Đánh giá online bị giảm.`, 'error');
   }
   /** Partial delivery keeps paid overflow in transit, including saves from older builds. */
   private receiveOrders() {
@@ -1795,7 +2015,7 @@ export class GameStore {
     if (!placed || !def?.display || !product || !def.display.categories.includes(product.category)) return false;
     placed.displayItems ??= [];
     if (placed.displayItems.length >= displayCapacity(def, placed)) { this.toast('Thiết bị trưng bày đã đầy.', 'error'); return false; }
-    if (displayedQuantity(this.state, productId) >= (this.state.inventory[productId] ?? 0)) { this.toast('Không còn món này trong kho để đem ra trưng.', 'error'); return false; }
+    if (displayedQuantity(this.state, productId) + this.onlineReservedQuantity(productId) >= (this.state.inventory[productId] ?? 0)) { this.toast('Không còn món này trong kho để đem ra trưng.', 'error'); return false; }
     placed.displayItems.push(productId);
     this.commit();
     return true;
@@ -2108,6 +2328,65 @@ export class GameStore {
       case 'stock':
         for (const product of products.filter(product => product.level <= s.level)) s.inventory[product.id] = Math.max(10, s.inventory[product.id] ?? 0);
         this.commit(); this.toast('Debug: Đã bổ sung 10 món cho toàn bộ sản phẩm đang mở khóa.'); return true;
+      case 'online-stock': {
+        if (s.phase !== 'preparation') {
+          s.phase = 'preparation';
+          s.activeVisits = [];
+          s.currentVisitId = null;
+          s.currentCustomerId = null;
+          s.customerMode = null;
+          s.patience = 0;
+        }
+        s.level = Math.max(2, s.level);
+        const testProducts = products.filter(product => product.level <= s.level).slice(0, 8);
+        for (const product of testProducts) s.inventory[product.id] = Math.max(6, s.inventory[product.id] ?? 0);
+        s.onlineListings = testProducts.slice(0, 2).map(product => product.id);
+        s.onlineChannelEnabled = true;
+        this.commit();
+        this.toast('Debug: Đã chuẩn bị kho và mở trình chọn sản phẩm online.');
+        return true;
+      }
+      case 'livestream-reset': {
+        if (s.phase !== 'preparation') {
+          s.phase = 'preparation';
+          s.activeVisits = [];
+          s.currentVisitId = null;
+          s.currentCustomerId = null;
+          s.customerMode = null;
+          s.patience = 0;
+        }
+        s.level = Math.max(2, s.level);
+        const liveProducts = products.filter(product => product.level <= s.level).slice(0, 6);
+        for (const product of liveProducts) s.inventory[product.id] = Math.max(8, s.inventory[product.id] ?? 0);
+        s.onlineListings = liveProducts.map(product => product.id);
+        s.onlineChannelEnabled = true;
+        s.lastLivestreamDay = Math.max(0, s.day - 1);
+        this.commit();
+        this.toast('Debug: Phiên livestream hôm nay đã được khôi phục.');
+        return true;
+      }
+      case 'regular-order': {
+        if (s.phase === 'open') {
+          s.phase = 'preparation';
+          s.activeVisits = [];
+          s.currentVisitId = null;
+          s.currentCustomerId = null;
+          s.customerMode = null;
+          s.patience = 0;
+        } else if (s.phase === 'closed') s.phase = 'preparation';
+        const orderProducts = products.filter(product => product.level <= s.level).slice(0, 2);
+        if (!orderProducts.length) return false;
+        for (const product of orderProducts) {
+          s.inventory[product.id] = Math.max(6, s.inventory[product.id] ?? 0);
+          if (!s.onlineListings.includes(product.id)) s.onlineListings.push(product.id);
+        }
+        s.onlineChannelEnabled = true;
+        if (s.regularOnlineOrders.length >= this.regularOnlineCapacity()) s.regularOnlineOrders.shift();
+        const created = this.createRegularOnlineOrder(orderProducts.map(product => product.id), 'storefront');
+        this.commit();
+        this.toast(created ? 'Debug: Đã tạo một đơn hàng thường ảo.' : 'Debug: Không thể tạo đơn hàng thường.', created ? 'success' : 'error');
+        return created;
+      }
       case 'advanced-features': {
         if (s.phase === 'open') {
           s.phase = 'preparation'; s.activeVisits = []; s.currentVisitId = null; s.currentCustomerId = null; s.customerMode = null; s.patience = 0;

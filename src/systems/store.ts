@@ -1,6 +1,6 @@
 import { customers, furniture, levels, products } from '../data/catalog';
 import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
-import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
+import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, MAX_PLACED_FURNITURE, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
 import { recordPublicShopReview, shopReviewStats } from './reviews';
@@ -8,6 +8,7 @@ import { CAMPAIGN_GUIDE_SEEN, campaignIsComplete, campaignOffers } from './campa
 import { createVipAppointment, crisisComplete, RETURN_EXCHANGE_SHIPPING_FEE, supplierFor, suppliers } from './operations';
 import { gameDate } from './calendar';
 import { ATELIER_PURCHASE_COST, ATELIER_RECIPE_CARD_COST, ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProduct, unregisterCustomProduct } from '../data/atelier';
+import { EMPLOYEE_APPEARANCE_COUNT } from '../art/employeeAssets';
 
 const STAFF_NAMES = [
   'Mai An', 'Thảo Nhi', 'Gia Hân', 'Bảo Trân', 'Minh Châu', 'Khánh Linh', 'Yến Vy', 'Hà My', 'Ngọc Lam', 'Tú Anh',
@@ -832,6 +833,7 @@ export class GameStore {
     if (s.level < requirement.level || (s.landLevel ?? 0) < requirement.landLevel) {
       this.toast(`Tuyển dụng cần shop cấp ${requirement.level} và mặt bằng cấp ${requirement.landLevel + 1}.`, 'error'); return false;
     }
+    if (s.employees.length >= EMPLOYEE_APPEARANCE_COUNT) { this.toast(`Boutique đã đủ ${EMPLOYEE_APPEARANCE_COUNT} nhân viên.`, 'error'); return false; }
     if (s.recruitmentPost || s.staffApplicants.length) { this.toast('Shop đang có một đợt tuyển dụng chưa hoàn tất.', 'error'); return false; }
     const rounded = Math.round(salary / 5000) * 5000;
     if (!Number.isFinite(rounded) || rounded < STAFF_SALARY_MIN || rounded > STAFF_SALARY_MAX) { this.toast(`Mức lương mỗi ca cần từ ${STAFF_SALARY_MIN.toLocaleString('vi-VN')}₫ đến ${STAFF_SALARY_MAX.toLocaleString('vi-VN')}₫.`, 'error'); return false; }
@@ -862,15 +864,16 @@ export class GameStore {
     const salaryPower = Math.max(0, Math.min(1, (post.salary - STAFF_SALARY_MIN) / (STAFF_SALARY_MAX - STAFF_SALARY_MIN)));
     const base = 34 + salaryPower * 46;
     const used = new Set(this.state.employees.map(employee => employee.name));
-    const usedAppearances = new Set(this.state.employees.map(employee => Math.abs(employee.appearance) % 6));
+    const usedAppearances = new Set(this.state.employees.map(employee => Math.abs(employee.appearance) % EMPLOYEE_APPEARANCE_COUNT));
     const applicants: StaffCandidate[] = [];
-    for (let index = 0; index < 3; index++) {
+    const applicantCount = Math.min(3, EMPLOYEE_APPEARANCE_COUNT - this.state.employees.length);
+    for (let index = 0; index < applicantCount; index++) {
       const availableNames = STAFF_NAMES.filter(name => !used.has(name));
       const name = availableNames[Math.floor(this.random() * availableNames.length)] ?? `Ứng viên ${index + 1}`;
       used.add(name);
       const role = roles[Math.floor(this.random() * roles.length)];
-      const availableAppearances = [0, 1, 2, 3, 4, 5].filter(appearance => !usedAppearances.has(appearance));
-      const appearance = availableAppearances[Math.floor(this.random() * availableAppearances.length)] ?? index % 6;
+      const availableAppearances = Array.from({ length: EMPLOYEE_APPEARANCE_COUNT }, (_, appearance) => appearance).filter(appearance => !usedAppearances.has(appearance));
+      const appearance = availableAppearances[Math.floor(this.random() * availableAppearances.length)] ?? index % EMPLOYEE_APPEARANCE_COUNT;
       usedAppearances.add(appearance);
       const stat = (focus = 0) => Math.max(28, Math.min(98, Math.round(base + focus + (this.random() - .5) * 30)));
       applicants.push({
@@ -886,10 +889,17 @@ export class GameStore {
   hireStaff(candidateId: string) {
     const s = this.state;
     const candidate = s.staffApplicants.find(item => item.id === candidateId);
-    if (!candidate || staffCapacity(s) < 1) return false;
+    if (!candidate || staffCapacity(s) < 1 || s.employees.length >= EMPLOYEE_APPEARANCE_COUNT) return false;
     const assignedCount = s.employees.filter(item => (item.assignment ?? 'service') !== 'off').length;
     const assignment: StaffAssignment = assignedCount < staffCapacity(s) ? 'service' : 'off';
     s.employees.push({ ...candidate, uid: `staff-${Date.now()}-${candidate.id}`, hiredDay: s.day, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, experience: 0, skillLevel: 1, shiftSales: 0, energy: 100, assignment, unpaidShifts: 0, unpaidWages: 0, totalShiftsWorked: 0 });
+    if (s.employees.length >= EMPLOYEE_APPEARANCE_COUNT) {
+      s.staffApplicants = [];
+      s.recruitmentPost = null;
+      this.commit();
+      this.toast(`${candidate.name} đã gia nhập ${s.shopName}! Đội ngũ hiện đã đủ ${EMPLOYEE_APPEARANCE_COUNT} nhân viên.`);
+      return true;
+    }
     s.staffApplicants = s.staffApplicants.filter(item => item.id !== candidateId);
     if (!s.staffApplicants.length) s.recruitmentPost = null;
     this.commit();
@@ -2081,6 +2091,10 @@ export class GameStore {
   buyFurniture(id: string) {
     const def = furniture.find(f => f.id === id);
     if (!def || def.level > this.state.level) return;
+    if (this.state.layout.length >= MAX_PLACED_FURNITURE) {
+      this.toast(`Shop chỉ được đặt tối đa ${MAX_PLACED_FURNITURE} món nội thất. Hãy cất hoặc bán bớt đồ trước khi mua.`, 'error');
+      return;
+    }
     if (def.price > this.state.money) { this.toast('Chưa đủ tiền để mua món nội thất này.', 'error'); return; }
     let placed: PlacedFurniture | undefined;
     const size = landSize(this.state);
@@ -2157,6 +2171,10 @@ export class GameStore {
     this.state.storedFurniture = this.state.storedFurniture ?? [];
     const index = this.state.storedFurniture.indexOf(id);
     if (index === -1) return false;
+    if (this.state.layout.length >= MAX_PLACED_FURNITURE) {
+      this.toast(`Shop chỉ được đặt tối đa ${MAX_PLACED_FURNITURE} món nội thất. Hãy cất hoặc bán bớt một món trước.`, 'error');
+      return false;
+    }
     const def = furniture.find(f => f.id === id);
     if (!def) return false;
     let placed: PlacedFurniture | undefined;
@@ -2409,12 +2427,12 @@ export class GameStore {
         s.level = Math.max(5, s.level); s.xp = Math.max(2000, s.xp); s.landLevel = Math.max(2, s.landLevel ?? 0); s.money = Math.max(3000000, s.money);
         for (const product of products.filter(product => product.level <= 5)) s.inventory[product.id] = Math.max(12, s.inventory[product.id] ?? 0);
         const rack = s.layout.find(item => furniture.find(definition => definition.id === item.id)?.display?.kind === 'clothing');
-        if (rack) rack.displayItems = ['baby-tee', 'ribbon-dress', 'silk'].filter(id => products.some(product => product.id === id));
+        if (rack) rack.displayItems = ['ribbon-kiss-tee', 'ribbon-dress', 'silk'].filter(id => products.some(product => product.id === id));
         if (!s.employees.some(employee => employee.uid === 'staff-debug-operations') && s.employees.length < 3) s.employees.push({ id: 'debug-stylist', uid: 'staff-debug-operations', name: 'Mai Anh', role: 'Stylist vận hành', bio: 'Nhân viên mẫu để thử xếp ca và năng lượng.', appearance: 2, salary: 120000, service: 78, persuasion: 74, charm: 72, reliability: 82, appliedDay: s.day, hiredDay: s.day, morale: 84, deniedLeaves: 0, sales: 6, tipsEarned: 45000, energy: 42, assignment: 'service', experience: 18, skillLevel: 2, shiftSales: 0 });
         const shiftTester = s.employees.find(employee => employee.uid === 'staff-debug-operations') ?? s.employees[0];
         if (shiftTester) { shiftTester.energy = 42; shiftTester.assignment = 'service'; }
         s.returnCases = s.returnCases.filter(item => !item.id.startsWith('debug-'));
-        s.returnCases.push({ id: 'debug-return', productId: 'baby-tee', customerName: 'Chloe', amount: sellPrice(s, products.find(product => product.id === 'baby-tee')!), reason: 'Khách muốn đổi sang kích cỡ phù hợp hơn', availableDay: s.day, deadlineDay: s.day + 2 });
+        s.returnCases.push({ id: 'debug-return', productId: 'ribbon-kiss-tee', customerName: 'Chloe', amount: sellPrice(s, products.find(product => product.id === 'ribbon-kiss-tee')!), reason: 'Khách muốn đổi sang kích cỡ phù hợp hơn', availableDay: s.day, deadlineDay: s.day + 2 });
         s.vipAppointments = s.vipAppointments.filter(item => !item.id.startsWith('debug-'));
         s.vipAppointments.push(
           { id: 'debug-vip-ready', customerName: 'Hạ Vy', style: 'Coquette', category: 'tops', budget: 900000, scheduledDay: s.day, minItems: 1, reward: 260000, status: 'accepted' },
@@ -2426,7 +2444,7 @@ export class GameStore {
         s.reputationCrisis = { startDay: s.day, deadlineDay: s.day + 3, positiveReviews: 1, sales: 2, targetReviews: 3, targetSales: 8 };
         s.pendingOrders = s.pendingOrders.filter(order => !order.id.startsWith('debug-'));
         s.pendingOrders.push(
-          { id: 'debug-delivery-soon', productId: 'jeans', quantity: 5, cost: 250000, arrivalDay: s.day + 1, supplierId: 'wholesale' },
+          { id: 'debug-delivery-soon', productId: 'daily-muse-straight-jeans', quantity: 5, cost: 250000, arrivalDay: s.day + 1, supplierId: 'wholesale' },
           { id: 'debug-delivery-later', productId: 'silk', quantity: 10, cost: 1800000, arrivalDay: s.day + 5, supplierId: 'global' },
         );
         this.commit(); this.toast('Debug: Đã tạo dữ liệu thử cho nguồn hàng, ca làm, đổi trả, VIP, couture và hàng chờ giao.'); return true;
@@ -2487,6 +2505,7 @@ export class GameStore {
         generateApplicantsNow();
         this.commit(); this.toast('Debug: Đã tạo hồ sơ ứng viên ngay lập tức.'); return true;
       case 'hire': {
+        if (s.employees.length >= EMPLOYEE_APPEARANCE_COUNT) { this.toast(`Debug: Đội ngũ đã đủ ${EMPLOYEE_APPEARANCE_COUNT} nhân viên.`, 'error'); return false; }
         if (!s.staffApplicants.length) generateApplicantsNow();
         const candidate = s.staffApplicants[0];
         if (!candidate) { this.commit(); this.toast('Debug: Không có hồ sơ ứng viên.', 'error'); return false; }
@@ -2517,9 +2536,9 @@ export class GameStore {
         return true;
       case 'customer': {
         if (s.phase === 'closed') s.phase = 'preparation';
-        s.inventory['baby-tee'] = Math.max(2, s.inventory['baby-tee'] ?? 0);
+        s.inventory['ribbon-kiss-tee'] = Math.max(2, s.inventory['ribbon-kiss-tee'] ?? 0);
         const rack = s.layout.find(item => furniture.find(definition => definition.id === item.id)?.display);
-        if (rack && !(rack.displayItems ?? []).length) rack.displayItems = ['baby-tee'];
+        if (rack && !(rack.displayItems ?? []).length) rack.displayItems = ['ribbon-kiss-tee'];
         if (s.phase !== 'open') this.openShop();
         if (s.phase !== 'open') return false;
         this.admitCustomer();

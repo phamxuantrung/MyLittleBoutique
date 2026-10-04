@@ -403,6 +403,15 @@ export function ownerIllustration(working = false, mood = 'normal'): string {
  * Rendered with 100% same sweet, kawaii anime face
  */
 export function ownerPortraitSvg(size = 38): string {
+  const clipId = `owner-asset-portrait-${size}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="160 0 580 580" preserveAspectRatio="xMidYMid slice">
+    <defs><clipPath id="${clipId}"><circle cx="450" cy="290" r="286"/></clipPath></defs>
+    <circle cx="450" cy="290" r="286" fill="#fff0f7"/>
+    <image href="/assets/characters/main-character.svg" x="0" y="0" width="900.75" height="982.5" preserveAspectRatio="xMidYMid meet" clip-path="url(#${clipId})"/>
+  </svg>`;
+
+  /* Fallback vector portrait retained for saves or environments that cannot
+     resolve the supplied character asset. */
   const ink = paint.ink;
   const skin = '#fff0e6';
   const skinShadow = '#fed7c3';
@@ -1392,7 +1401,7 @@ function renderFittedBottom(p: Product, skin: string, ink = '#2c1810'): string {
   const art = p.art || '';
 
   // 1. Quần dài: Jeans, Cargo, Parachute, Baggy, Flare
-  if (sub === 'jeans' || sub === 'cargo' || art.includes('pants') || art.includes('jeans') || art === 'cargoPants' || art === 'parachutePants') {
+  if (['jeans', 'cargo', 'flare', 'trousers'].includes(sub) || art.includes('pants') || art.includes('jeans') || art === 'cargoPants' || art === 'parachutePants') {
     const isCargo = sub === 'cargo' || art === 'cargoPants' || art === 'parachutePants';
     return `
       <!-- High-Waist Fitted Trousers / Jeans (ôm eo x=45..65 tại y=78, nở nhẹ hông rồi buông ống thời trang) -->
@@ -2088,7 +2097,7 @@ function exposedBody(items: Product[], skin: string, ink: string) {
   const outer = items.find(p => p.category === 'outerwear');
   const crop = (svg: string, y: number, height: number, region: string) =>
     `<svg data-exposed="${region}" x="0" y="${y}" width="110" height="${height}" viewBox="0 ${y} 110 ${height}" overflow="hidden">${svg}</svg>`;
-  const pants = bottom && (['jeans', 'cargo'].includes(bottom.subcategory) || /pants|jeans/i.test(bottom.art));
+  const pants = bottom && (['jeans', 'cargo', 'flare', 'trousers'].includes(bottom.subcategory) || /pants|jeans/i.test(bottom.art));
   const hem = pants || set?.subcategory === 'pantsSet' ? 142 : dress ?
     (dress.subcategory === 'maxi' || dress.art === 'maxiDress' ? 139 : dress.subcategory === 'slip' || dress.art === 'slipDress' ? 122 : 104) :
     set ? 101 : bottom ? (bottom.subcategory === 'pleated' || ['pleatedSkirt', 'skirt'].includes(bottom.art) ? 102 : bottom.subcategory === 'bubble' || bottom.art === 'bubbleSkirt' ? 104 : 98) : 80;

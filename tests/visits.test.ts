@@ -8,8 +8,8 @@ class MemorySave extends SaveSystem { override write() {} }
 const make = (random = () => 0) => {
   const state = initialState();
   state.money = 500000;
-  state.inventory = { 'baby-tee': 2, jeans: 2, 'ribbon-dress': 1, hoodie: 1, ribbon: 2 };
-  state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['baby-tee', 'baby-tee', 'jeans', 'jeans', 'ribbon-dress', 'hoodie'];
+  state.inventory = { 'ribbon-kiss-tee': 2, 'cyber-pop-flare': 2, 'ribbon-dress': 1, 'urban-pulse-hoodie': 1, ribbon: 2 };
+  state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['ribbon-kiss-tee', 'ribbon-kiss-tee', 'cyber-pop-flare', 'cyber-pop-flare', 'ribbon-dress', 'urban-pulse-hoodie'];
   const plantIndex = state.layout.findIndex(item => item.uid === 'starter-plant');
   state.layout[plantIndex] = { uid: 'starter-table', id: 'table', x: 6, y: 0, rotation: 0, displayItems: ['ribbon', 'ribbon'] };
   return new GameStore(state, new MemorySave(), random);
@@ -81,7 +81,7 @@ describe('timed shop and random visits', () => {
     const store = make(() => .5); store.openShop(); arrive(store);
     store.state.customerMode = 'browse'; store.state.patience = 1;
     const money = store.state.money;
-    expect(store.serve(['baby-tee'])).toBeUndefined();
+    expect(store.serve(['ribbon-kiss-tee'])).toBeUndefined();
     store.tick(); expect(store.state.stats.happy).toBe(1);
     expect(store.state.money).toBeGreaterThan(money);
     expect(activeCustomer(store.state)).toBeUndefined();

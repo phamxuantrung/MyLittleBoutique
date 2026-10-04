@@ -15,5 +15,5 @@ test('functional furniture displays real warehouse products', async ({ page }) =
   await expect(dialog).toHaveClass('dialog-display');
   await expect(dialog.getByRole('textbox', { name: /Đổi tên Sào đồ Sunday/ })).toHaveText('Sào đồ Sunday');
   await expect(dialog.locator('.fixture-capacity-chip')).toContainText('4/16');
-  await expect(dialog.locator('[data-action="display-remove"][data-id="baby-tee"]')).toBeVisible();
+  await expect(dialog.locator('[data-action="display-remove"][data-id="ribbon-kiss-tee"]')).toBeVisible();
 });

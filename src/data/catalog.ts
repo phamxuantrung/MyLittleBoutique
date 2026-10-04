@@ -4,22 +4,16 @@ import { fashionCustomers } from './fashionCustomers';
 export { categories } from './fashion';
 
 const originalProducts: Omit<Product, 'subcategory' | 'occasions'>[] = [
-  { id: 'baby-tee', name: 'Baby tee nơ hồng', category: 'tops', style: 'Coquette', color: '#e6a4b2', colorName: 'Hồng', buyPrice: 45000, sellPrice: 99000, quality: 82, level: 1, art: 'tee' },
-  { id: 'jeans', name: 'Jeans xanh mây', category: 'bottoms', style: 'Casual', color: '#8aa9bf', colorName: 'Xanh', buyPrice: 75000, sellPrice: 159000, quality: 85, level: 1, art: 'cloudJeans' },
-  { id: 'ribbon-dress', name: 'Đầm Sunday date', category: 'dresses', style: 'Coquette', color: '#ebc4b9', colorName: 'Hồng', buyPrice: 110000, sellPrice: 229000, quality: 92, level: 1, art: 'dress' },
-  { id: 'hoodie', name: 'Hoodie matcha', category: 'tops', style: 'Streetwear', color: '#8b9f8d', colorName: 'Xanh lá', buyPrice: 85000, sellPrice: 179000, quality: 88, level: 1, art: 'hoodie' },
-  { id: 'ribbon', name: 'Nơ Ballet club', category: 'accessories', style: 'Coquette', color: '#d889a0', colorName: 'Hồng', buyPrice: 18000, sellPrice: 49000, quality: 80, level: 1, art: 'bow' },
-  { id: 'sneakers', name: 'Sneaker sữa yến mạch', category: 'shoes', style: 'Streetwear', color: '#ddd6bf', colorName: 'Kem', buyPrice: 90000, sellPrice: 189000, quality: 86, level: 1, art: 'shoes' },
-  { id: 'mini-skirt', name: 'Chân váy Cloud nine', category: 'bottoms', style: 'Soft Girl', color: '#c2b4d6', colorName: 'Tím', buyPrice: 65000, sellPrice: 139000, quality: 84, level: 2, art: 'skirt' },
-  { id: 'bag', name: 'Túi Little baguette', category: 'bags', style: 'Y2K', color: '#d7a286', colorName: 'Nâu', buyPrice: 70000, sellPrice: 159000, quality: 89, level: 2, art: 'bag' },
-  { id: 'shirt', name: 'Sơ mi After class', category: 'tops', style: 'Preppy', color: '#f0e5cb', colorName: 'Kem', buyPrice: 65000, sellPrice: 149000, quality: 90, level: 2, art: 'shirt' },
-  { id: 'cargo', name: 'Cargo Downtown', category: 'bottoms', style: 'Streetwear', color: '#b1ac95', colorName: 'Nâu', buyPrice: 95000, sellPrice: 199000, quality: 88, level: 2, art: 'pants' },
-  { id: 'blazer', name: 'Blazer Atelier', category: 'outerwear', style: 'Minimal', color: '#b4ab9d', colorName: 'Nâu', buyPrice: 150000, sellPrice: 319000, quality: 95, level: 3, art: 'blazer' },
-  { id: 'vintage', name: 'Đầm Golden hour', category: 'dresses', style: 'Vintage', color: '#d3b179', colorName: 'Vàng', buyPrice: 125000, sellPrice: 279000, quality: 93, level: 3, art: 'dress' },
-  { id: 'concert', name: 'Baby tee Encore', category: 'tops', style: 'K-pop', color: '#aba0c6', colorName: 'Tím', buyPrice: 85000, sellPrice: 189000, quality: 88, level: 3, art: 'tee' },
-  { id: 'silk', name: 'Đầm lụa Moonlight', category: 'dresses', style: 'Luxury', color: '#6c7279', colorName: 'Đen', buyPrice: 240000, sellPrice: 489000, quality: 99, level: 4, art: 'dress' },
-  { id: 'loafers', name: 'Loafer The editor', category: 'shoes', style: 'Preppy', color: '#7b655b', colorName: 'Nâu', buyPrice: 145000, sellPrice: 299000, quality: 95, level: 3, art: 'loafer' },
-  { id: 'pearl-bag', name: 'Túi Pearl muse', category: 'bags', style: 'Luxury', color: '#e7d9c4', colorName: 'Kem', buyPrice: 180000, sellPrice: 389000, quality: 98, level: 4, art: 'topHandle' },
+  { id: 'ribbon-kiss-tee', name: 'Áo Ribbon Kiss', category: 'tops', style: 'Coquette', color: '#e6a6b8', colorName: 'Hồng', buyPrice: 45000, sellPrice: 99000, quality: 83, level: 1, art: 'atelierOffShoulder', secondaryStyles: ['Soft Girl'] },
+  { id: 'ribbon-dress', name: 'Đầm Sunday Date', category: 'dresses', style: 'Coquette', color: '#f3a3c4', colorName: 'Hồng', buyPrice: 110000, sellPrice: 229000, quality: 92, level: 1, art: 'dress', secondaryStyles: ['Soft Girl'] },
+  { id: 'ribbon', name: 'Nơ Ballet Club', category: 'accessories', style: 'Balletcore', color: '#ee95bd', colorName: 'Hồng', buyPrice: 18000, sellPrice: 49000, quality: 82, level: 1, art: 'bow', secondaryStyles: ['Coquette'] },
+  { id: 'sneakers', name: 'Sneaker sữa yến mạch', category: 'shoes', style: 'Casual', color: '#ead9bd', colorName: 'Kem', buyPrice: 90000, sellPrice: 189000, quality: 86, level: 1, art: 'shoes' },
+  { id: 'bag', name: 'Túi Little Baguette', category: 'bags', style: 'Coquette', color: '#ee87b7', colorName: 'Hồng', buyPrice: 70000, sellPrice: 159000, quality: 89, level: 2, art: 'bag' },
+  { id: 'blazer', name: 'Blazer Atelier', category: 'outerwear', style: 'Luxury', color: '#ead9bd', colorName: 'Kem', buyPrice: 150000, sellPrice: 319000, quality: 95, level: 5, art: 'blazer' },
+  { id: 'vintage', name: 'Đầm Golden Hour', category: 'dresses', style: 'Luxury', color: '#f2c64f', colorName: 'Vàng', buyPrice: 290000, sellPrice: 619000, quality: 97, level: 5, art: 'dress', secondaryStyles: ['Coquette'] },
+  { id: 'silk', name: 'Đầm lụa Moonlight', category: 'dresses', style: 'Minimal', color: '#d9d9e6', colorName: 'Bạc', buyPrice: 220000, sellPrice: 469000, quality: 96, level: 4, art: 'dress', secondaryStyles: ['Luxury'] },
+  { id: 'loafers', name: 'Loafer The editor', category: 'shoes', style: 'Dark Academia', color: '#87533f', colorName: 'Nâu', buyPrice: 145000, sellPrice: 299000, quality: 95, level: 3, art: 'loafer' },
+  { id: 'pearl-bag', name: 'Túi Pearl Muse', category: 'bags', style: 'Luxury', color: '#d9d9e6', colorName: 'Bạc', buyPrice: 180000, sellPrice: 389000, quality: 98, level: 4, art: 'topHandle' },
 ];
 // Keep the normal retail margin meaningful without letting the first few days
 // snowball too quickly. Bulk-buy discounts can still improve this margin.
@@ -70,10 +64,10 @@ export const furniture: Furniture[] = [
   { id: 'shop-sign', name: 'Biển hiệu Boutique', price: 135000, appeal: 5, level: 1, art: 'shop-sign', width: 3, height: 1, style: 'Coquette', description: 'Biển tên shop cỡ lớn ba ô, tự đổi nội dung theo tên cửa hàng' },
   { id: 'fashion-print', name: 'Bộ tranh Fashion Muse', price: 78000, appeal: 4, level: 1, art: 'fashion-print', width: 2, height: 1, style: 'Coquette', description: 'Cụm ba tranh thời trang nhỏ treo chung theo phong cách gallery' },
   { id: 'boutique-window', name: 'Cửa sổ vòm Boutique', price: 90000, appeal: 4, level: 1, art: 'boutique-window', width: 2, height: 1, style: 'Clean Girl', description: 'Cửa sổ vòm kính xanh có thể treo và di chuyển trên hai mặt tường' },
-  { id: 'blush-blinds', name: 'Rèm sáo Blush', price: 72000, appeal: 3, level: 1, art: 'blush-blinds', width: 2, height: 1, style: 'Clean Girl', description: 'Rèm sáo hồng kem lọc ánh sáng dịu, treo được trên hai mặt tường' },
+  { id: 'blush-blinds', name: 'Rèm sáo Blush', price: 72000, appeal: 3, level: 1, art: 'blush-blinds', width: 1, height: 1, style: 'Clean Girl', description: 'Rèm sáo hồng kem lọc ánh sáng dịu, treo được trên hai mặt tường' },
   { id: 'runway-print', name: 'Tranh Runway Dress', price: 92000, appeal: 5, level: 1, art: 'runway-print', width: 1, height: 1, style: 'Soft Girl', description: 'Minh họa váy runway trong khung tím pastel' },
-  { id: 'heart-rug', name: 'Thảm lông Trái tim', price: 50000, appeal: 3, level: 1, art: 'heart-rug', width: 1, height: 1, style: 'Coquette', description: 'Thảm lông cừu hình trái tim êm ái' },
-  { id: 'checkered-rug', name: 'Thảm caro Retro', price: 55000, appeal: 3, level: 1, art: 'checkered-rug', width: 1, height: 1, style: 'Y2K', description: 'Thảm bàn cờ đen trắng đậm chất Gen Z' },
+  { id: 'heart-rug', name: 'Thảm lông Trái tim', price: 50000, appeal: 3, level: 1, art: 'heart-rug', width: 2, height: 2, style: 'Coquette', description: 'Thảm lông cừu hình trái tim êm ái' },
+  { id: 'checkered-rug', name: 'Thảm caro Retro', price: 55000, appeal: 3, level: 1, art: 'checkered-rug', width: 2, height: 2, style: 'Y2K', description: 'Thảm bàn cờ đen trắng đậm chất Gen Z' },
   { id: 'tulip-lamp', name: 'Đèn cây hoa Tulip', price: 75000, appeal: 4, level: 1, art: 'tulip-lamp', width: 1, height: 1, style: 'Balletcore', description: 'Đèn cây hoa tulip phát ánh sáng dịu êm' },
   { id: 'beanbag', name: 'Ghế lười Marshmallow', price: 85000, appeal: 4, level: 1, art: 'beanbag', width: 1, height: 1, style: 'Casual', description: 'Ghế lười hạt xốp ombre tím hồng cực êm' },
 
@@ -82,7 +76,6 @@ export const furniture: Furniture[] = [
   { id: 'mannequin', name: 'Ma-nơ-canh Nàng thơ', price: 190000, appeal: 5, level: 2, art: 'mannequin', width: 1, height: 1, style: 'Preppy', description: 'Trưng đúng 1 sản phẩm set outfit mẫu.', display: { kind: 'outfit', capacity: 1, categories: ['sets'] } },
   { id: 'coquette-mirror', name: 'Gương nơ ren Coquette', price: 165000, appeal: 6, level: 2, art: 'coquette-mirror', width: 1, height: 1, style: 'Coquette', description: 'Gương viền nơ ren và ngọc trai công chúa' },
   { id: 'wavy-mirror', name: 'Gương uốn sóng Neon Y2K', price: 185000, appeal: 6, level: 2, art: 'wavy-mirror', width: 1, height: 1, style: 'Y2K', description: 'Gương selfie uốn lượn phong cách Ultrafragola' },
-  { id: 'shell-sofa', name: 'Sofa vỏ sò Ngọc trai', price: 220000, appeal: 7, level: 2, art: 'shell-sofa', width: 2, height: 1, style: 'Balletcore', description: 'Sofa nhung vỏ sò hồng phấn kiêu kỳ' },
   { id: 'monstera-plant', name: 'Chậu Monstera gốm', price: 90000, appeal: 4, level: 2, art: 'monstera-plant', width: 1, height: 1, style: 'Clean Girl', description: 'Monstera lá xẻ sang trọng trong chậu terrazzo' },
   { id: 'vinyl-player', name: 'Máy nghe nhạc Melody', price: 95000, appeal: 5, level: 1, art: 'vinyl-player', width: 1, height: 1, style: 'Vintage', description: 'Chạm để chọn bài, bật tắt và điều chỉnh âm lượng nhạc trong boutique.' },
   { id: 'gallery-print', name: 'Tranh lớn Gallery Lovely', price: 115000, appeal: 6, level: 2, art: 'gallery-print', width: 2, height: 1, style: 'Balletcore', description: 'Tranh lớn typography và ruy băng làm điểm nhấn cho mảng tường' },
@@ -93,7 +86,7 @@ export const furniture: Furniture[] = [
   { id: 'shoe-cabinet', name: 'Tủ giày Cloud', price: 195000, appeal: 5, level: 2, art: 'shoe-cabinet', width: 2, height: 1, style: 'Clean Girl', description: 'Tủ giày có đèn 30 đôi, có thể nâng cấp thêm slot.', display: { kind: 'shoes', capacity: 30, categories: ['shoes'], upgrade: { maxLevel: 3, slotsPerLevel: 15, baseCost: 175000 } } },
 
   // Cấp 3: Boutique điểm hẹn
-  { id: 'fitting', name: 'Phòng thử đồ rèm hồng', price: 250000, appeal: 7, level: 3, art: 'fitting', width: 2, height: 1, style: 'Casual', description: 'Khu vực thử đồ kín đáo và tiện nghi' },
+  { id: 'fitting', name: 'Phòng thử đồ rèm hồng', price: 250000, appeal: 7, level: 3, art: 'fitting', width: 2, height: 2, style: 'Casual', description: 'Khu vực thử đồ kín đáo và tiện nghi' },
   { id: 'neon-sign', name: 'Đèn neon FASHION', price: 210000, appeal: 7, level: 3, art: 'neon-sign', width: 3, height: 1, style: 'Streetwear', description: 'Bảng neon ba ô phát sáng thu hút mọi ánh nhìn' },
   { id: 'lightbox-sign', name: 'Biển đèn Fashion Club', price: 235000, appeal: 8, level: 3, art: 'lightbox-sign', width: 3, height: 1, style: 'Y2K', description: 'Hộp đèn pastel ba ô cho góc chụp ảnh trong shop' },
   { id: 'shoe-sketch-print', name: 'Tranh Kitten Heel', price: 155000, appeal: 7, level: 3, art: 'shoe-sketch-print', width: 1, height: 1, style: 'Clean Girl', description: 'Bản phác họa giày thời trang trên nền xanh dịu' },
@@ -103,12 +96,12 @@ export const furniture: Furniture[] = [
 
   // Cấp 4 & 5: Nhà mốt cao cấp & Sang trọng
   { id: 'lux-rack', name: 'Sào đồ vòm mạ vàng', price: 320000, appeal: 9, level: 4, art: 'lux-rack', width: 2, height: 1, style: 'Luxury', description: 'Sào treo cao cấp 32 món, có thể nâng cấp thêm slot.', display: { kind: 'clothing', capacity: 32, categories: ['tops', 'bottoms', 'dresses', 'sets', 'outerwear'], upgrade: { maxLevel: 3, slotsPerLevel: 16, baseCost: 280000 } } },
-  { id: 'glass-showcase', name: 'Tủ túi pha lê LED', price: 360000, appeal: 10, level: 4, art: 'glass-showcase', width: 1, height: 1, style: 'Luxury', description: 'Tủ kính 20 túi xách, có thể nâng cấp thêm slot.', display: { kind: 'bags', capacity: 20, categories: ['bags'], upgrade: { maxLevel: 3, slotsPerLevel: 10, baseCost: 320000 } } },
+  { id: 'glass-showcase', name: 'Tủ túi pha lê LED', price: 360000, appeal: 10, level: 4, art: 'glass-showcase', width: 2, height: 1, style: 'Luxury', description: 'Tủ kính 20 túi xách, có thể nâng cấp thêm slot.', display: { kind: 'bags', capacity: 20, categories: ['bags'], upgrade: { maxLevel: 3, slotsPerLevel: 10, baseCost: 320000 } } },
   { id: 'crystal-chandelier', name: 'Đèn chùm pha lê Hoàng Gia', price: 480000, appeal: 12, level: 5, art: 'crystal-chandelier', width: 2, height: 1, style: 'Luxury', description: 'Đèn chùm pha lê tỏa sáng rực rỡ cả gian phòng' },
   { id: 'couture-rack', name: 'Sào couture Vầng Trăng', price: 820000, appeal: 13, level: 5, art: 'couture-rack', width: 2, height: 1, style: 'Luxury', description: 'Sào vòm đồng champagne trưng 40 thiết kế couture.', display: { kind: 'clothing', capacity: 40, categories: ['tops', 'bottoms', 'dresses', 'sets', 'outerwear'], upgrade: { maxLevel: 3, slotsPerLevel: 20, baseCost: 420000 } } },
   { id: 'jewel-shoe-wall', name: 'Tủ giày Jewel Gallery', price: 760000, appeal: 12, level: 5, art: 'jewel-shoe-wall', width: 2, height: 1, style: 'Luxury', description: 'Tủ giày kính màu khói với 36 vị trí trưng bày.', display: { kind: 'shoes', capacity: 36, categories: ['shoes'], upgrade: { maxLevel: 3, slotsPerLevel: 18, baseCost: 390000 } } },
   { id: 'atelier-island', name: 'Đảo phụ kiện Atelier', price: 1100000, appeal: 15, level: 6, art: 'atelier-island', width: 2, height: 1, style: 'Minimal', description: 'Bàn đảo đá sáng dành cho 30 phụ kiện cao cấp.', display: { kind: 'accessories', capacity: 30, categories: ['accessories'], upgrade: { maxLevel: 3, slotsPerLevel: 15, baseCost: 560000 } } },
-  { id: 'runway-mannequin', name: 'Ma-nơ-canh Runway Spotlight', price: 980000, appeal: 15, level: 6, art: 'runway-mannequin', width: 1, height: 1, style: 'K-pop', description: 'Bục runway có đèn viền, trưng một set chủ đạo.', display: { kind: 'outfit', capacity: 1, categories: ['sets'] } },
+  { id: 'runway-mannequin', name: 'Ma-nơ-canh Runway Spotlight', price: 980000, appeal: 15, level: 6, art: 'runway-mannequin', width: 2, height: 1, style: 'K-pop', description: 'Bục runway có đèn viền, trưng một set chủ đạo.', display: { kind: 'outfit', capacity: 1, categories: ['sets'] } },
   { id: 'global-showcase', name: 'Tủ túi Global Flagship', price: 1650000, appeal: 19, level: 7, art: 'global-showcase', width: 2, height: 1, style: 'Luxury', description: 'Tủ flagship ánh pha lê trưng 36 mẫu túi biểu tượng.', display: { kind: 'bags', capacity: 36, categories: ['bags'], upgrade: { maxLevel: 3, slotsPerLevel: 18, baseCost: 780000 } } },
   { id: 'champagne-sofa', name: 'Sofa Champagne Lounge', price: 1350000, appeal: 18, level: 7, art: 'champagne-sofa', width: 2, height: 1, style: 'Luxury', description: 'Sofa lounge bọc nhung kem với khung kim loại champagne.' },
 ];

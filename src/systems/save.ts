@@ -1,17 +1,92 @@
 import { customers, furniture, levels, products } from '../data/catalog';
 import type { ActiveBrandCampaign, AtelierCraftHistoryEntry, Category, CoutureOrder, CustomerLoyalty, CustomerVisit, CustomProduct, DayStats, GameState, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, RegularOnlineOrder, ReputationCrisis, ReturnCase, SocialDrama, StaffCandidate, StaffLeaveRequest, StaffMember, Style, SupplierId, TailoringJob, VipAppointment } from '../types';
-import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, displayLevel, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, STAFF_SALARY_MIN } from './rules';
+import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, displayLevel, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, MAX_PLACED_FURNITURE, STAFF_SALARY_MIN } from './rules';
 import { generateDayCustomers, lookupCustomer, registerCustomer } from './customerGen';
 import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProducts } from '../data/atelier';
+import { EMPLOYEE_APPEARANCE_COUNT } from '../art/employeeAssets';
 
 export const SAVE_KEY = 'little-boutique.save.v1';
 const MOVABLE_DECOR_MIGRATION = 'system:wall-decor-v5';
 const CAMPAIGN_LEVEL3_MIGRATION = 'system:campaign-level3-preview-v1';
 const MUSIC_DEFAULT_OFF_MIGRATION = 'system:music-default-off-v2';
 const MUSIC_PLAYER_STARTER_MIGRATION = 'system:music-player-starter-v1';
-const musicPlayerStarter: PlacedFurniture = { uid: 'starter-music-player', id: 'vinyl-player', x: 6, y: 3, rotation: 0 };
+// A fully expanded 16x16 shop can legally contain far more than the old
+// 30-item load limit, especially when rugs and wall decorations are included.
+const MAX_SAVED_FURNITURE = 1000;
+const recoveredFurnitureByState = new WeakMap<GameState, number>();
+export const recoveredFurnitureCount = (state: GameState) => recoveredFurnitureByState.get(state) ?? 0;
+const LEGACY_PRODUCT_IDS: Record<string, string> = {
+  'baby-tee': 'ribbon-kiss-tee',
+  hoodie: 'urban-pulse-hoodie',
+  shirt: 'daily-sky-shirt',
+  concert: 'stage-spark-top',
+  'atelier-oversize-tee': 'pure-line-tee',
+  'atelier-crop-top': 'vintage-maison-rose-corset',
+  'chrome-pixel-crop': 'vintage-maison-rose-corset',
+  'atelier-camisole': 'mint-mellow-cardigan',
+  'atelier-off-shoulder': 'retro-rose-blouse',
+  'atelier-oversize-shirt': 'ivy-prep-knit',
+  'atelier-corset': 'mocha-luxe-corset-blouse',
+  'ribbon-corset': 'ribbon-kiss-tee',
+  'off-shoulder': 'stage-spark-top',
+  'city-jersey': 'daily-sky-shirt',
+  'maison-rose-corset': 'mocha-luxe-corset-blouse',
+  jeans: 'cloud-sky-jeans',
+  'mini-skirt': 'cloud-nine-skirt',
+  cargo: 'downtown-cargo',
+  'atelier-wide-jeans': 'blue-hour-wide-jeans',
+  'atelier-straight-jeans': 'daily-muse-straight-jeans',
+  'atelier-cargo': 'matcha-utility-cargo',
+  'atelier-denim-shorts': 'picnic-day-shorts',
+  'atelier-pleated-skirt': 'ribbon-campus-skirt',
+  'atelier-aline-skirt': 'cocoa-edit-skirt',
+  'campus-pleats': 'campus-crush-skirt',
+  'bubble-skirt': 'cloud-nine-skirt',
+  'parachute-pants': 'matcha-utility-cargo',
+  'maison-rose-skirt': 'campus-crush-skirt',
+  'coquette-heart-skirt': 'picnic-day-shorts',
+  'cyber-pop-flare': 'blue-hour-wide-jeans',
+  'city-beat-cargo': 'downtown-cargo',
+  'pure-line-skirt': 'daily-muse-straight-jeans',
+  'easy-day-shorts': 'cloud-sky-jeans',
+  'academy-charm-skirt': 'ribbon-campus-skirt',
+  'retro-bloom-skirt': 'cocoa-edit-skirt',
+  'idol-shine-skort': 'campus-crush-skirt',
+  'berry-cloud-skirt': 'cloud-nine-skirt',
+  'golden-grace-trousers': 'campus-crush-skirt',
+};
+const migrateProductId = (id: unknown) => typeof id === 'string' ? LEGACY_PRODUCT_IDS[id] ?? id : id;
+const migrateProductRecord = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const migrated: Record<string, unknown> = {};
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    const nextId = String(migrateProductId(id));
+    migrated[nextId] = typeof value === 'number' && typeof migrated[nextId] === 'number'
+      ? migrated[nextId] + value
+      : value;
+  }
+  return migrated;
+};
+const migrateLegacyProducts = (save: Record<string, any>) => {
+  save.inventory = migrateProductRecord(save.inventory);
+  if (save.stats?.soldProducts) save.stats.soldProducts = migrateProductRecord(save.stats.soldProducts);
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    const object = value as Record<string, unknown>;
+    if (typeof object.productId === 'string') object.productId = migrateProductId(object.productId);
+    for (const key of ['productIds', 'onlineListings']) {
+      if (!Array.isArray(object[key])) continue;
+      object[key] = Array.from(new Set((object[key] as unknown[]).map(migrateProductId)));
+    }
+    if (Array.isArray(object.displayItems)) object.displayItems = object.displayItems.map(migrateProductId);
+    Object.values(object).forEach(visit);
+  };
+  visit(save);
+};
+const musicPlayerStarter: PlacedFurniture = { uid: 'starter-music-player', id: 'vinyl-player', x: 1, y: 6, rotation: 0 };
 const movableDecorStarters: PlacedFurniture[] = [
-  { uid: 'starter-atelier-rug', id: 'atelier-rug', x: 2, y: 2, rotation: 0 },
+  { uid: 'starter-atelier-rug', id: 'atelier-rug', x: 0, y: 0, rotation: 0 },
   { uid: 'starter-fashion-print', id: 'fashion-print', x: 4, y: 0, rotation: 0 },
   { uid: 'starter-shop-sign', id: 'shop-sign', x: 1, y: 0, rotation: 0 },
   { uid: 'starter-window-left-a', id: 'boutique-window', x: 0, y: 2, rotation: 1 },
@@ -34,12 +109,11 @@ export function initialState(): GameState {
     activeSupplierId: 'local', supplierRelations: { local: 10, wholesale: 0, global: 0 },
     returnCases: [], vipAppointments: [], coutureOrder: null, coutureAvailableDay: 1, operationSequence: 0, reputationCrisis: null,
     atelierOwned: false, materialInventory: {}, craftedRecipeIds: [], atelierRecipeCards: [], atelierCraftHistory: [], customProducts: [], tailoringJobs: [], atelierDraft: null,
-    storedFurniture: [],
+    storedFurniture: ['mirror'],
     layout: [
-      { uid: 'starter-rack', id: 'rack', x: 0, y: 2, rotation: 0, displayItems: [] },
-      { uid: 'starter-mirror', id: 'mirror', x: 0, y: 0, rotation: 0 },
-      { uid: 'starter-plant', id: 'plant', x: 6, y: 0, rotation: 0 },
-      { uid: 'starter-counter', id: 'counter', x: 4, y: 4, rotation: 0 },
+      { uid: 'starter-rack', id: 'rack', x: 1, y: 3, rotation: 0, displayItems: [] },
+      { uid: 'starter-plant', id: 'plant', x: 6, y: 3, rotation: 0 },
+      { uid: 'starter-counter', id: 'counter', x: 4, y: 3, rotation: 0 },
       { ...musicPlayerStarter },
       ...movableDecorStarters.map(item => ({ ...item })),
     ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, nextDramaDay: 1, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: false, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
@@ -54,7 +128,7 @@ const parseStaffCandidate = (raw: unknown): StaffCandidate | undefined => {
   if (!['id', 'name', 'role', 'bio'].every(key => typeof value[key] === 'string')) return;
   return {
     id: String(value.id).slice(0, 80), name: String(value.name).slice(0, 40), role: String(value.role).slice(0, 60), bio: String(value.bio).slice(0, 180),
-    appearance: Math.floor(finite(value.appearance, 0, 5)), salary: Math.max(STAFF_SALARY_MIN, Math.round(finite(value.salary, 80000, 400000))),
+    appearance: Math.floor(finite(value.appearance, 0, EMPLOYEE_APPEARANCE_COUNT - 1)), salary: Math.max(STAFF_SALARY_MIN, Math.round(finite(value.salary, 80000, 400000))),
     service: Math.round(finite(value.service, 50, 100)), persuasion: Math.round(finite(value.persuasion, 50, 100)),
     charm: Math.round(finite(value.charm, 50, 100)), reliability: Math.round(finite(value.reliability, 50, 100)),
     appliedDay: Math.max(1, Math.floor(finite(value.appliedDay, 1, 99999))),
@@ -67,6 +141,7 @@ export function parseSave(raw: string | null): GameState {
   try {
     const s = JSON.parse(raw);
     if (!s || s.version !== 1 || typeof s.inventory !== 'object' || !s.inventory) return fresh;
+    migrateLegacyProducts(s);
     const state: GameState = { ...fresh, money: finite(s.money, fresh.money), xp: Math.floor(finite(s.xp, 0)), level: Math.max(1, Math.floor(finite(s.level, 1, levels.length))), reputation: finite(s.reputation, 4.5, 5), reviews: Math.floor(finite(s.reviews, 0)), followers: Math.floor(finite(s.followers, 0)), day: Math.max(1, Math.floor(finite(s.day, 1, 99999))), dayTimer: finite(s.dayTimer, DAY_DURATION, DAY_DURATION), dailyLuck: typeof s.dailyLuck === 'string' ? s.dailyLuck : 'Nắng ấm nhẹ nhàng', inventory: {}, prices: {}, stats: emptyStats(), posts: [], claimed: [], storedFurniture: [], customerLoyalty: {}, shopName: typeof s.shopName === 'string' && s.shopName.trim() ? s.shopName.trim().slice(0, 30) : 'My Little Boutique', hasNamedShop: s.hasNamedShop === true };
     state.landLevel = Math.min(landExpansion.length - 1, Math.floor(finite(s.landLevel, 0, landExpansion.length - 1)));
     state.dayTimer = finite(s.dayTimer, dayDuration(state), dayDuration(state));
@@ -286,17 +361,23 @@ export function parseSave(raw: string | null): GameState {
     state.lastCustomerId = (customers.some(c => c.id === s.lastCustomerId) || (typeof s.lastCustomerId === 'string' && !!lookupCustomer(s.lastCustomerId))) ? s.lastCustomerId : null;
     state.nextArrivalIn = Math.floor(finite(s.nextArrivalIn, 4, 30));
     state.patience = selectedVisit?.patience ?? 0;
+    const displacedFurniture: string[] = [];
     if (Array.isArray(s.layout)) {
       const hadDisplayData = s.layout.some((p: unknown) => !!p && typeof p === 'object' && Array.isArray((p as { displayItems?: unknown }).displayItems));
       state.layout = [];
-      for (const p of s.layout.slice(0, 30)) {
+      for (const p of s.layout.slice(0, MAX_SAVED_FURNITURE)) {
         if (p && typeof p.uid === 'string' && /^[a-zA-Z0-9-]{1,80}$/.test(p.uid) && furniture.some(f => f.id === p.id) && [0, 1].includes(p.rotation) && !state.layout.some(f => f.uid === p.uid)) {
           const def = furniture.find(f => f.id === p.id)!;
           const size = landSize(state);
           const normalizedX = isWallFurnitureId(p.id) && p.rotation === 0 ? Math.min(p.x, size - def.width) : p.x;
           const normalizedY = isWallFurnitureId(p.id) && p.rotation === 1 ? Math.min(p.y, size - def.width) : p.y;
           const rawPlaced = { uid: p.uid, id: p.id, x: normalizedX, y: normalizedY, rotation: p.rotation, displayLevel: typeof p.displayLevel === 'number' ? p.displayLevel : 0 };
-          if (!canPlace(state.layout, rawPlaced, state.landLevel)) continue;
+          // Keep overflow and furniture whose old position is no longer valid
+          // in storage instead of silently deleting it while loading the save.
+          if (state.layout.length >= MAX_PLACED_FURNITURE || !canPlace(state.layout, rawPlaced, state.landLevel)) {
+            displacedFurniture.push(p.id);
+            continue;
+          }
           const normalizedDisplayLevel = displayLevel(def, rawPlaced);
           const capacity = displayCapacity(def, { ...rawPlaced, displayLevel: normalizedDisplayLevel });
           const displayItems = def.display && Array.isArray(p.displayItems)
@@ -333,9 +414,11 @@ export function parseSave(raw: string | null): GameState {
         }
       }
     }
-    if (Array.isArray(s.storedFurniture)) {
-      state.storedFurniture = s.storedFurniture.filter((id: unknown) => typeof id === 'string' && furniture.some(f => f.id === id)).slice(0, 100);
-    }
+    const savedStoredFurniture = Array.isArray(s.storedFurniture)
+      ? s.storedFurniture.filter((id: unknown): id is string => typeof id === 'string' && furniture.some(f => f.id === id))
+      : [];
+    state.storedFurniture = [...savedStoredFurniture, ...displacedFurniture].slice(0, MAX_SAVED_FURNITURE);
+    if (displacedFurniture.length) recoveredFurnitureByState.set(state, displacedFurniture.length);
     if (Array.isArray(s.posts)) state.posts = s.posts
       .filter((p: Record<string, unknown>) => p && ['id', 'name', 'handle', 'text', 'color'].every(k => typeof p[k] === 'string') && typeof p.viral === 'boolean' && typeof p.likes === 'number' && typeof p.day === 'number')
       .map((p: Record<string, unknown>) => ({ ...p, channel: p.channel === 'online' ? 'online' : 'shop', reviewStars: Math.max(1, Math.min(5, Math.round(finite(p.reviewStars, p.viral ? 5 : 4, 5)))), ...(typeof p.createdAt === 'number' && Number.isFinite(p.createdAt) ? { createdAt: p.createdAt } : {}) }))
@@ -416,7 +499,7 @@ export function parseSave(raw: string | null): GameState {
           unpaidWages: Math.max(0, Math.floor(finite(value.unpaidWages, 0, 999999999))),
           totalShiftsWorked: Math.max(0, Math.floor(finite(value.totalShiftsWorked, 0, 999999))),
         } satisfies StaffMember;
-      }).filter((employee: StaffMember | undefined): employee is StaffMember => !!employee).slice(0, 30);
+      }).filter((employee: StaffMember | undefined): employee is StaffMember => !!employee).slice(0, EMPLOYEE_APPEARANCE_COUNT);
     }
     const activeStaffIds = new Set(state.employees.map(employee => employee.uid));
     for (const visit of state.activeVisits) {

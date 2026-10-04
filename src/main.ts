@@ -6,6 +6,7 @@ import { GameStore } from './systems/store';
 import { AudioSystem } from './systems/audio';
 import { GameUI } from './ui/GameUI';
 import { ShopScene } from './scenes/ShopScene';
+import { recoveredFurnitureCount } from './systems/save';
 
 let game: Phaser.Game | undefined;
 let viewportFrame = 0;
@@ -95,6 +96,14 @@ audio.setMusicVolume(store.state.musicVolume);
 audio.setMusicTrack(store.state.musicTrack);
 if (store.state.music) audio.music(true);
 const ui = new GameUI(store, audio);
+const recoveredFurniture = recoveredFurnitureCount(store.state);
+if (recoveredFurniture) {
+  // Persist the repaired layout immediately so the notice appears only once.
+  store.commit();
+  window.setTimeout(() => {
+    store.toast(`Đã chuyển ${recoveredFurniture} món nội thất không còn vừa vị trí cũ vào Kho nội thất.`);
+  }, 350);
+}
 const scene = new ShopScene(store, () => { audio.play('click'); ui.openServe(); }, uid => ui.selectFurniture(uid), orderId => ui.openOnlineOrder(orderId), () => ui.openMusicPlayer());
 game = new Phaser.Game({
   type: Phaser.AUTO,

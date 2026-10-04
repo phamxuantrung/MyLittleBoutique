@@ -7,8 +7,8 @@ export function preparedState(): GameState {
   state.hasNamedShop = true;
   state.shopName = 'Sunday Boutique';
   state.money = 500000;
-  state.inventory = { 'baby-tee': 2, jeans: 2, 'ribbon-dress': 1, hoodie: 1, ribbon: 2 };
-  state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['baby-tee', 'jeans', 'ribbon-dress', 'hoodie'];
+  state.inventory = { 'ribbon-kiss-tee': 2, 'cyber-pop-flare': 2, 'ribbon-dress': 1, 'urban-pulse-hoodie': 1, ribbon: 2 };
+  state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['ribbon-kiss-tee', 'cyber-pop-flare', 'ribbon-dress', 'urban-pulse-hoodie'];
   const plantIndex = state.layout.findIndex(item => item.uid === 'starter-plant');
   state.layout[plantIndex] = { uid: 'starter-table', id: 'table', x: 6, y: 0, rotation: 0, displayItems: ['ribbon', 'ribbon'] };
   return state;

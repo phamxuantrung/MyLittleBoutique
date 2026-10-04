@@ -1,5 +1,8 @@
 @import '@fontsource-variable/nunito';
 @import '@fontsource-variable/nunito/wght-italic.css';
+/* Font tên boutique: tự host để canvas dùng đúng trên Safari/iOS và đủ dấu Việt. */
+@import '@fontsource/mali/latin-700.css';
+@import '@fontsource/mali/vietnamese-700.css';
 
 /* ==========================================================================
    CSS CUSTOM PROPERTIES & COLOR DESIGN SYSTEM
@@ -80,6 +83,8 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+  object-fit: contain;
+  object-position: center;
 }
 
 .recipe-materials span {
@@ -5069,7 +5074,7 @@ dialog.dialog-result {
 }
 
 .result-character-img img {
-  width: 88px;
+  width: 72px;
   height: auto;
   max-width: none;
   object-fit: contain;
@@ -5362,7 +5367,7 @@ dialog.dialog-result {
   }
 
   .result-character-img img {
-    width: 76px;
+    width: 64px;
   }
 
   .result-main-title {
@@ -22347,7 +22352,8 @@ dialog.dialog-online-order .dialog-inner {
   display: grid;
   place-items: end center;
 }
-.handover-courier-art svg { width: 80px; height: 104px; filter: drop-shadow(0 4px 3px rgba(48, 95, 87, .16)); }
+.handover-courier-art svg,
+.handover-courier-art img { width: 80px; height: 104px; object-fit: contain; object-position: center bottom; filter: drop-shadow(0 4px 3px rgba(48, 95, 87, .16)); }
 .handover-courier-art b {
   position: absolute;
   right: 2px;
@@ -22614,7 +22620,8 @@ dialog.dialog-online-order .dialog-inner {
   .handover-customer-heading h2 { font-size: 14px; }
   .handover-courier-stage { min-height: 92px; flex-basis: 92px; }
   .handover-courier-art { width: 70px; height: 84px; }
-  .handover-courier-art svg { width: 64px; height: 82px; }
+  .handover-courier-art svg,
+  .handover-courier-art img { width: 64px; height: 82px; }
   .handover-consultation-left .handover-requested { min-height: 90px; grid-template-rows: minmax(52px, 1fr) auto; }
   .handover-consultation-left .handover-requested > span { min-height: 52px; }
   .handover-consultation-right { padding: 6px 8px; }
@@ -27544,26 +27551,28 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
   }
 }
 
-/* Let artwork fill the free height in all three inventory tabs. */
+/* Match stock cards to the import cards: a fixed, safe illustration stage
+   prevents square external artwork from being enlarged past the card edges. */
 .inventory-horizontal-rail>.inv-card {
   display: grid;
-  grid-template-rows: minmax(clamp(66px, 18vh, 118px), 1fr) auto;
+  grid-template-rows: 88px minmax(0, 1fr);
 }
 
 .inventory-panel-shell .inv-visual {
   width: 100%;
-  height: auto;
-  min-height: clamp(66px, 18vh, 118px);
+  height: 88px;
+  min-height: 88px;
   flex: none;
   overflow: hidden;
 }
 
 .inventory-panel-shell .inv-visual .product-art {
   width: auto;
-  height: 82%;
-  max-width: 78%;
-  max-height: min(82%, 132px);
+  height: 70px;
+  max-width: 82%;
+  max-height: 70px;
   object-fit: contain;
+  transform: none;
 }
 
 .inventory-panel-shell .inv-detail {
@@ -28056,12 +28065,13 @@ body:has(.move-bottom-toolbar.is-selection-toolbar:not([hidden])) .selection-mov
 
 .drawer-review-avatar img {
   position: absolute;
-  top: -2px;
+  top: 0;
   left: 50%;
-  width: 58px;
+  width: 50px;
   max-width: none;
-  height: 84px;
+  height: 72px;
   object-fit: contain;
+  object-position: center top;
   transform: translateX(-50%);
 }
 
@@ -35303,7 +35313,7 @@ dialog.dialog-atelier-recipes .dialog-inner {
 /* Keep every product illustration visually balanced inside the same card frame. */
 .import-panel-shell .product-import-grid > .import-card {
   display: grid;
-  grid-template-rows: minmax(clamp(66px, 18vh, 112px), 1fr) auto;
+  grid-template-rows: 88px minmax(0, 1fr);
   width: 100%;
   min-width: 0;
 }
@@ -35322,8 +35332,8 @@ dialog.dialog-atelier-recipes .dialog-inner {
 
 .import-panel-shell .product-import-grid .import-visual {
   width: 100%;
-  height: auto;
-  min-height: clamp(66px, 18vh, 112px);
+  height: 88px;
+  min-height: 88px;
   flex: none;
   overflow: hidden;
 }
@@ -35336,6 +35346,17 @@ dialog.dialog-atelier-recipes .dialog-inner {
   object-fit: contain;
   transform: scale(var(--import-art-scale, 1.08));
   transform-origin: center;
+}
+
+/* Imported artwork already uses a square, tightly fitted canvas. Do not apply
+   the silhouette enlargement intended for the generated 120 × 140 SVG art. */
+.import-panel-shell .product-import-grid .import-visual .import-product-art.product-art-external {
+  width: auto;
+  height: 70px;
+  max-width: 82%;
+  max-height: 70px;
+  object-fit: contain;
+  transform: none;
 }
 
 .import-panel-shell .product-import-grid .import-detail {
@@ -40766,6 +40787,16 @@ dialog.dialog-online-stock .dialog-inner {
   border-radius: 15px;
   background: #fff;
   box-shadow: 0 4px 0 #ecd6e2, 0 8px 18px rgba(95, 48, 76, .07);
+}
+.online-stock-card[data-action] {
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.online-stock-card .product-art,
+.online-stock-card .online-stock-card-photo > i,
+.online-stock-card .online-stock-card-photo > b,
+.online-stock-card .online-product-info {
+  pointer-events: none;
 }
 .online-stock-card.is-listed {
   border-color: #aad9cf;

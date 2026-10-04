@@ -2,8 +2,23 @@
 const gold = '#f5bf4f';
 const svg = (body: string) => `<svg class="atelier-material-art" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${body}</svg>`;
 
+const materialArtwork: Record<string, string> = {
+  cotton: '/assets/atelier/materials/cotton.png',
+  linen: '/assets/atelier/materials/linen.png',
+  denim: '/assets/atelier/materials/denim.png',
+  lace: '/assets/atelier/materials/lace.png',
+  ribbon: '/assets/atelier/materials/ribbon.png',
+  wool: '/assets/atelier/materials/wool.png',
+  silk: '/assets/atelier/materials/silk.png',
+  leather: '/assets/atelier/materials/leather.png',
+  crystal: '/assets/atelier/materials/crystal.png',
+  cashmere: '/assets/atelier/materials/cashmere.png',
+};
+
 /** Illustrated material swatches used throughout the personal atelier UI. */
 export function atelierMaterialIllustration(id: string) {
+  const artwork = materialArtwork[id];
+  if (artwork) return `<img class="atelier-material-art" src="${artwork}" alt="" aria-hidden="true" draggable="false" />`;
   const art: Record<string, string> = {
     cotton: `<ellipse cx="40" cy="68" rx="27" ry="5" fill="#75537B" opacity=".12"/><path d="M22 55c-9-2-11-14-3-19-5-10 7-19 16-13 5-12 22-10 24 2 12-2 18 12 10 20 5 9-5 18-14 14Z" fill="#FFF9F2" stroke="${ink}" stroke-width="2"/><path d="M31 59c4-13 8-22 15-31M41 59c1-10 6-20 15-27" stroke="#D8C7BC" stroke-width="2"/><path d="M25 34c7-7 16-8 22-3" stroke="#FFF" stroke-width="4" opacity=".9"/>`,
     linen: `<ellipse cx="40" cy="68" rx="27" ry="5" fill="#75537B" opacity=".12"/><path d="M17 26 54 17l10 38-37 9Z" fill="#E5D0A9" stroke="${ink}" stroke-width="2"/><path d="m21 30 37-9M24 38l37-9M26 46l37-9M29 54l34-8M29 23l10 37M38 21l10 37M47 19l10 37" stroke="#B89E73" stroke-width="1" opacity=".72"/><path d="M19 25c12 2 24-2 34-7" stroke="#FFF5D8" stroke-width="3"/><path d="m61 17 6 8-6 2Z" fill="#F3A6C9" stroke="${ink}" stroke-width="1.2"/>`,

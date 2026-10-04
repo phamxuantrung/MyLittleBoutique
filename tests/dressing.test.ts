@@ -4,11 +4,11 @@ import { characterSvg } from '../src/art/svg';
 import { renderDressedCustomerLayers } from '../src/art/characters';
 
 it('draws sleeves over arms and hands over sleeves for every character model', () => {
-  const hoodie = products.find(p => p.id === 'hoodie')!;
+  const hoodie = products.find(p => p.id === 'urban-pulse-hoodie')!;
   for (const id of ['lily', 'emma', 'sophie', 'mia', 'zoe', 'ruby']) {
     const svg = characterSvg(customers.find(c => c.id === id)!, 'normal', false, [hoodie]);
     const arms = svg.indexOf('data-body-layer="arms"');
-    const top = svg.indexOf('data-worn="hoodie"');
+    const top = svg.indexOf('data-worn="urban-pulse-hoodie"');
     const hands = svg.indexOf('data-body-layer="hands"');
     expect(arms).toBeGreaterThan(-1);
     expect(top).toBeGreaterThan(arms);
@@ -17,12 +17,10 @@ it('draws sleeves over arms and hands over sleeves for every character model', (
   }
 });
 
-it('only draws skin below trouser cuffs, dress hems and set hems', () => {
+it('only draws skin below trouser cuffs and dress hems', () => {
   const cases = [
-    { product: products.find(p => p.id === 'jeans')!, hem: 142 },
+    { product: products.find(p => p.id === 'blue-hour-wide-jeans')!, hem: 142 },
     { product: products.find(p => p.id === 'ribbon-dress')!, hem: 104 },
-    { product: products.find(p => p.category === 'sets' && p.subcategory === 'pantsSet')!, hem: 142 },
-    { product: products.find(p => p.category === 'sets' && p.subcategory === 'skirtSet')!, hem: 101 },
   ];
   for (const { product, hem } of cases) {
     const layers = renderDressedCustomerLayers([product], '#fff0e6');
@@ -33,7 +31,7 @@ it('only draws skin below trouser cuffs, dress hems and set hems', () => {
 });
 
 it('keeps only wrists for a hoodie, forearms for a tee, and underwear when legs are uncovered', () => {
-  for (const [id, cuff] of [['hoodie', 90], ['baby-tee', 75]] as const) {
+  for (const [id, cuff] of [['urban-pulse-hoodie', 90], ['ribbon-kiss-tee', 75]] as const) {
     const layers = renderDressedCustomerLayers([products.find(p => p.id === id)!], '#fff0e6');
     expect(layers.arms).toContain(`data-exposed="arms" x="0" y="${cuff}"`);
     expect(layers.body).not.toContain('data-exposed="torso"');
@@ -43,7 +41,7 @@ it('keeps only wrists for a hoodie, forearms for a tee, and underwear when legs 
 
 it('omits underwear and the default body under selected bottoms and dresses', () => {
   const customer = customers[0];
-  for (const id of ['jeans', 'ribbon-dress']) {
+  for (const id of ['blue-hour-wide-jeans', 'ribbon-dress']) {
     const svg = characterSvg(customer, 'normal', false, [products.find(p => p.id === id)!]);
     expect(svg).not.toContain('data-preview-basic="underwear"');
     expect(svg).toContain('data-body-layer="exposed-body"');

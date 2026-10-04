@@ -10,12 +10,12 @@ class MemorySave extends SaveSystem {
 
 const preparedStore = (random = () => 0) => {
   const state = initialState();
-  state.inventory['baby-tee'] = 6;
+  state.inventory['ribbon-kiss-tee'] = 6;
   state.inventory.ribbon = 4;
-  state.inventory.hoodie = 3;
-  state.onlineListings = ['baby-tee', 'ribbon'];
+  state.inventory['urban-pulse-hoodie'] = 3;
+  state.onlineListings = ['ribbon-kiss-tee', 'ribbon'];
   state.onlineChannelEnabled = true;
-  state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['baby-tee'];
+  state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['ribbon-kiss-tee'];
   return new GameStore(state, new MemorySave(), random);
 };
 
@@ -42,7 +42,7 @@ describe('regular online orders', () => {
   it('livestream creates only a regular order', () => {
     const store = preparedStore();
     expect(store.beginLivestream()).toBe(true);
-    const result = store.resolveLivestreamRound(['baby-tee'], livestreamRequest(store.state, ['baby-tee', 'ribbon'], 1), 0);
+    const result = store.resolveLivestreamRound(['ribbon-kiss-tee'], livestreamRequest(store.state, ['ribbon-kiss-tee', 'ribbon'], 1), 0);
     expect(result.orderCreated).toBe(true);
     expect(result.conversionChance).toBeGreaterThan(0);
     expect(result.fee).toBeGreaterThan(0);
@@ -53,23 +53,23 @@ describe('regular online orders', () => {
   it('packs regular orders before opening and hands them to the batch courier', () => {
     const store = preparedStore();
     store.state.regularOnlineOrders = [{
-      id: 'regular-test', productIds: ['baby-tee'], customerName: 'An', customerHandle: '@an_daily',
+      id: 'regular-test', productIds: ['ribbon-kiss-tee'], customerName: 'An', customerHandle: '@an_daily',
       price: 100000, fee: 8000, createdDay: 1, dueDay: 2, packed: false, source: 'storefront',
     }];
     expect(store.packRegularOnlineOrder('regular-test')).toBe(true);
     const moneyBefore = store.state.money;
-    const stockBefore = store.state.inventory['baby-tee'];
+    const stockBefore = store.state.inventory['ribbon-kiss-tee'];
     store.openShop();
     expect(store.fulfillPackedRegularOrders()).toBe(true);
     expect(store.state.regularOnlineOrders).toHaveLength(0);
-    expect(store.state.inventory['baby-tee']).toBe(stockBefore - 1);
+    expect(store.state.inventory['ribbon-kiss-tee']).toBe(stockBefore - 1);
     expect(store.state.money).toBe(moneyBefore + 92000);
   });
 
   it('renders the regular-order board and interactive livestream without empty markup', () => {
     const store = preparedStore();
     store.state.regularOnlineOrders = [{
-      id: 'regular-ui', productIds: ['baby-tee'], customerName: 'Linh', customerHandle: '@linh_closet',
+      id: 'regular-ui', productIds: ['ribbon-kiss-tee'], customerName: 'Linh', customerHandle: '@linh_closet',
       price: 99000, fee: 7920, createdDay: 1, dueDay: 2, packed: false, source: 'storefront',
     }];
     expect(onlineChannelModal(store.state)).toContain('data-action="regular-order-open"');
@@ -80,8 +80,8 @@ describe('regular online orders', () => {
     expect(onlineChannelModal(store.state)).not.toContain('online-dashboard-stock-list');
     expect(onlineStockModal(store.state)).toContain('data-action="online-list"');
     expect(onlineStockModal(store.state)).toContain('data-action="online-stock-back"');
-    expect(livestreamModal(store.state, ['baby-tee', 'ribbon', 'jeans'])).toContain('data-action="livestream-start"');
-    const liveMarkup = livestreamModal(store.state, ['baby-tee', 'ribbon', 'jeans'], 1, [], 0, undefined, undefined, 60, 60);
+    expect(livestreamModal(store.state, ['ribbon-kiss-tee', 'ribbon', 'cyber-pop-flare'])).toContain('data-action="livestream-start"');
+    const liveMarkup = livestreamModal(store.state, ['ribbon-kiss-tee', 'ribbon', 'cyber-pop-flare'], 1, [], 0, undefined, undefined, 60, 60);
     expect(liveMarkup).toContain('livestream-two-pane');
     expect(liveMarkup).toContain('data-action="livestream-round-select"');
     expect(liveMarkup).not.toContain('data-action="livestream-submit"');
@@ -89,7 +89,7 @@ describe('regular online orders', () => {
 
   it('allows every listed product to join one livestream without a six-item cap', () => {
     const store = preparedStore();
-    const ids = ['baby-tee', 'jeans', 'ribbon-dress', 'hoodie', 'ribbon', 'sneakers', 'mini-skirt', 'bag'];
+    const ids = ['ribbon-kiss-tee', 'cyber-pop-flare', 'ribbon-dress', 'urban-pulse-hoodie', 'ribbon', 'sneakers', 'berry-cloud-skirt', 'bag'];
     for (const id of ids) store.state.inventory[id] = 8;
     store.state.onlineListings = ids;
     const markup = livestreamModal(store.state, ids);

@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
-import { characterSvg, courierSvg, employeeSvg, furnitureSvg, getCustomerArchetype, heartSvg, isWallArtAsset, ownerPcSvg, ownerSvg, roomSvg, roomSvgBounds, svgUrl } from '../art/svg';
+import { characterSvg, furnitureSvg, getCustomerArchetype, heartSvg, isWallArtAsset, roomSvg, roomSvgBounds, svgUrl } from '../art/svg';
+import { EMPLOYEE_APPEARANCE_COUNT, employeeArtwork } from '../art/employeeAssets';
+import { customerArtwork } from '../art/customerAssets';
+import { COURIER_APPEARANCE_COUNT, courierArtwork } from '../art/courierAssets';
+import { externalFurnitureArtwork } from '../art/furnitureAssets';
 import { customers, furniture, products } from '../data/catalog';
 import type { GameStore } from '../systems/store';
 import { activeCustomer, activeEmployees, activeVisit, canPlace, customerNeedsAdvice, isWallFurnitureId, landExpansion, landSize, nextLandExpansion, randomBrowseThought } from '../systems/rules';
@@ -41,18 +45,47 @@ const shopSignTextureKey = (side: 'left' | 'right', name: string) => {
   return `f-shop-sign-${side}-${hash.toString(36)}`;
 };
 
-// Ignore faint antialiasing and decorative shadows when hit-testing furniture.
-// This keeps clicks on the visible painted object instead of its transparent SVG box.
-const FURNITURE_HIT_ALPHA_TOLERANCE = 40;
-const FURNITURE_HIT_OFFSETS_MOUSE: ReadonlyArray<readonly [number, number]> = [
-  [0, 0], [3, 0], [-3, 0], [0, 3], [0, -3],
-];
-const FURNITURE_HIT_OFFSETS_TOUCH: ReadonlyArray<readonly [number, number]> = [
-  [0, 0],
-  [6, 0], [-6, 0], [0, 6], [0, -6],
-  [10, 0], [-10, 0], [0, 10], [0, -10],
-  [7, 7], [-7, 7], [7, -7], [-7, -7],
-];
+// Every visible pixel belongs to the furniture hit area. Fully transparent
+// padding remains click-through so nearby furniture can still be selected.
+const FURNITURE_HIT_ALPHA_TOLERANCE = 1;
+const PRIMARY_CUSTOMER_SCALE = 0.5;
+const SECONDARY_CUSTOMER_SCALE = 0.46;
+const STAFF_SCALE = 0.5;
+const COURIER_SCALE = 0.5;
+const SHOP_ZOOM_MIN = 0.7;
+const SHOP_ZOOM_MAX = 1.6;
+const CENTERED_FURNITURE_ART = new Set([
+  'rack', 'shoe-shelf', 'bag-stand', 'table',
+  'wall-rack', 'shoe-cabinet', 'bag-cabinet', 'lux-rack', 'couture-rack',
+  'glass-showcase', 'global-showcase', 'atelier-island', 'jewel-shoe-wall',
+  'flowers', 'plant', 'mannequin', 'monstera-plant', 'beanbag', 'vinyl-player',
+  'coffee-corner', 'counter', 'sofa',
+  'coquette-mirror', 'wavy-mirror', 'mirror', 'tulip-lamp', 'perfume-table',
+  'champagne-sofa', 'runway-mannequin',
+  'fitting',
+]);
+const SMALL_IMPORTED_FURNITURE_ART = new Set([
+  'flowers', 'plant', 'mannequin', 'monstera-plant', 'beanbag', 'vinyl-player',
+  'coquette-mirror', 'wavy-mirror', 'mirror', 'tulip-lamp', 'perfume-table',
+]);
+const LARGE_IMPORTED_MIRROR_ART = new Set(['coquette-mirror', 'wavy-mirror', 'mirror']);
+const IMPORTED_RUG_ART = new Set(['atelier-rug', 'heart-rug', 'checkered-rug']);
+const IMPORTED_WALL_ART = new Set([
+  'blush-blinds', 'botanical-print', 'shoe-sketch-print', 'parfum-print', 'runway-print',
+  'fashion-print', 'gallery-print', 'ribbon-sign', 'lightbox-sign', 'neon-sign',
+]);
+// Chỉnh riêng độ cao đồ treo tường: số dương = dịch lên, số âm = dịch xuống.
+const IMPORTED_WALL_LIFT: Partial<Record<string, number>> = {
+  // Mỗi giá trị bù cho khoảng trong suốt khác nhau trong PNG để tâm phần
+  // nhìn thấy của biển trùng với tâm theo chiều cao của bức tường.
+  'ribbon-sign': 36,
+  'lightbox-sign': 40,
+  'neon-sign': 47,
+};
+// The imported furniture PNGs share a 360x460 canvas and their floor-contact
+// line is normalized to y=440. Use that exact point as the ground anchor.
+const CENTERED_FURNITURE_ORIGIN = { x: .5, y: 440 / 460 };
+const SHOP_SIGN_FONT_SCALE = 0.9;
 
 const shopSignTextLayout = (name: string) => {
   const normalized = (name.trim() || 'My Little Boutique').normalize('NFC');
@@ -76,7 +109,8 @@ const shopSignTextLayout = (name: string) => {
     }
   }
   const longest = Math.max(...lines.map(line => line.length));
-  return { lines, fontSize: longest > 20 ? 14 : longest > 16 ? 17 : longest > 12 ? 20 : 24 };
+  const baseFontSize = longest > 20 ? 14 : longest > 16 ? 17 : longest > 12 ? 20 : 24;
+  return { lines, fontSize: Math.round(baseFontSize * SHOP_SIGN_FONT_SCALE) };
 };
 
 /* Danh sách câu thoại & cảm thán dễ thương của chủ shop (Retro Anime Boutique) */
@@ -184,7 +218,9 @@ export class ShopScene extends Phaser.Scene {
   private gestureEpoch = 0;
   private isDraggingPiece = false;
   private furnitureGesturePointerId = -1;
+  private furnitureGestureUid?: string;
   private furnitureDragPointerId = -1;
+  private furnitureDragUid?: string;
   private selectionClearBlockedUntil = 0;
   private currentTab = 'shop';
   private readonly coarsePointer = typeof window !== 'undefined'
@@ -202,17 +238,22 @@ export class ShopScene extends Phaser.Scene {
   }
   private furniturePixelHitTest = (_hitArea: unknown, x: number, y: number, gameObject: Phaser.GameObjects.GameObject) => {
     const image = gameObject as Phaser.GameObjects.Image;
-    const centerX = Math.round(x);
-    const centerY = Math.round(y);
-    // Exact painted pixels are checked first. A small fixed set of surrounding
-    // probes gives touch input some tolerance without scanning a full pixel disk
-    // for every furniture item on every pointer move.
-    const offsets = this.coarsePointer ? FURNITURE_HIT_OFFSETS_TOUCH : FURNITURE_HIT_OFFSETS_MOUSE;
-    for (const [offsetX, offsetY] of offsets) {
-      const alpha = this.textures.getPixelAlpha(centerX + offsetX, centerY + offsetY, image.texture.key, image.frame.name);
-      if (alpha !== null && alpha >= FURNITURE_HIT_ALPHA_TOLERANCE) return true;
-    }
-    return false;
+    const width = image.frame.width;
+    const height = image.frame.height;
+    if (x < 0 || y < 0 || x >= width || y >= height) return false;
+
+    // Phaser has already converted the pointer through camera, position,
+    // rotation, scale, parent and origin transforms. flipX / flipY only change
+    // the rendered UVs, so mirror the texture coordinates here as well.
+    const textureX = image.flipX ? width - 1 - x : x;
+    const textureY = image.flipY ? height - 1 - y : y;
+    const alpha = this.textures.getPixelAlpha(
+      Math.floor(textureX),
+      Math.floor(textureY),
+      image.texture.key,
+      image.frame.name,
+    );
+    return alpha !== null && alpha >= FURNITURE_HIT_ALPHA_TOLERANCE;
   };
   private furnitureDragHitTest = () => true;
   setSaleSpeed(speed: 1 | 2 | 4) {
@@ -258,7 +299,9 @@ export class ShopScene extends Phaser.Scene {
     this.activeNativeTouchPointerIds.clear();
     this.gestureEpoch++;
     this.furnitureGesturePointerId = -1;
+    this.furnitureGestureUid = undefined;
     this.furnitureDragPointerId = -1;
+    this.furnitureDragUid = undefined;
     this.isDraggingPiece = false;
     // Phaser documents resetPointers specifically for cases where DOM UI or a
     // third-party component steals the matching pointer-up event. Without it,
@@ -295,20 +338,33 @@ export class ShopScene extends Phaser.Scene {
         if (f.art === 'shop-sign') continue;
         const rightKey = f.art === 'shop-sign' ? shopSignTextureKey('right', this.store.state.shopName) : `f-${f.art}-right`;
         const leftKey = f.art === 'shop-sign' ? shopSignTextureKey('left', this.store.state.shopName) : `f-${f.art}-left`;
-        if (!this.textures.exists(rightKey)) this.load.svg(rightKey, svgUrl(furnitureSvg(f.art, 'right', this.store.state.shopName)));
-        if (!this.textures.exists(leftKey)) this.load.svg(leftKey, svgUrl(furnitureSvg(f.art, 'left', this.store.state.shopName)));
+        const artwork = externalFurnitureArtwork(f.art);
+        if (artwork) {
+          if (!this.textures.exists(rightKey)) this.load.image(rightKey, artwork);
+          if (!this.textures.exists(leftKey)) this.load.image(leftKey, artwork);
+        } else {
+          if (!this.textures.exists(rightKey)) this.load.svg(rightKey, svgUrl(furnitureSvg(f.art, 'right', this.store.state.shopName)));
+          if (!this.textures.exists(leftKey)) this.load.svg(leftKey, svgUrl(furnitureSvg(f.art, 'left', this.store.state.shopName)));
+        }
       } else if (!this.textures.exists(`f-${f.art}`)) {
-        this.load.svg(`f-${f.art}`, svgUrl(furnitureSvg(f.art)));
+        const artwork = externalFurnitureArtwork(f.art);
+        if (artwork) this.load.image(`f-${f.art}`, artwork);
+        else this.load.svg(`f-${f.art}`, svgUrl(furnitureSvg(f.art)));
       }
     }
     for (const c of customers) {
-      this.load.svg(`c-${c.id}`, svgUrl(characterSvg(c)));
-      this.load.svg(`c-${c.id}-happy`, svgUrl(characterSvg(c, 'happy')));
+      const artwork = customerArtwork(c.id);
+      if (artwork) this.load.image(`c-${c.id}`, artwork);
+      else this.load.svg(`c-${c.id}`, svgUrl(characterSvg(c)));
+      const happyArtwork = customerArtwork(c.id, 'happy');
+      if (happyArtwork) this.load.image(`c-${c.id}-happy`, happyArtwork);
     }
-    this.load.svg('owner', svgUrl(ownerSvg()));
-    this.load.svg('owner-pc', svgUrl(ownerPcSvg()));
-    for (let appearance = 0; appearance < 6; appearance++) this.load.svg(`staff-${appearance}`, svgUrl(employeeSvg(appearance)));
-    for (let variant = 0; variant < 3; variant++) this.load.svg(`courier-${variant}`, svgUrl(courierSvg(variant)));
+    const ownerAsset = '/assets/characters/main-character.svg';
+    const ownerTextureSize = { width: 147, height: 160 };
+    this.load.svg('owner', ownerAsset, ownerTextureSize);
+    this.load.svg('owner-pc', ownerAsset, ownerTextureSize);
+    for (let appearance = 0; appearance < EMPLOYEE_APPEARANCE_COUNT; appearance++) this.load.image(`staff-photo-${appearance}`, employeeArtwork(appearance));
+    for (let variant = 0; variant < COURIER_APPEARANCE_COUNT; variant++) this.load.image(`courier-photo-${variant}`, courierArtwork(variant));
     this.load.svg('heart', svgUrl(heartSvg()));
   }
   create() {
@@ -373,6 +429,11 @@ export class ShopScene extends Phaser.Scene {
     });
     this.input.on('dragstart', (pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image) => {
       if (!this.edit) return;
+      const uid = obj.getData('uid') as string;
+      // The first piece that starts moving owns the drag until it is released.
+      // Phaser can emit dragstart before an Image's pointerdown callback on
+      // emulated touch input, so ownership is established here.
+      if (this.isDraggingPiece) return;
       if (this.pinchPointerIds || this.activeTouchPointerIds.size > 1) {
         this.input.setDragState(pointer, 0);
         return;
@@ -380,6 +441,7 @@ export class ShopScene extends Phaser.Scene {
       this.isDraggingPiece = true;
       this.furnitureGesturePointerId = pointer.id;
       this.furnitureDragPointerId = pointer.id;
+      this.furnitureDragUid = uid;
       this.isPanning = false;
       this.pinchDist = 0;
       this.pinchPointerIds = undefined;
@@ -387,7 +449,6 @@ export class ShopScene extends Phaser.Scene {
       this.stopSelectionPulse();
       this.selectionArrows?.clear();
       obj.setData('dragCell', undefined);
-      const uid = obj.getData('uid') as string;
       if (this.selected !== uid) {
         this.selected = uid;
         this.selectCallback(uid);
@@ -406,15 +467,17 @@ export class ShopScene extends Phaser.Scene {
       obj.setAlpha(.75).setDepth(draggingWallItem ? -600 : 1000);
     });
     this.input.on('drag', (pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image, x: number, y: number) => {
-      if (!this.edit || !this.isDraggingPiece || pointer.id !== this.furnitureDragPointerId) return;
+      if (!this.edit || !this.isDraggingPiece || pointer.id !== this.furnitureDragPointerId
+        || obj.getData('uid') !== this.furnitureDragUid) return;
       const p = this.store.state.layout.find(p => p.uid === obj.getData('uid'));
       if (!p) return;
       const wallLift = obj.getData('wallLift') ?? 0;
       const wallMounted = isWallFurnitureId(p.id);
-      const rawCell = wallMounted ? toWallGrid(p, x, y + wallLift) : toFurnitureGrid(p, x, y);
+      const floorEndOffset = wallMounted ? 0 : this.furnitureFloorEndOffset(p);
+      const rawCell = wallMounted ? toWallGrid(p, x, y + wallLift) : toFurnitureGrid(p, x, y - floorEndOffset);
       const placement = wallMounted
         ? { cell: rawCell, valid: canPlace(this.store.state.layout, { ...p, ...rawCell }, this.store.state.landLevel) }
-        : this.resolveFloorPlacement(p, rawCell, x, y);
+        : this.resolveFloorPlacement(p, rawCell, x, y - floorEndOffset);
       const { cell, valid } = placement;
       // Floor furniture follows the pointer every frame. Grid validation and
       // preview drawing below only run when the pointer enters another cell.
@@ -434,13 +497,19 @@ export class ShopScene extends Phaser.Scene {
       this.drawGhost({ ...p, ...cell }, valid);
     });
     this.input.on('dragend', (pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.Image) => {
-      if (!this.edit || !this.isDraggingPiece || pointer.id !== this.furnitureDragPointerId) return;
+      if (!this.edit || !this.isDraggingPiece || pointer.id !== this.furnitureDragPointerId
+        || obj.getData('uid') !== this.furnitureDragUid) return;
       this.isDraggingPiece = false;
       if (this.furnitureDragPointerId === pointer.id) this.furnitureDragPointerId = -1;
+      this.furnitureDragUid = undefined;
+      if (this.furnitureGesturePointerId === pointer.id) {
+        this.furnitureGesturePointerId = -1;
+        this.furnitureGestureUid = undefined;
+      }
       const p = this.store.state.layout.find(piece => piece.uid === obj.getData('uid'));
       const cell = obj.getData('dragCell') ?? (p && isWallFurnitureId(p.id)
         ? toWallGrid(p, obj.x, obj.y + (obj.getData('wallLift') ?? 0))
-        : p ? toFurnitureGrid(p, obj.x, obj.y) : { x: 0, y: 0 });
+        : p ? toFurnitureGrid(p, obj.x, obj.y - this.furnitureFloorEndOffset(p)) : { x: 0, y: 0 });
       const moved = this.store.moveFurniture(obj.getData('uid'), cell.x, cell.y);
       obj.setData('dragCell', undefined);
       obj.setAlpha(1);
@@ -497,7 +566,9 @@ export class ShopScene extends Phaser.Scene {
         this.isPanning = false;
         this.panPointerId = -1;
         this.furnitureGesturePointerId = -1;
+        this.furnitureGestureUid = undefined;
         this.furnitureDragPointerId = -1;
+        this.furnitureDragUid = undefined;
         this.pinchPointerIds = [first.id, second.id];
         this.pinchDist = Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y);
         this.pinchZoom = this.cameras.main.zoom;
@@ -537,7 +608,7 @@ export class ShopScene extends Phaser.Scene {
           return;
         }
         const d = Phaser.Math.Distance.Between(first.x, first.y, second.x, second.y);
-        const z = Phaser.Math.Clamp(this.pinchZoom * (d / this.pinchDist), 0.5, 2.2);
+        const z = Phaser.Math.Clamp(this.pinchZoom * (d / this.pinchDist), SHOP_ZOOM_MIN, SHOP_ZOOM_MAX);
         const centerX = (first.x + second.x) / 2;
         const centerY = (first.y + second.y) / 2;
         const before = this.cameras.main.getWorldPoint(centerX, centerY);
@@ -572,8 +643,14 @@ export class ShopScene extends Phaser.Scene {
       this.pinchDist = 0;
       this.pinchPointerIds = undefined;
       this.panPointerId = -1;
-      if (!pointer || pointer.id === this.furnitureGesturePointerId) this.furnitureGesturePointerId = -1;
-      if (!pointer || pointer.id === this.furnitureDragPointerId) this.furnitureDragPointerId = -1;
+      if (!pointer || pointer.id === this.furnitureGesturePointerId) {
+        this.furnitureGesturePointerId = -1;
+        this.furnitureGestureUid = undefined;
+      }
+      if (!pointer || pointer.id === this.furnitureDragPointerId) {
+        this.furnitureDragPointerId = -1;
+        this.furnitureDragUid = undefined;
+      }
       setTimeout(() => { this.hasPanned = false; }, 50);
     };
     this.input.on('pointerup', stopPan);
@@ -584,7 +661,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.input.on('wheel', (pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
       if (this.currentTab !== 'shop' || this.isDraggingPiece || this.furnitureGesturePointerId >= 0) return;
-      const targetZoom = Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.00115, 0.5, 2.2);
+      const targetZoom = Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.00115, SHOP_ZOOM_MIN, SHOP_ZOOM_MAX);
       const before = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       this.cameras.main.setZoom(targetZoom);
       const after = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
@@ -643,7 +720,7 @@ export class ShopScene extends Phaser.Scene {
       const roomBounds = roomSvgBounds(landExpansion[level].size);
       const roomTexture = showDefaultLamp ? `room-${level}` : `room-${level}-no-default-lamp`;
       this.room?.setTexture(roomTexture).setPosition(roomBounds.x, 0);
-      this.cameras.main.setZoom(Math.max(.52, 1 - level * .07));
+      this.cameras.main.setZoom(Math.max(SHOP_ZOOM_MIN, 1 - level * .07));
     }
     this.updateLandExpansionButtons();
   }
@@ -828,22 +905,77 @@ export class ShopScene extends Phaser.Scene {
       .sort((a, b) => a.distance - b.distance)[0];
     return candidate ? { cell: candidate.cell, valid: true } : { cell: preferred, valid: false };
   }
+
+  private furnitureHasOpaquePixelAtWorld(image: Phaser.GameObjects.Image, worldX: number, worldY: number) {
+    if (!image.visible || image.alpha <= 0) return false;
+    const local = image.getWorldTransformMatrix().applyInverse(worldX, worldY);
+    let x = local.x + image.displayOriginX;
+    let y = local.y + image.displayOriginY;
+    const width = image.frame.width;
+    const height = image.frame.height;
+    if (x < 0 || y < 0 || x >= width || y >= height) return false;
+    if (image.flipX) x = width - 1 - x;
+    if (image.flipY) y = height - 1 - y;
+    const alpha = this.textures.getPixelAlpha(Math.floor(x), Math.floor(y), image.texture.key, image.frame.name);
+    return alpha !== null && alpha >= FURNITURE_HIT_ALPHA_TOLERANCE;
+  }
+
+  private selectionArrowDistance(anchor: Phaser.Math.Vector2, outward: Phaser.Math.Vector2) {
+    const perpendicular = new Phaser.Math.Vector2(-outward.y, outward.x);
+    for (const distance of [34, 48, 62, 76, 90, 104, 118]) {
+      let clear = true;
+      // Keep the whole floating arrow clear of every painted pixel, including
+      // the selected furniture itself. This lets oversized artwork extend well
+      // beyond its logical floor footprint without being covered by controls.
+      for (let forward = -16; forward <= 16 && clear; forward += 4) {
+        for (let lateral = -14; lateral <= 14; lateral += 4) {
+          const point = anchor.clone()
+            .add(outward.clone().scale(distance + forward))
+            .add(perpendicular.clone().scale(lateral));
+          for (const piece of this.pieces.values()) {
+            if (this.furnitureHasOpaquePixelAtWorld(piece, point.x, point.y)) {
+              clear = false;
+              break;
+            }
+          }
+          if (!clear) break;
+        }
+      }
+      if (clear) return distance;
+    }
+    return undefined;
+  }
+
   private drawSelectionArrows(p: PlacedFurniture) {
     const graphics = this.selectionArrows;
     if (!graphics || !this.edit || this.selected !== p.uid) return;
-    const drawArrow = (from: Phaser.Math.Vector2, to: Phaser.Math.Vector2) => {
-      const direction = to.clone().subtract(from).normalize();
+    const drawArrow = (anchor: Phaser.Math.Vector2, outward: Phaser.Math.Vector2) => {
+      const direction = outward.clone().normalize();
+      const distance = this.selectionArrowDistance(anchor, direction);
+      if (distance === undefined) return;
       const perpendicular = new Phaser.Math.Vector2(-direction.y, direction.x);
-      const headBase = to.clone().subtract(direction.clone().scale(9));
-      const left = headBase.clone().add(perpendicular.clone().scale(5));
-      const right = headBase.clone().subtract(perpendicular.clone().scale(5));
-      graphics.lineStyle(6, 0xffffff, .95).lineBetween(from.x, from.y, to.x, to.y);
-      graphics.lineStyle(3, 0xd83b96, 1).lineBetween(from.x, from.y, to.x, to.y);
-      graphics.fillStyle(0xffffff, .95).fillTriangle(to.x, to.y, left.x, left.y, right.x, right.y);
-      const innerBase = to.clone().subtract(direction.clone().scale(7));
-      const innerLeft = innerBase.clone().add(perpendicular.clone().scale(3.5));
-      const innerRight = innerBase.clone().subtract(perpendicular.clone().scale(3.5));
-      graphics.fillStyle(0xd83b96, 1).fillTriangle(to.x, to.y, innerLeft.x, innerLeft.y, innerRight.x, innerRight.y);
+      const center = anchor.clone().add(direction.clone().scale(distance));
+      const point = (forward: number, lateral: number) => center.clone()
+        .add(direction.clone().scale(forward))
+        .add(perpendicular.clone().scale(lateral));
+      const arrow = [
+        point(16, 0),
+        point(2, 13),
+        point(2, 6),
+        point(-14, 6),
+        point(-14, -6),
+        point(2, -6),
+        point(2, -13),
+      ];
+      const shadow = arrow.map(vertex => new Phaser.Geom.Point(vertex.x, vertex.y + 3));
+
+      graphics.fillStyle(0x762052, .24).fillPoints(shadow, true);
+      graphics.fillStyle(0xff77b9, 1).fillPoints(arrow, true);
+      graphics.lineStyle(4, 0xffffff, .96).strokePoints(arrow, true);
+      graphics.lineStyle(2, 0x84245d, 1).strokePoints(arrow, true);
+      const shineStart = point(-10, -2.5);
+      const shineEnd = point(-1, -2.5);
+      graphics.lineStyle(2, 0xffdced, .9).lineBetween(shineStart.x, shineStart.y, shineEnd.x, shineEnd.y);
     };
 
     if (isWallFurnitureId(p.id)) {
@@ -853,8 +985,14 @@ export class ShopScene extends Phaser.Scene {
       const start = new Phaser.Math.Vector2(startPoint.x, startPoint.y - 64);
       const end = new Phaser.Math.Vector2(endPoint.x, endPoint.y - 64);
       const along = end.clone().subtract(start).normalize();
-      drawArrow(start.clone().add(along.clone().scale(7)), start.clone().subtract(along.clone().scale(22)));
-      drawArrow(end.clone().subtract(along.clone().scale(7)), end.clone().add(along.clone().scale(22)));
+      const moves = p.rotation === 1
+        ? [{ anchor: start, outward: along.clone().negate(), x: p.x, y: p.y - 1 }, { anchor: end, outward: along, x: p.x, y: p.y + 1 }]
+        : [{ anchor: start, outward: along.clone().negate(), x: p.x - 1, y: p.y }, { anchor: end, outward: along, x: p.x + 1, y: p.y }];
+      for (const move of moves) {
+        if (canPlace(this.store.state.layout, { ...p, x: move.x, y: move.y }, this.store.state.landLevel)) {
+          drawArrow(move.anchor, move.outward);
+        }
+      }
       return;
     }
 
@@ -867,11 +1005,19 @@ export class ShopScene extends Phaser.Scene {
     ];
     const centerPoint = furnitureAnchor(p);
     const center = new Phaser.Math.Vector2(centerPoint.x, centerPoint.y);
+    const moves = [
+      { x: p.x, y: p.y - 1 },
+      { x: p.x + 1, y: p.y },
+      { x: p.x, y: p.y + 1 },
+      { x: p.x - 1, y: p.y },
+    ];
     for (let index = 0; index < corners.length; index++) {
+      const move = moves[index];
+      if (!canPlace(this.store.state.layout, { ...p, ...move }, this.store.state.landLevel)) continue;
       const next = corners[(index + 1) % corners.length];
       const midpoint = new Phaser.Math.Vector2((corners[index].x + next.x) / 2, (corners[index].y + next.y) / 2);
       const outward = midpoint.clone().subtract(center).normalize();
-      drawArrow(midpoint.clone().add(outward.clone().scale(5)), midpoint.clone().add(outward.clone().scale(25)));
+      drawArrow(midpoint, outward);
     }
   }
   refresh() { this.refreshFurniture(); this.refreshCustomer(); this.refreshOnlineShippers(); }
@@ -982,19 +1128,25 @@ export class ShopScene extends Phaser.Scene {
         ? p.rotation === 1 ? toWorld(0, p.y + wallSpan / 2) : toWorld(p.x + wallSpan / 2, 0)
         : furnitureAnchor(p);
       const isWallSign = ['shop-sign', 'ribbon-sign', 'neon-sign', 'lightbox-sign'].includes(f.art);
-      const wallLift = wallMounted ? (isWallSign ? -20 : 25) : 0;
-      const pos = { x: anchor.x, y: anchor.y - wallLift };
+      const wallLift = wallMounted ? (IMPORTED_WALL_LIFT[f.art] ?? (isWallSign ? -20 : 25)) : 0;
+      const pos = { x: anchor.x, y: anchor.y - wallLift + (wallMounted ? 0 : this.furnitureFloorEndOffset(p)) };
       let img = this.pieces.get(p.uid);
       if (!img) {
         if (!this.textures.exists(textureKey)) continue;
-        const scale = f.art === 'atelier-rug' ? 1.45
+        const scale = IMPORTED_RUG_ART.has(f.art) ? .65
+          : IMPORTED_WALL_ART.has(f.art) ? .47
+          : LARGE_IMPORTED_MIRROR_ART.has(f.art) ? .38
+          : SMALL_IMPORTED_FURNITURE_ART.has(f.art) ? .29
+          : CENTERED_FURNITURE_ART.has(f.art) && f.art !== 'table' ? .47
+            : f.art === 'table' ? .425
+          : f.art === 'atelier-rug' ? 1.45
           : ['shop-sign', 'ribbon-sign', 'neon-sign', 'lightbox-sign'].includes(f.art) ? 1.12
             : f.art === 'fashion-print' ? .76
               : f.art === 'gallery-print' ? 1.02
                 : ['botanical-print', 'runway-print', 'parfum-print', 'shoe-sketch-print'].includes(f.art) ? .72 : .85;
         // Furniture textures have generous transparent viewboxes. Use the actual
         // rendered alpha mask and ignore faint shadows/antialiasing around the art.
-        const visualOrigin = wallMounted ? { x: .5, y: .87 } : this.furnitureVisualOrigin(textureKey);
+        const visualOrigin = this.furniturePlacementOrigin(f.art, textureKey, wallMounted);
         img = this.add.image(pos.x, pos.y, textureKey).setOrigin(visualOrigin.x, visualOrigin.y).setScale(scale).setInteractive({
           hitArea: {},
           hitAreaCallback: this.furniturePixelHitTest,
@@ -1009,7 +1161,9 @@ export class ShopScene extends Phaser.Scene {
         img.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
           if (this.currentTab !== 'shop' || this.pointerIsCoveredByUi(pointer)) return;
           if (this.edit) {
+            if (this.isDraggingPiece && (pointer.id !== this.furnitureDragPointerId || p.uid !== this.furnitureDragUid)) return;
             this.furnitureGesturePointerId = pointer.id;
+            this.furnitureGestureUid = p.uid;
             this.isPanning = false;
             this.pinchDist = 0;
           }
@@ -1088,10 +1242,11 @@ export class ShopScene extends Phaser.Scene {
       img.setData('wallLift', wallLift);
       if (this.textures.exists(textureKey)) {
         img.setTexture(textureKey);
-        const visualOrigin = wallMounted ? { x: .5, y: .87 } : this.furnitureVisualOrigin(textureKey);
+        const visualOrigin = this.furniturePlacementOrigin(f.art, textureKey, wallMounted);
         img.setOrigin(visualOrigin.x, visualOrigin.y);
       }
-      img.setPosition(pos.x, pos.y).setDepth(renderDepth).setFlipX(!wallMounted && p.rotation === 1);
+      const flipImportedWall = wallMounted && IMPORTED_WALL_ART.has(f.art) && p.rotation === 1;
+      img.setPosition(pos.x, pos.y).setDepth(renderDepth).setFlipX(flipImportedWall || (!wallMounted && p.rotation === 1));
       // Trong giờ bán, toàn bộ nội thất được khóa để thao tác chạm chỉ dành cho khách hàng.
       if (img.input) img.input.enabled = this.store.state.phase !== 'open' || p.id === 'vinyl-player';
       if (this.selected === p.uid) {
@@ -1142,6 +1297,22 @@ export class ShopScene extends Phaser.Scene {
       : { x: .5, y: .87 };
     this.furnitureVisualOrigins.set(textureKey, origin);
     return origin;
+  }
+
+  private furniturePlacementOrigin(art: string, textureKey: string, wallMounted: boolean) {
+    if (wallMounted) return IMPORTED_WALL_ART.has(art) ? { x: .5, y: 400 / 460 } : { x: .5, y: .87 };
+    if (IMPORTED_RUG_ART.has(art)) return { x: .5, y: .5 };
+    if (CENTERED_FURNITURE_ART.has(art)) return CENTERED_FURNITURE_ORIGIN;
+    return this.furnitureVisualOrigin(textureKey);
+  }
+
+  private furnitureFloorEndOffset(item: PlacedFurniture) {
+    const definition = furniture.find(candidate => candidate.id === item.id);
+    if (!definition || !CENTERED_FURNITURE_ART.has(definition.art)) return 0;
+    const footprint = furnitureFootprint(item);
+    // Each isometric grid step adds 28px vertically. From the footprint centre
+    // to its lowest/front edge is half the combined width and height.
+    return (footprint.width + footprint.height) * 14;
   }
 
   private staffFloorSpots(count: number) {
@@ -1237,8 +1408,9 @@ export class ShopScene extends Phaser.Scene {
           : `${employee.name} · Tư vấn`;
       let avatar = this.staffAvatars.get(employee.uid);
       if (!avatar) {
-        const sprite = this.add.image(0, 0, `staff-${Math.abs(employee.appearance) % 6}`).setOrigin(.5, 1).setScale(.7);
-        const label = this.add.text(0, -128.5, employee.name, {
+        const appearance = ((Math.trunc(employee.appearance) % EMPLOYEE_APPEARANCE_COUNT) + EMPLOYEE_APPEARANCE_COUNT) % EMPLOYEE_APPEARANCE_COUNT;
+        const sprite = this.add.image(0, 0, `staff-photo-${appearance}`).setOrigin(.5, 1).setScale(STAFF_SCALE);
+        const label = this.add.text(0, -106.5, employee.name, {
           fontFamily: 'Nunito Variable, Arial, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#7b315f',
           align: 'center',
         }).setOrigin(.5).setResolution(2).setStroke('#fffdfb', 3).setShadow(0, 2, 'rgba(78,39,70,.42)', 3, true, true);
@@ -1247,7 +1419,10 @@ export class ShopScene extends Phaser.Scene {
         this.tweens.add({ targets: label, alpha: { from: .78, to: 1 }, duration: 1050, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.staffAvatars.set(employee.uid, avatar);
       }
+      const staffSprite = avatar.getData('staffSprite') as Phaser.GameObjects.Image | undefined;
+      if (staffSprite) staffSprite.setScale(STAFF_SCALE);
       const label = avatar.getData('staffLabel') as Phaser.GameObjects.Text | undefined;
+      if (label) label.setY(-106.5);
       label?.setText(activity);
       this.moveStaffTo(avatar, spot, targetKey, index);
       avatar.setVisible(this.store.state.phase === 'open' && this.currentTab === 'shop');
@@ -1290,7 +1465,7 @@ export class ShopScene extends Phaser.Scene {
     if (sprite) {
       this.tweens.killTweensOf(sprite);
       sprite.setFlipX(target.x < avatar.x);
-      sprite.setAngle(0).setScale(.7);
+      sprite.setAngle(0).setScale(STAFF_SCALE);
     }
     avatar.setData('staffTargetKey', targetKey).setData('staffBaseX', target.x).setData('staffBaseY', target.y);
     if (distance < 5) {
@@ -1299,12 +1474,12 @@ export class ShopScene extends Phaser.Scene {
       return;
     }
     const duration = Phaser.Math.Clamp(distance * 3.1, 420, 1250);
-    if (sprite) this.tweens.add({ targets: sprite, scaleY: .65, angle: { from: -2, to: 2 }, duration: 130, yoyo: true, repeat: Math.max(1, Math.floor(duration / 260)) });
+    if (sprite) this.tweens.add({ targets: sprite, scaleY: STAFF_SCALE * .93, angle: { from: -2, to: 2 }, duration: 130, yoyo: true, repeat: Math.max(1, Math.floor(duration / 260)) });
     this.tweens.add({
       targets: avatar, x: target.x, y: target.y, duration, ease: 'Sine.inOut',
       onUpdate: () => avatar.setDepth(avatar.y - 1),
       onComplete: () => {
-        sprite?.setAngle(0).setScale(.7);
+        sprite?.setAngle(0).setScale(STAFF_SCALE);
         avatar.setPosition(target.x, target.y).setDepth(target.y - 1);
         this.startStaffIdle(avatar, index);
       },
@@ -1560,6 +1735,7 @@ export class ShopScene extends Phaser.Scene {
         ? `Đang được hỗ trợ${dots}\nSắp hoàn tất`
         : `Chờ tư vấn${dots} ${focused.patience}s\nChạm để hỗ trợ`;
       if (this.speechBubbleText.text !== nextText) this.speechBubbleText.setText(nextText);
+      this.speechBubbleText.setColor(!employee && focused.patience <= 10 ? '#d7194a' : '#7952a6');
     }
     for (const [uid, entry] of this.secondaryCustomers) {
       const visit = this.store.state.activeVisits.find(candidate => candidate.uid === uid);
@@ -1571,7 +1747,7 @@ export class ShopScene extends Phaser.Scene {
         : undefined;
       const nextText = employee ? `Được hỗ trợ${dots}` : `Chờ tư vấn${dots} ${visit.patience}s`;
       if (label.text !== nextText) label.setText(nextText);
-      label.setColor('#7952a6');
+      label.setColor(!employee && visit.patience <= 10 ? '#d7194a' : '#7952a6');
     }
   }
 
@@ -1609,18 +1785,18 @@ export class ShopScene extends Phaser.Scene {
       const entrance = this.customerEntrance(index + 1);
       let entry = this.secondaryCustomers.get(visit.uid);
       if (!entry) {
-        const sprite = this.add.image(0, 0, this.getCustomerTextureKey(customer, false, visit.uid)).setScale(.62).setOrigin(.5, 1);
+        const sprite = this.add.image(0, 0, this.getCustomerTextureKey(customer, false, visit.uid)).setScale(SECONDARY_CUSTOMER_SCALE).setOrigin(.5, 1);
         const bubble = this.add.graphics();
         const bubbleWidth = visit.mode === 'advice' ? 82 : 76;
         const bubbleFill = visit.mode === 'advice' ? 0xfff8dd : 0xffffff;
-        bubble.fillStyle(bubbleFill, .56).fillRoundedRect(-bubbleWidth / 2, -154, bubbleWidth, 27, 7);
-        this.strokeDashedBubble(bubble, -bubbleWidth / 2, -154, bubbleWidth, 27, 7, 0x493746, 6);
-        bubble.fillStyle(bubbleFill, .56).fillTriangle(-6, -128, 6, -128, 0, -119);
+        bubble.fillStyle(bubbleFill, .56).fillRoundedRect(-bubbleWidth / 2, -132, bubbleWidth, 27, 7);
+        this.strokeDashedBubble(bubble, -bubbleWidth / 2, -132, bubbleWidth, 27, 7, 0x493746, 6);
+        bubble.fillStyle(bubbleFill, .56).fillTriangle(-6, -106, 6, -106, 0, -97);
         bubble.lineStyle(1.6, 0x493746, .9);
-        this.drawDashedLine(bubble, -6, -128, 0, -119, 3, 2);
-        this.drawDashedLine(bubble, 0, -119, 6, -128, 3, 2);
-        const label = this.add.text(visit.mode === 'advice' ? 3 : 0, -140.5, visit.mode === 'advice' ? `Chờ tư vấn... ${visit.patience}s` : `${customer.name} · xem đồ`, {
-          fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: visit.mode === 'advice' ? '#7952a6' : '#4675a1', stroke: '#fffdfb', strokeThickness: 2, align: 'center', wordWrap: { width: bubbleWidth - 12 },
+        this.drawDashedLine(bubble, -6, -106, 0, -97, 3, 2);
+        this.drawDashedLine(bubble, 0, -97, 6, -106, 3, 2);
+        const label = this.add.text(visit.mode === 'advice' ? 3 : 0, -118.5, visit.mode === 'advice' ? `Chờ tư vấn... ${visit.patience}s` : `${customer.name} · xem đồ`, {
+          fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: visit.mode === 'advice' && visit.patience <= 10 ? '#d7194a' : visit.mode === 'advice' ? '#7952a6' : '#4675a1', stroke: '#fffdfb', strokeThickness: 2, align: 'center', wordWrap: { width: bubbleWidth - 12 },
         }).setOrigin(.5).setResolution(2);
         const chat = this.add.container(0, 0, [bubble, label]);
         const remembered = this.customerPositions.get(visit.uid);
@@ -1669,15 +1845,16 @@ export class ShopScene extends Phaser.Scene {
       const existing = this.onlineShippers.get(order.id);
       if (existing) { existing.setDepth(existing.y + 4); return; }
       const spot = spots[index % spots.length];
-      const sprite = this.add.image(0, 0, `courier-${order.courierVariant}`).setScale(.62).setOrigin(.5, 1);
+      const courierVariant = ((Math.trunc(order.courierVariant) % COURIER_APPEARANCE_COUNT) + COURIER_APPEARANCE_COUNT) % COURIER_APPEARANCE_COUNT;
+      const sprite = this.add.image(0, 0, `courier-photo-${courierVariant}`).setScale(COURIER_SCALE).setOrigin(.5, 1);
       const bubble = this.add.graphics();
-      bubble.fillStyle(0xeafff9, .56).fillRoundedRect(-47, -159, 94, 31, 9);
-      this.strokeDashedBubble(bubble, -47, -159, 94, 31, 9, 0x493746, 6);
-      bubble.fillStyle(0xeafff9, .56).fillTriangle(-6, -128, 6, -128, 0, -119);
+      bubble.fillStyle(0xeafff9, .56).fillRoundedRect(-47, -132, 94, 31, 9);
+      this.strokeDashedBubble(bubble, -47, -132, 94, 31, 9, 0x493746, 6);
+      bubble.fillStyle(0xeafff9, .56).fillTriangle(-6, -101, 6, -101, 0, -92);
       bubble.lineStyle(1.6, 0x493746, .9);
-      this.drawDashedLine(bubble, -6, -128, 0, -119, 3, 2);
-      this.drawDashedLine(bubble, 0, -119, 6, -128, 3, 2);
-      const label = this.add.text(0, -143.5, `ĐƠN ONLINE #${index + 1}\nChạm để giao hàng`, {
+      this.drawDashedLine(bubble, -6, -101, 0, -92, 3, 2);
+      this.drawDashedLine(bubble, 0, -92, 6, -101, 3, 2);
+      const label = this.add.text(0, -116.5, `ĐƠN ONLINE #${index + 1}\nChạm để giao hàng`, {
         fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: '#293a3a', stroke: '#ffffff', strokeThickness: 2, align: 'center', lineSpacing: 1,
       }).setOrigin(.5).setResolution(2);
       const container = this.add.container(spot.x, spot.y, [sprite, bubble, label]).setDepth(spot.y + 4).setSize(100, 170).setInteractive(new Phaser.Geom.Rectangle(0, -85, 100, 170), Phaser.Geom.Rectangle.Contains);
@@ -1788,7 +1965,8 @@ export class ShopScene extends Phaser.Scene {
     const archetype = getCustomerArchetype(c);
     const archKey = `c-${archetype}${suffix}`;
     if (this.textures.exists(archKey)) return archKey;
-    return `c-lily${suffix}`;
+    const fallbackWithMood = `c-lily${suffix}`;
+    return this.textures.exists(fallbackWithMood) ? fallbackWithMood : 'c-lily';
   }
 
   /** Return the same visual identity used by the in-shop Phaser sprite. */
@@ -1825,7 +2003,7 @@ export class ShopScene extends Phaser.Scene {
       }
     });
 
-    const sprite = this.add.image(0, 0, this.getCustomerTextureKey(c, false, visit?.uid)).setScale(.69).setOrigin(.5, 1);
+    const sprite = this.add.image(0, 0, this.getCustomerTextureKey(c, false, visit?.uid)).setScale(PRIMARY_CUSTOMER_SCALE).setOrigin(.5, 1);
 
     this.speechBubbleGfx = this.add.graphics();
     let badgeDownX = 0, badgeDownY = 0, badgeDownTime = 0;
@@ -1921,7 +2099,7 @@ export class ShopScene extends Phaser.Scene {
 
       this.customerWalkTween = this.tweens.add({
         targets: sprite,
-        scaleY: 0.63,
+        scaleY: PRIMARY_CUSTOMER_SCALE * 0.91,
         duration: 120,
         yoyo: true,
         repeat: 5,
@@ -2059,12 +2237,13 @@ export class ShopScene extends Phaser.Scene {
     const isRotated = counter.rotation === 1;
     // BẮT BUỘC: Chủ shop luôn luôn đứng sau bàn thanh toán (như thực tế boutique ngoài đời):
     // Chiếc máy tính tiền nằm trên quầy, màn hình quay vào phía chủ shop và lưng quay ra phía khách.
-    // Khi rotation = 0: máy tính tiền ở vị trí sâu trong bàn -> chủ shop đứng sau máy tính (offsetX: +12, offsetY: -12).
-    // Khi rotation = 1 (quầy lật): máy tính tiền ở góc trái -> offsetX: -12, offsetY: -12, flipX: true.
+    // Sprite chủ shop hiện là hình toàn thân. Nâng điểm neo lên để vai và tay nằm phía trên mặt quầy.
+    // Khi rotation = 0: máy tính tiền ở vị trí sâu trong bàn -> chủ shop đứng sau máy tính.
+    // Khi rotation = 1 (quầy lật): máy tính tiền ở góc trái -> flipX: true.
     // depth của chủ shop PHẢI nhỏ hơn depth của quầy (counterDepth - 10) để mặt bàn quầy che phía trước thân dưới,
     // đầu, vai, ngực và hai bàn tay gõ máy tính tiền nhô lên sau quầy cực kỳ tự nhiên.
-    const offsetX = isRotated ? -12 : 12;
-    const offsetY = -12;
+    const offsetX = (isRotated ? -12 : 12) + 12;
+    const offsetY = -19;
 
     const ownerX = counterPos.x + offsetX;
     const ownerY = counterPos.y + offsetY;

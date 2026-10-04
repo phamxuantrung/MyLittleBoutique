@@ -9,7 +9,7 @@ test('advanced operations are placed in import, staff and customer-care screens'
   state.level = 5;
   state.xp = 2000;
   state.claimed.push('system:campaign-guide-v1');
-  state.returnCases.push({ id: 'return-e2e', productId: 'baby-tee', customerName: 'Chloe', amount: 99000, reason: 'Sai kích cỡ', availableDay: 1, deadlineDay: 3 });
+  state.returnCases.push({ id: 'return-e2e', productId: 'ribbon-kiss-tee', customerName: 'Chloe', amount: 99000, reason: 'Sai kích cỡ', availableDay: 1, deadlineDay: 3 });
   state.reputationCrisis = { startDay: 1, deadlineDay: 4, positiveReviews: 1, sales: 2, targetReviews: 3, targetSales: 8 };
   state.employees.push({ id: 'stylist', uid: 'stylist-1', name: 'Mai', role: 'Stylist', bio: 'Phối đồ tinh tế', appearance: 1, salary: 50000, service: 75, persuasion: 72, charm: 70, reliability: 80, appliedDay: 1, hiredDay: 1, morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, energy: 75, assignment: 'service' });
   await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
@@ -51,7 +51,7 @@ test('advanced operations are placed in import, staff and customer-care screens'
 test('delivered waiting stock is announced on the main shop screen', async ({ page }) => {
   const state = preparedState();
   state.phase = 'closed';
-  state.pendingOrders.push({ id: 'arrival-e2e', productId: 'baby-tee', quantity: 4, cost: 120000, arrivalDay: 2, supplierId: 'wholesale' });
+  state.pendingOrders.push({ id: 'arrival-e2e', productId: 'ribbon-kiss-tee', quantity: 4, cost: 120000, arrivalDay: 2, supplierId: 'wholesale' });
   await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
   await page.goto('/');
   await page.locator('[data-action="summary"]').click();
@@ -192,8 +192,8 @@ test('the online channel accepts listings and fulfills a courier order', async (
   const state = openState('lily', 'advice');
   state.dayTimer = 116;
   for (const product of products) state.inventory[product.id] = Math.max(2, state.inventory[product.id] ?? 0);
-  state.onlineListings = ['baby-tee'];
-  state.onlineOrders = [{ id: 'e2e-online-order', productId: 'baby-tee', customerName: 'An', customerHandle: '@an_style', price: 100000, fee: 14000, createdDay: 1, courierVariant: 0 }];
+  state.onlineListings = ['ribbon-kiss-tee'];
+  state.onlineOrders = [{ id: 'e2e-online-order', productId: 'ribbon-kiss-tee', customerName: 'An', customerHandle: '@an_style', price: 100000, fee: 14000, createdDay: 1, courierVariant: 0 }];
   await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
   await page.goto('/');
   await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
@@ -223,7 +223,7 @@ test('the online channel accepts listings and fulfills a courier order', async (
   await lastProduct.click();
   await expect.poll(() => grid.evaluate(element => element.scrollTop)).toBeCloseTo(scrollTop, 0);
   await lastProduct.click();
-  await dialog.locator('[data-action="online-hand-over-select"][data-id="baby-tee"]').click();
+  await dialog.locator('[data-action="online-hand-over-select"][data-id="ribbon-kiss-tee"]').click();
   await dialog.locator('[data-action="online-hand-over"]').click();
   await expect(dialog).not.toBeVisible();
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);

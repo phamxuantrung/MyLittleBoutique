@@ -12,7 +12,7 @@ const careCustomerAvatar = (name: string) => {
   const exactCustomer = customers.find(customer => customer.name.toLocaleLowerCase('vi') === name.toLocaleLowerCase('vi'));
   const seed = [...name].reduce((total, character) => total + character.codePointAt(0)!, 0);
   const appearance = exactCustomer ?? customers[seed % customers.length];
-  return avatarImage({ ...appearance, id: `care-${seed}`, name });
+  return avatarImage({ ...appearance, id: appearance.id, name });
 };
 
 export function customerCareModal(s: GameState) {

@@ -2,8 +2,9 @@ import type { Customer, Product } from '../types';
 import maliVietnameseFont from '@fontsource/mali/files/mali-vietnamese-700-normal.woff2?inline';
 import { fashionShapes } from './fashionShapes';
 import { artSvg, bowShape, cel, fabricColor, heartShape, paint, tint } from './direction';
-import { characterIllustration, employeePortraitSvg, getCustomerArchetype, ownerIllustration, ownerPortraitSvg } from './characters';
+import { characterIllustration, getCustomerArchetype, ownerIllustration, ownerPortraitSvg } from './characters';
 import { atelierProductBody } from './atelierArt';
+import { finishReferenceProduct } from './productReference';
 
 const wrap = (body: string, w: number, h: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
 // Phaser's XHR loader expects data URIs to contain base64 rather than URI escapes.
@@ -12,7 +13,10 @@ const shadow = '<ellipse cx="90" cy="201" rx="67" ry="14" fill="#8850a8" opacity
 const bow = (color: string) => `<path d="M58 42Q36 22 35 43Q35 58 57 48Q81 23 83 42Q87 62 62 49L71 67L59 62L49 67L56 48" fill="${color}" stroke="#4a2d5a" stroke-width="1.5"/><circle cx="60" cy="46" r="5" fill="${color}"/>`;
 const escapeSvgText = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[character]!));
 
-export function productSvg(product: Pick<Product, 'art' | 'color' | 'designColor' | 'designStrokes' | 'designMotif' | 'designAccentColor' | 'designMotifScale' | 'designMotifX' | 'designMotifY' | 'designFormWidth' | 'designFormLength' | 'designMotifRotation' | 'designMotifOpacity' | 'designMotifRepeat' | 'designShapePoints' | 'designShapeSmooth' | 'designStrokeColor' | 'designStrokeWidth' | 'designStickers'>, hanger = false) {
+type ProductSvgInput = Pick<Product, 'art' | 'color' | 'designColor' | 'designStrokes' | 'designMotif' | 'designAccentColor' | 'designMotifScale' | 'designMotifX' | 'designMotifY' | 'designFormWidth' | 'designFormLength' | 'designMotifRotation' | 'designMotifOpacity' | 'designMotifRepeat' | 'designShapePoints' | 'designShapeSmooth' | 'designStrokeColor' | 'designStrokeWidth' | 'designStickers'>
+  & Partial<Pick<Product, 'id' | 'category'>>;
+
+export function productSvg(product: ProductSvgInput, hanger = false) {
   const c = fabricColor(product.designColor ?? product.color);
   const shapes = fashionShapes(c);
   const atelierBody = atelierProductBody(product.art, c, product.designShapePoints, product.designShapeSmooth !== false, product.designStrokeColor, product.designStrokeWidth);
@@ -105,8 +109,12 @@ export function productSvg(product: Pick<Product, 'art' | 'color' | 'designColor
   const hangerPath = hanger
     ? '<path d="M56 16Q55 8 61 8Q69 8 65 16L60 20L26 36H94L60 20" stroke="#a88d6a" stroke-width="2.2" fill="none"/>'
     : '';
-  if (atelierBody) return wrap(`<g transform="${formTransform}"><g fill="none" stroke-linecap="round" stroke-linejoin="round">${atelierBody}</g>${customLayer}</g>${motifLayer}${stickerLayer}`, 120, 140);
-  return wrap(`${cel(`${hangerPath}<g transform="${formTransform}"><g stroke-linejoin="round">${body}</g>${customLayer}</g>`)}${motifLayer}${stickerLayer}`, 120, 140);
+  if (atelierBody) {
+    const rendered = `<g transform="${formTransform}"><g fill="none" stroke-linecap="round" stroke-linejoin="round">${atelierBody}</g>${customLayer}</g>${motifLayer}${stickerLayer}`;
+    return wrap(finishReferenceProduct(rendered, product, c), 120, 140);
+  }
+  const rendered = `${cel(`${hangerPath}<g transform="${formTransform}"><g stroke-linejoin="round">${body}</g>${customLayer}</g>`)}${motifLayer}${stickerLayer}`;
+  return wrap(finishReferenceProduct(rendered, product, c), 120, 140);
 }
 
 export const characterSvg = characterIllustration;
@@ -114,7 +122,6 @@ export { getCustomerArchetype };
 export const ownerSvg = () => ownerIllustration(false);
 export const ownerPcSvg = () => ownerIllustration(true);
 export const ownerPortrait = ownerPortraitSvg;
-export const employeeSvg = employeePortraitSvg;
 export const heartSvg = () => artSvg(heartShape(), 24, 24);
 
 export function courierSvg(variant = 0) {
@@ -958,7 +965,6 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
     beanbag: `<ellipse cx="90" cy="190" rx="38" ry="16" fill="#8850a8" opacity=".2"/><ellipse cx="90" cy="180" rx="36" ry="24" fill="#c084fc" stroke="#4a2d5a" stroke-width="2"/><ellipse cx="90" cy="174" rx="28" ry="18" fill="#e9d5ff"/><ellipse cx="90" cy="172" rx="16" ry="10" fill="#f3e8ff"/><path d="M85 160 Q90 152 95 160" stroke="#7c3aed" stroke-width="2" fill="none"/>`,
     'coquette-mirror': `<ellipse cx="90" cy="200" rx="28" ry="9" fill="#ffd566" stroke="#4a2d5a" stroke-width="1.8"/><path d="M58 190 V70 Q58 20 90 20 Q122 20 122 70 V190 Z" fill="#fed7aa" stroke="#4a2d5a" stroke-width="2.5"/><path d="M64 185 V72 Q64 28 90 28 Q116 28 116 72 V185 Z" fill="#cffafe"/><path d="M70 70 L110 50 M68 110 L112 85" stroke="#ffffff" stroke-width="6" opacity=".7"/><path d="M80 18 Q68 6 74 24 Q82 22 90 20 Q98 22 106 24 Q112 6 100 18 Z" fill="#ff7da7" stroke="#4a2d5a" stroke-width="1.6"/><circle cx="90" cy="19" r="3.5" fill="#fbbf24"/>`,
     'wavy-mirror': `<ellipse cx="90" cy="202" rx="30" ry="10" fill="#f43f5e" opacity=".2"/><path d="M54 195 Q50 180 56 165 Q50 150 56 135 Q50 120 56 105 Q50 90 56 75 Q50 45 90 40 Q130 45 124 75 Q130 90 124 105 Q130 120 124 135 Q130 150 124 165 Q130 180 126 195 Z" fill="#ff80b0" stroke="#4a2d5a" stroke-width="2.4"/><path d="M58 190 Q54 178 60 165 Q54 152 60 137 Q54 122 60 107 Q54 92 60 77 Q56 50 90 46 Q124 50 120 77 Q126 92 120 107 Q126 122 120 137 Q126 152 120 165 Q126 178 122 190 Z" fill="#fecdd3"/><rect x="66" y="58" width="48" height="126" rx="14" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1.5"/><path d="M72 80 L108 60 M70 125 L110 100" stroke="#ffffff" stroke-width="5" opacity=".7"/>`,
-    'shell-sofa': `<path d="M26 167V190M154 167V190" stroke="#aa8e78" stroke-width="6"/><path d="M26 150 Q18 100 48 85 Q66 70 90 70 Q114 70 132 85 Q162 100 154 150 Z" fill="#f472b6" stroke="#4a2d5a" stroke-width="2"/><path d="M90 70 V155 M68 76 Q78 115 85 155 M112 76 Q102 115 95 155 M46 95 Q62 125 80 155 M134 95 Q118 125 100 155" stroke="#fbcfe8" stroke-width="2.5"/><ellipse cx="90" cy="165" rx="58" ry="24" fill="#fbcfe8" stroke="#4a2d5a" stroke-width="2"/><ellipse cx="90" cy="162" rx="48" ry="18" fill="#fdf2f8"/><circle cx="70" cy="155" r="9" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.2"/><circle cx="67" cy="152" r="3" fill="#ffffff"/><circle cx="110" cy="155" r="9" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.2"/><circle cx="107" cy="152" r="3" fill="#ffffff"/>`,
     'monstera-plant': `<ellipse cx="90" cy="198" rx="26" ry="10" fill="#5c4a3b" opacity=".2"/><path d="M68 160 L74 198 Q90 208 106 198 L112 160 Z" fill="#f8fafc" stroke="#4a2d5a" stroke-width="1.8"/><circle cx="82" cy="175" r="1.5" fill="#f43f5e"/><circle cx="98" cy="182" r="1.5" fill="#3b82f6"/><circle cx="88" cy="192" r="1.5" fill="#fbbf24"/><ellipse cx="90" cy="160" rx="22" ry="7" fill="#78350f"/><path d="M90 160 Q80 120 60 100" stroke="#166534" stroke-width="3" fill="none"/><path d="M90 160 Q100 115 120 95" stroke="#166534" stroke-width="3" fill="none"/><path d="M90 160 V75" stroke="#166534" stroke-width="3.5" fill="none"/><path d="M60 100 C40 70 30 110 60 125 C75 115 80 90 60 100 Z" fill="#22c55e" stroke="#4a2d5a" stroke-width="1.5"/><path d="M120 95 C140 65 150 105 120 120 C105 110 100 85 120 95 Z" fill="#15803d" stroke="#4a2d5a" stroke-width="1.5"/><path d="M90 75 C65 40 115 40 90 75 Z" fill="#4ade80" stroke="#4a2d5a" stroke-width="1.5"/>`,
     'vinyl-player': `<defs><linearGradient id="playerPinkTop" x1="0" x2="1"><stop stop-color="#fff4f9"/><stop offset=".55" stop-color="#fde8f4"/><stop offset="1" stop-color="#f4b8da"/></linearGradient></defs><ellipse cx="90" cy="190" rx="43" ry="9" fill="#3a1a48" opacity=".14"/><path d="M44 153L90 130L137 153L90 178Z" fill="url(#playerPinkTop)" stroke="#3a1a48" stroke-width="2.5"/><path d="M44 153V181L90 204V178Z" fill="#d4429a" stroke="#3a1a48" stroke-width="2.5"/><path d="M90 178V204L137 181V153Z" fill="#b83588" stroke="#3a1a48" stroke-width="2.5"/><path d="M52 164V177L84 193V180Z" fill="#f07898" stroke="#7d2d68" stroke-width="1.2"/><path d="M58 168L77 178M58 174L77 184" stroke="#ffeef4" stroke-width="1.5"/><ellipse cx="83" cy="151" rx="23" ry="11.5" fill="#3a1a48" stroke="#fff8fc" stroke-width="1.5"/><ellipse cx="83" cy="151" rx="12" ry="6" fill="#5a3870"/><circle cx="83" cy="151" r="5" fill="#d4429a"/><circle cx="83" cy="151" r="1.4" fill="#fff"/><circle cx="118" cy="145" r="3.5" fill="#f0b840" stroke="#5a3870" stroke-width="1.2"/><path d="M118 145Q112 146 108 154" fill="none" stroke="#fff8e0" stroke-width="3.5" stroke-linecap="round"/><path d="M118 145Q112 146 108 154" fill="none" stroke="#9070a8" stroke-width="1.2" stroke-linecap="round"/><circle cx="127" cy="157" r="2.5" fill="#fff" stroke="#5a3870" stroke-width="1"/>`,
     'boutique-window': `<defs><linearGradient id="decorWindowGlass" x2="0" y2="1"><stop stop-color="#bde7f8"/><stop offset="1" stop-color="#d9e5fb"/></linearGradient></defs><path d="M39 181V76Q39 26 90 26Q141 26 141 76V181Z" fill="#f8b4d8" stroke="#fff2e3" stroke-width="9"/><path d="M47 175V77Q47 35 90 35Q133 35 133 77V175Z" fill="url(#decorWindowGlass)" stroke="#4a2d5a" stroke-width="2.5"/><path d="M90 35V176M47 98H133" stroke="#fff5e7" stroke-width="5"/><path d="M53 76L81 53M98 166L127 138" stroke="#fff" opacity=".58" stroke-width="10"/><path d="M27 191H153" stroke="#d090c0" stroke-width="9" stroke-linecap="round"/>`,
@@ -998,10 +1004,12 @@ export function furnitureSvg(art: string, wallSide: 'left' | 'right' = 'right', 
   return wrap((hasFloorShadow ? shadow : '') + cel(decorPaint(painted), 1.8) + detail, 180, 230);
 }
 
+const ROOM_FLOOR_EDGE_MARGIN = 0.35;
+
 export function roomSvgBounds(floorSize = 7) {
   const size = Math.max(7, Math.min(14, Math.floor(floorSize)));
-  const span = 56 * size;
-  const bottomY = 225 + 56 * size;
+  const span = 56 * (size + ROOM_FLOOR_EDGE_MARGIN);
+  const bottomY = 225 + 56 * (size + ROOM_FLOOR_EDGE_MARGIN);
   const minX = Math.min(0, 500 - span - 55);
   const maxX = Math.max(1000, 500 + span + 55);
   return { size, x: minX, width: maxX - minX, height: Math.max(760, bottomY + 85) };
@@ -1010,12 +1018,17 @@ export function roomSvgBounds(floorSize = 7) {
 export function roomSvg(floorSize = 7, showDefaultCeilingLamp = true) {
   const bounds = roomSvgBounds(floorSize);
   const size = bounds.size;
-  const span = 56 * size;
-  const halfSpan = 28 * size;
+  const gridSpan = 56 * size;
+  const gridHalfSpan = 28 * size;
+  const span = 56 * (size + ROOM_FLOOR_EDGE_MARGIN);
+  const halfSpan = 28 * (size + ROOM_FLOOR_EDGE_MARGIN);
   const leftX = 500 - span;
   const rightX = 500 + span;
   const sideY = 225 + halfSpan;
   const bottomY = 225 + halfSpan * 2;
+  const gridLeftX = 500 - gridSpan;
+  const gridRightX = 500 + gridSpan;
+  const gridSideY = 225 + gridHalfSpan;
   const expansion = size - 7;
   const leftPlantX = leftX - 30;
   const rightPlantX = rightX + 35;
@@ -1024,7 +1037,7 @@ export function roomSvg(floorSize = 7, showDefaultCeilingLamp = true) {
   let lines = '';
   for (let i = 0; i <= size * 2; i++) {
     const t = i / (size * 2);
-    lines += `<path d="M${500 + span * t} ${225 + halfSpan * t}L${leftX + span * t} ${sideY + halfSpan * t}M${500 - span * t} ${225 + halfSpan * t}L${rightX - span * t} ${sideY + halfSpan * t}"/>`;
+    lines += `<path d="M${500 + gridSpan * t} ${225 + gridHalfSpan * t}L${gridLeftX + gridSpan * t} ${gridSideY + gridHalfSpan * t}M${500 - gridSpan * t} ${225 + gridHalfSpan * t}L${gridRightX - gridSpan * t} ${gridSideY + gridHalfSpan * t}"/>`;
   }
   const room = `<defs>
     <linearGradient id="wall" x2="0" y2="1"><stop stop-color="#f7e9dc"/><stop offset="1" stop-color="#efdfcd"/></linearGradient>

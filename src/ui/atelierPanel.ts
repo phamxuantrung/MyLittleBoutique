@@ -4,16 +4,18 @@ import { icon } from './icons';
 import { escapeHtml, money, productImage } from './format';
 import { gameDate } from '../systems/calendar';
 import { atelierMaterialIllustration } from '../art/atelierArt';
+import { externalProductArtwork } from '../art/productAssets';
 import { productSvg, svgUrl } from '../art/svg';
 
 export type AtelierSection = 'design' | 'production';
+export const ATELIER_CUSTOMIZER_ENABLED = false;
 export const ATELIER_CANVAS_VIEW = { x: -6, y: -7, width: 132, height: 154 } as const;
 
 const materialFormula = (materials: Record<string, number>) => Object.entries(materials).map(([id, quantity]) => {
   const material = atelierMaterials.find(item => item.id === id);
   return `<span style="--material:${material?.color ?? '#eee'}"><i class="recipe-material-art">${atelierMaterialIllustration(id)}</i>${escapeHtml(material?.name ?? id)} ×${quantity}</span>`;
 }).join('');
-const recipeIllustration = (recipe: typeof atelierRecipes[number]) => `<img class="recipe-product-art" src="${svgUrl(productSvg(recipe))}" alt="${escapeHtml(recipe.name)}" draggable="false" />`;
+const recipeIllustration = (recipe: typeof atelierRecipes[number]) => `<img class="recipe-product-art" src="${externalProductArtwork(recipe) ?? svgUrl(productSvg(recipe))}" alt="${escapeHtml(recipe.name)}" draggable="false" />`;
 
 export function atelierPanel(
   s: GameState,
@@ -74,7 +76,7 @@ export function atelierPanel(
             return `<article class="blueprint-card production-blueprint-card ${enough ? '' : 'is-shortage'}">
               <button class="blueprint-delete-button" data-action="atelier-delete-blueprint" data-id="${product.id}" aria-label="Xóa bản thiết kế ${escapeHtml(product.name)}" title="Xóa bản thiết kế">${icon('trash')}</button>
               <div class="blueprint-art production-blueprint-art">${productImage(product)}</div>
-              <div class="blueprint-copy production-blueprint-copy"><small>${product.style} · ${product.category}</small><div class="production-name-row"><label class="production-name-editor" title="Chạm để đổi tên sản phẩm"><span>${icon('edit')}</span><input class="production-name-input" data-custom-product="${product.id}" value="${escapeHtml(product.name)}" maxlength="32" aria-label="Tên sản phẩm ${escapeHtml(product.name)}" /></label><button class="open-design-studio" data-action="atelier-customize-open" data-id="${product.id}" aria-label="Mở Studio chỉnh mẫu ${escapeHtml(product.name)}" title="Phối màu và họa tiết">${icon('edit')}</button></div><div class="recipe-materials">${materialFormula(recipe.materials)}</div><div class="production-card-meta"><span>${icon('clock')} ${days} ngày</span><span>${icon('box')} Kho thành phẩm: ${s.inventory[product.id] ?? 0}</span></div></div>
+              <div class="blueprint-copy production-blueprint-copy"><small>${product.style} · ${product.category}</small><div class="production-name-row"><label class="production-name-editor" title="Chạm để đổi tên sản phẩm"><span>${icon('edit')}</span><input class="production-name-input" data-custom-product="${product.id}" value="${escapeHtml(product.name)}" maxlength="32" aria-label="Tên sản phẩm ${escapeHtml(product.name)}" /></label>${ATELIER_CUSTOMIZER_ENABLED ? `<button class="open-design-studio" data-action="atelier-customize-open" data-id="${product.id}" aria-label="Mở Studio chỉnh mẫu ${escapeHtml(product.name)}" title="Phối màu và họa tiết">${icon('edit')}</button>` : ''}</div><div class="recipe-materials">${materialFormula(recipe.materials)}</div><div class="production-card-meta"><span>${icon('clock')} ${days} ngày</span><span>${icon('box')} Kho thành phẩm: ${s.inventory[product.id] ?? 0}</span></div></div>
               <div class="production-material-status ${enough ? 'is-ready' : ''}">${icon(enough ? 'check' : 'info')}<span><b>${enough ? 'Đủ nguyên liệu' : 'Thiếu nguyên liệu'}</b><small>Cho ${qty} sản phẩm</small></span></div>
               <div class="blueprint-actions production-card-actions"><div class="production-quantity"><small>SỐ LƯỢNG</small><div class="design-stepper"><button data-action="atelier-batch-step" data-id="${product.id}" data-value="-5" ${qty <= 5 ? 'disabled' : ''}>−</button><b>${qty}</b><button data-action="atelier-batch-step" data-id="${product.id}" data-value="5" ${qty >= 50 ? 'disabled' : ''}>+</button></div></div><button data-action="atelier-start-batch" data-id="${product.id}" ${!enough || s.phase === 'open' ? 'disabled' : ''}><span>Bắt đầu sản xuất</span>${icon('arrow')}</button></div>
             </article>`;

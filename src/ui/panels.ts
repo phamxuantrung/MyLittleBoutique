@@ -1,13 +1,15 @@
-import { courierSvg, ownerPortrait } from '../art/svg';
+import { ownerPortrait } from '../art/svg';
+import { courierImage } from '../art/courierAssets';
 import { shopReviewStats } from '../systems/reviews';
 import { categories, customers, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
 import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
-import type { Furniture, GameState, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
+import type { Customer, Furniture, GameState, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
 import { avatarImage, compact, escapeHtml, furnitureImage, money, productImage, staffImage } from './format';
 import { icon } from './icons';
 import { CAMPAIGN_GUIDE_SEEN, campaignOffers, campaignRank, categoryNames, styleNames } from '../systems/campaigns';
 import { gameDate } from '../systems/calendar';
+import { EMPLOYEE_APPEARANCE_COUNT } from '../art/employeeAssets';
 export { stockPanel, inventoryPanel, importPanel, supplierSelectionPanel } from './catalogPanel';
 
 export function campaignModal(s: GameState, forceGuide = false) {
@@ -297,7 +299,7 @@ export const decorCategories: Record<string, { label: string; icon: string; matc
   decoration: { label: 'Trang trí', icon: 'decor', match: f => !f.display },
   mirror: { label: 'Gương & Check-in', icon: 'camera', match: f => ['mirror', 'coquette-mirror', 'wavy-mirror', 'fitting'].includes(f.id) },
   plants: { label: 'Cây & Hoa', icon: 'leaf', match: f => ['plant', 'flowers', 'monstera-plant'].includes(f.id) },
-  seating: { label: 'Bàn ghế & Quầy', icon: 'home', match: f => ['counter', 'beanbag', 'sofa', 'shell-sofa', 'coffee-corner', 'vinyl-player'].includes(f.id) },
+  seating: { label: 'Bàn ghế & Quầy', icon: 'home', match: f => ['counter', 'beanbag', 'sofa', 'coffee-corner', 'vinyl-player'].includes(f.id) },
   decor: { label: 'Thảm & Đèn', icon: 'sun', match: f => ['atelier-rug', 'heart-rug', 'checkered-rug', 'tulip-lamp', 'crystal-chandelier'].includes(f.id) },
   art: { label: 'Đồ treo tường', icon: 'camera', match: f => ['boutique-window', 'blush-blinds', 'shop-sign', 'fashion-print', 'gallery-print', 'botanical-print', 'runway-print', 'parfum-print', 'shoe-sketch-print', 'ribbon-sign', 'neon-sign', 'lightbox-sign'].includes(f.id) },
 };
@@ -524,7 +526,7 @@ function recruitmentBoard(s: GameState) {
       <div class="recruitment-heading">
         <div class="recruitment-heading-icon">${icon('users')}</div>
         <div><span class="panel-eyebrow">BOUTIQUE CAREERS</span><h3>Góc tuyển dụng</h3><p>Tìm một cộng sự giúp tư vấn khách và tăng cơ hội nhận tip.</p></div>
-        <span class="staff-capacity-chip">${s.employees.length} nhân viên · ca ${Math.min(assigned, capacity)}/${capacity}</span>
+        <span class="staff-capacity-chip">${s.employees.length}/${EMPLOYEE_APPEARANCE_COUNT} nhân viên · ca ${Math.min(assigned, capacity)}/${capacity}</span>
       </div>
       ${locked ? `
         <div class="recruitment-lock-card">${icon('lock')}<div><strong>Chưa đủ điều kiện mở vị trí tiếp theo</strong><span>Cần shop cấp ${requirement.level} và mặt bằng cấp ${requirement.landLevel + 1}. Hiện tại: cấp ${s.level}, mặt bằng cấp ${(s.landLevel ?? 0) + 1}.</span></div></div>
@@ -657,7 +659,7 @@ function legacySocialPanel(s: GameState, section: 'feed' | 'recruitment' = 'feed
       <section class="social-profile-card" aria-label="Trang cá nhân boutique">
         <div class="profile-cover-banner" aria-hidden="true">
           <div class="profile-cover-art">
-            ${['ribbon', 'baby-tee', 'ribbon-dress', 'jeans', 'hoodie'].map(id => `<figure class="cover-fashion-print">${productImage(products.find(p => p.id === id)!)}</figure>`).join('')}
+            ${['ribbon', 'ribbon-kiss-tee', 'ribbon-dress', 'daily-muse-straight-jeans', 'urban-pulse-hoodie'].map(id => `<figure class="cover-fashion-print">${productImage(products.find(p => p.id === id)!)}</figure>`).join('')}
           </div>
           <span class="cover-fashion-sparkle is-left">${icon('sparkle')}</span>
           <span class="cover-fashion-sparkle is-right">${icon('sparkle')}</span>
@@ -822,7 +824,7 @@ function reviewAvatar(post: SocialPost) {
   return avatarImage({
     ...base,
     ...post.avatar,
-    id: post.avatar?.id ?? base.id,
+    id: base.id,
     name: post.name,
     handle: post.handle,
     outfit: post.avatar?.outfit ?? post.color,
@@ -1296,10 +1298,11 @@ export function onlineStockModal(s: GameState) {
     </div>
     <div class="online-stock-grid">${warehouse.length ? warehouse.map(({ product, available }) => {
       const isListed = s.onlineListings.includes(product.id);
-      return `<article class="online-stock-card online-product-card ${isListed ? 'is-listed' : ''}">
+      const listingAction = isListed ? 'online-unlist' : 'online-list';
+      return `<article class="online-stock-card online-product-card ${isListed ? 'is-listed' : ''}" ${canEdit ? `data-action="${listingAction}" data-id="${product.id}"` : ''}>
         <span class="online-stock-card-photo online-product-photo">${productImage(product)}<i>${escapeHtml(product.style)}</i><b>×${available}</b></span>
         <div class="online-product-info"><strong>${escapeHtml(product.name)}</strong><b>${money(s.prices[product.id] ?? product.sellPrice)}</b><small>${isListed ? 'Đang bán trên gian hàng' : `Còn ${available} sản phẩm trong kho`}</small></div>
-        <button data-action="${isListed ? 'online-unlist' : 'online-list'}" data-id="${product.id}" ${!canEdit ? 'disabled' : ''} aria-label="${isListed ? 'Gỡ' : 'Đăng'} ${escapeHtml(product.name)}" title="${isListed ? 'Gỡ khỏi gian hàng' : 'Thêm vào gian hàng'}">${icon(isListed ? 'check' : 'plus')}</button>
+        <button data-action="${listingAction}" data-id="${product.id}" ${!canEdit ? 'disabled' : ''} aria-label="${isListed ? 'Gỡ' : 'Đăng'} ${escapeHtml(product.name)}" title="${isListed ? 'Gỡ khỏi gian hàng' : 'Thêm vào gian hàng'}">${icon(isListed ? 'check' : 'plus')}</button>
       </article>`;
     }).join('') : `<div class="online-stock-empty">${icon('box')}<strong>Kho chưa có hàng sẵn sàng</strong><small>Nhập thêm hàng hoặc cất bớt sản phẩm khỏi kệ để đăng bán.</small></div>`}</div>
   </section>`;
@@ -1320,7 +1323,7 @@ export function onlineOrderModal(s: GameState, orderId: string, selectedProductI
     <aside class="handover-consultation-left studio-col-left">
       <div class="handover-balance-bar"><span>${icon('coin')} Thu về sau phí</span><strong>${money(order.price - order.fee)}</strong><em>Phí ${money(order.fee)}</em></div>
       <div class="handover-customer-heading"><small>ĐƠN CỦA ${escapeHtml(order.customerHandle)}</small><h2>${escapeHtml(order.customerName)}</h2><span>Khách đặt ${requestedProducts.length} sản phẩm</span></div>
-      <div class="handover-courier-stage"><svg class="handover-pickup" viewBox="0 0 240 120" aria-hidden="true"><path d="M14 79V55c0-7 5-12 12-12h93l20 4 20 24h37c12 0 22 9 22 21v8H14Z" fill="#9bded2" stroke="#47796f" stroke-width="3" stroke-linejoin="round"/><path d="M31 51h78v27H31Z" fill="#c8f1e9" stroke="#47796f" stroke-width="2"/><path d="M119 47h24l16 24h-40Z" fill="#dff8ff" stroke="#47796f" stroke-width="2"/><path d="M164 73h29" stroke="#f6a7cb" stroke-width="5" stroke-linecap="round"/><path d="M17 82h199v15H17Z" fill="#ef94bf" stroke="#70445d" stroke-width="2"/><circle cx="61" cy="99" r="16" fill="#fff" stroke="#70445d" stroke-width="4"/><circle cx="61" cy="99" r="7" fill="#b8a4c8"/><circle cx="178" cy="99" r="16" fill="#fff" stroke="#70445d" stroke-width="4"/><circle cx="178" cy="99" r="7" fill="#b8a4c8"/><path d="M38 58h15M38 66h25" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="m201 76 9 4-9 4Z" fill="#ffe179" stroke="#8b6731" stroke-width="1.5"/></svg><div class="handover-courier-art">${courierSvg(order.courierVariant)}<b>${String(s.onlineOrders.indexOf(order) + 1).padStart(2, '0')}</b></div><span>${icon('truck')} Shipper đang chờ tại shop</span></div>
+      <div class="handover-courier-stage"><svg class="handover-pickup" viewBox="0 0 240 120" aria-hidden="true"><path d="M14 79V55c0-7 5-12 12-12h93l20 4 20 24h37c12 0 22 9 22 21v8H14Z" fill="#9bded2" stroke="#47796f" stroke-width="3" stroke-linejoin="round"/><path d="M31 51h78v27H31Z" fill="#c8f1e9" stroke="#47796f" stroke-width="2"/><path d="M119 47h24l16 24h-40Z" fill="#dff8ff" stroke="#47796f" stroke-width="2"/><path d="M164 73h29" stroke="#f6a7cb" stroke-width="5" stroke-linecap="round"/><path d="M17 82h199v15H17Z" fill="#ef94bf" stroke="#70445d" stroke-width="2"/><circle cx="61" cy="99" r="16" fill="#fff" stroke="#70445d" stroke-width="4"/><circle cx="61" cy="99" r="7" fill="#b8a4c8"/><circle cx="178" cy="99" r="16" fill="#fff" stroke="#70445d" stroke-width="4"/><circle cx="178" cy="99" r="7" fill="#b8a4c8"/><path d="M38 58h15M38 66h25" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="m201 76 9 4-9 4Z" fill="#ffe179" stroke="#8b6731" stroke-width="1.5"/></svg><div class="handover-courier-art">${courierImage(order.courierVariant)}<b>${String(s.onlineOrders.indexOf(order) + 1).padStart(2, '0')}</b></div><span>${icon('truck')} Shipper đang chờ tại shop</span></div>
       <div class="handover-requested"><span class="handover-requested-images">${requestedProducts.map(product => productImage(product)).join('')}</span><div><small>${requestedProducts.length} SẢN PHẨM CẦN GIAO</small><strong>${requestedProducts.map(product => escapeHtml(product.name)).join(' · ')}</strong></div></div>
     </aside>
     <section class="handover-consultation-right studio-col-right">
@@ -1510,12 +1513,20 @@ export function livestreamModal(
   </section>`;
 }
 
-export function serveModal(s: GameState, selected: string[], category = 'all') {
+export function serveModal(s: GameState, selected: string[], category = 'all', visualCustomer?: Customer) {
   const c = activeCustomer(s); if (!c) return '';
   const relationship = s.customerLoyalty[c.id];
   const relationshipTier = loyaltyTier(relationship);
   const nextLoyaltyMilestone = loyaltyMilestones.find(milestone => milestone.points > (relationship?.points ?? 0));
   const items = selected.map(id => products.find(p => p.id === id)!);
+  const onePiece = items.find(item => item.category === 'dresses' || item.category === 'sets');
+  const outfitSlots = [
+    { label: 'Phụ kiện', shortLabel: 'PK', item: items.find(item => item.category === 'accessories'), locked: false },
+    { label: 'Áo hoặc Đầm', shortLabel: 'Áo', item: onePiece ?? items.find(item => item.category === 'tops') ?? items.find(item => item.category === 'outerwear'), locked: false },
+    { label: 'Quần, chân váy hoặc Đầm', shortLabel: 'Quần', item: onePiece ? undefined : items.find(item => item.category === 'bottoms'), locked: !!onePiece },
+    { label: 'Túi xách', shortLabel: 'Túi', item: items.find(item => item.category === 'bags'), locked: false },
+    { label: 'Giày', shortLabel: 'Giày', item: items.find(item => item.category === 'shoes'), locked: false },
+  ];
   const score = matchScore(s, c, items);
   const price = items.reduce((sum, p) => sum + sellPrice(s, p), 0);
   const isOverBudget = price > c.budget;
@@ -1549,14 +1560,19 @@ export function serveModal(s: GameState, selected: string[], category = 'all') {
           <div class="fitting-backdrop-arch">
             <div class="fitting-spotlight"></div>
             <div class="fitting-model">
-              ${avatarImage(c, false, items)}
+              ${avatarImage(visualCustomer ?? c, false, items)}
             </div>
             <div class="fitting-pedestal"></div>
-          </div>
-          <div class="fitting-stage-status ${items.length ? 'is-active' : ''}">
-            ${items.length 
-              ? `<span class="stage-tag active">${icon('sparkle')} Đang ướm thử (${items.length}/${MAX_OUTFIT_ITEMS} món)</span>` 
-              : `<span class="stage-tag hint">Chạm đồ bên phải để ướm thử</span>`}
+            <div class="fitting-outfit-slots" aria-label="5 ô sản phẩm đã chọn">
+              ${outfitSlots.map(slot => {
+                const item = slot.item;
+                return slot.locked
+                  ? `<div class="fitting-outfit-slot is-locked" title="${escapeHtml(slot.label)} đang được Đầm/Set sử dụng" aria-label="Slot ${escapeHtml(slot.label)} đã khóa vì đang chọn Đầm hoặc Set">${icon('lock')}<span>${escapeHtml(slot.shortLabel)}</span></div>`
+                  : item
+                  ? `<button type="button" class="fitting-outfit-slot is-filled" data-action="select-product" data-id="${item.id}" title="${escapeHtml(slot.label)} · Bỏ chọn ${escapeHtml(item.name)}" aria-label="${escapeHtml(slot.label)}: bỏ chọn ${escapeHtml(item.name)}">${productImage(item, 'fitting-slot-product')}</button>`
+                  : `<div class="fitting-outfit-slot" title="${escapeHtml(slot.label)}" aria-label="Slot ${escapeHtml(slot.label)} đang trống"><span>${escapeHtml(slot.shortLabel)}</span></div>`;
+              }).join('')}
+            </div>
           </div>
         </div>
 

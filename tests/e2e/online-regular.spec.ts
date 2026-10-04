@@ -4,14 +4,14 @@ import { preparedState } from './state';
 
 test('regular orders can be packed and livestream creates another regular order', async ({ page }) => {
   const state = preparedState();
-  state.inventory['baby-tee'] = 6;
+  state.inventory['ribbon-kiss-tee'] = 6;
   state.inventory.ribbon = 5;
-  state.inventory.jeans = 5;
-  state.inventory.hoodie = 4;
-  state.onlineListings = ['baby-tee', 'ribbon', 'jeans'];
+  state.inventory['cyber-pop-flare'] = 5;
+  state.inventory['urban-pulse-hoodie'] = 4;
+  state.onlineListings = ['ribbon-kiss-tee', 'ribbon', 'cyber-pop-flare'];
   state.onlineChannelEnabled = true;
   state.regularOnlineOrders = [{
-    id: 'regular-e2e', productIds: ['baby-tee'], customerName: 'Linh', customerHandle: '@linh_closet',
+    id: 'regular-e2e', productIds: ['ribbon-kiss-tee'], customerName: 'Linh', customerHandle: '@linh_closet',
     price: 99000, fee: 7920, createdDay: 1, dueDay: 2, packed: false, source: 'storefront',
   }];
 
@@ -49,19 +49,19 @@ test('regular orders can be packed and livestream creates another regular order'
   expect(fullscreen).toBe(true);
   const livestreamFitsFrame = await dialog.locator('.dialog-inner').evaluate(element => element.scrollWidth <= element.clientWidth + 1);
   expect(livestreamFitsFrame).toBe(true);
-  await dialog.locator('[data-action="livestream-pool-select"][data-id="baby-tee"]').click();
-  await dialog.locator('[data-action="livestream-pool-select"][data-id="jeans"]').click();
+  await dialog.locator('[data-action="livestream-pool-select"][data-id="ribbon-kiss-tee"]').click();
+  await dialog.locator('[data-action="livestream-pool-select"][data-id="cyber-pop-flare"]').click();
   await expect(dialog.locator('.livestream-product.is-selected')).toHaveCount(2);
   await dialog.locator('[data-action="livestream-start"]').click();
   await expect(dialog.locator('.livestream-two-pane')).toBeVisible();
   await expect(dialog.locator('.livestream-video-pane')).toBeVisible();
   await expect(dialog.locator('.livestream-product-pane')).toBeVisible();
   await expect(dialog.locator('.livestream-time')).toBeVisible();
-  await dialog.locator('[data-action="livestream-round-select"][data-id="baby-tee"]').click();
+  await dialog.locator('[data-action="livestream-round-select"][data-id="ribbon-kiss-tee"]').click();
   await expect(dialog.locator('.livestream-pin-card.is-pinned')).toHaveCount(1);
-  await dialog.locator('[data-action="livestream-round-select"][data-id="jeans"]').click();
-  await expect(dialog.locator('.livestream-pin-card.is-pinned')).toHaveAttribute('data-id', 'jeans');
-  await dialog.locator('[data-action="livestream-round-select"][data-id="baby-tee"]').click();
+  await dialog.locator('[data-action="livestream-round-select"][data-id="cyber-pop-flare"]').click();
+  await expect(dialog.locator('.livestream-pin-card.is-pinned')).toHaveAttribute('data-id', 'cyber-pop-flare');
+  await dialog.locator('[data-action="livestream-round-select"][data-id="ribbon-kiss-tee"]').click();
   const liveSessionFitsFrame = await dialog.locator('.dialog-inner').evaluate(element => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1);
   expect(liveSessionFitsFrame).toBe(true);
   await expect(dialog.locator('.livestream-feed')).toContainText(/Em chốt mẫu đang ghim|Để em suy nghĩ thêm/, { timeout: 7000 });

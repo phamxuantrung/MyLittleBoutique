@@ -64,7 +64,7 @@ test.describe('manual landscape on phones', () => {
     await page.touchscreen.tap(point.x, point.y);
     await expect(game.getByRole('dialog')).toHaveClass('dialog-serve');
     await game.locator('[data-action="outfit-category"][data-id="tops"]').tap();
-    await game.locator('.outfit-grid [data-id="baby-tee"]').tap();
+    await game.locator('.outfit-grid [data-id="ribbon-kiss-tee"]').tap();
     await game.locator('[data-action="serve"]').tap();
     await expect(game.getByRole('dialog')).toHaveClass('dialog-result');
     expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).stats.sold, SAVE_KEY)).toBe(1);

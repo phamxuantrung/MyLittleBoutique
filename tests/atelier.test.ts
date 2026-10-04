@@ -9,13 +9,13 @@ class MemorySave {
 }
 
 describe('personal tailoring workshop', () => {
-  it('gives all twelve recipes a unique editable block and surface identity', () => {
+  it('gives all ten recipes a unique editable block and surface identity', () => {
     const pointSignatures = atelierRecipes.map(recipe => JSON.stringify(atelierProductPoints(recipe.art)));
     const renderedBodies = atelierRecipes.map(recipe => atelierProductBody(recipe.art, recipe.color));
 
-    expect(atelierRecipes).toHaveLength(12);
-    expect(new Set(pointSignatures).size).toBe(12);
-    expect(new Set(renderedBodies).size).toBe(12);
+    expect(atelierRecipes).toHaveLength(10);
+    expect(new Set(pointSignatures).size).toBe(10);
+    expect(new Set(renderedBodies).size).toBe(10);
     renderedBodies.forEach(body => {
       expect(body).toContain('atelier-recipe-surface');
       expect(body).toContain('atelier-live-shape-path');

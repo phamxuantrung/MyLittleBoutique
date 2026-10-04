@@ -27,7 +27,7 @@ for (const [width, height] of [[390, 844], [844, 390], [1280, 800]]) {
     await expect(dialog).toHaveClass('dialog-serve');
     await expect(dialog).toContainText('Khách mới');
     await dialog.locator('[data-action="outfit-category"][data-id="tops"]').click();
-    await dialog.locator('.outfit-grid [data-id="baby-tee"]').click();
+    await dialog.locator('.outfit-grid [data-id="ribbon-kiss-tee"]').click();
     await expect(dialog.locator('[data-action="serve"]')).toBeEnabled();
     await dialog.locator('[data-action="serve"]').click();
     await expect(dialog).toContainText('Phối đồ cực chuẩn');

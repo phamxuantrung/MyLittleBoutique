@@ -5,9 +5,10 @@ import { MUSIC_TRACKS, type AudioSystem } from '../systems/audio';
 import { activeCustomer, activeVisit, buyPrice, currentEvent, currentTrend, DAY_DURATION, dailyRent, dayDuration, customerNeedsAdvice, decorAppealScore, displayCapacity, displayLevel, displayUpgradeCost, isTrending, landExpansion, landSize, landTier, MAX_OUTFIT_ITEMS, nextLandExpansion, validOutfit, smartOutfitSelection } from '../systems/rules';
 import { defaultFilters } from '../systems/catalog';
 import { icon } from './icons';
-import { characterSvg, courierSvg, ownerPortrait, productSvg } from '../art/svg';
+import { ownerPortrait, productSvg } from '../art/svg';
+import { courierImage } from '../art/courierAssets';
 import { isWallFurnitureId } from '../systems/rules';
-import { compact, compactMoney, escapeHtml, furnitureImage, money, productImage } from './format';
+import { avatarImage, compact, compactMoney, escapeHtml, furnitureImage, money, productImage } from './format';
 import { boutiqueProfileModal, campaignModal, debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, livestreamModal, livestreamRequest, nameShopModal, onlineChannelModal, onlineOrderModal, onlineStockModal, questPanel, regularOrderDetailModal, regularPickupModal, serveModal, socialPanel, staffManagementModal, summaryModal, supplierSelectionPanel, trendPanel, upgradeModal } from './panels';
 import type { ShopScene } from '../scenes/ShopScene';
 import { DISPLAY_GUIDE_SEEN, displayGuideModal, needsDisplayGuide } from './displayGuide';
@@ -17,7 +18,7 @@ import type { ArrivedOrderSummary, LivestreamComment, LivestreamRequest, Livestr
 import { supplierFor, suppliers } from '../systems/operations';
 import { gameCalendarDate } from '../systems/calendar';
 import { lookupCustomer } from '../systems/customerGen';
-import { atelierCustomizeModal, atelierPanel, atelierRecipeBookModal, atelierSampleModal, type AtelierSection } from './atelierPanel';
+import { ATELIER_CUSTOMIZER_ENABLED, atelierCustomizeModal, atelierPanel, atelierRecipeBookModal, atelierSampleModal, type AtelierSection } from './atelierPanel';
 import { ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipes } from '../data/atelier';
 import { atelierMaterialIllustration, atelierProductPoints } from '../art/atelierArt';
 import type { PanzoomEventDetail, PanzoomObject } from '@panzoom/panzoom';
@@ -29,7 +30,7 @@ type Modal = 'none' | 'profile' | 'serve' | 'display' | 'fixture-info' | 'store-
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'atelier-recipe-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
 const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
-const SHOW_DEBUG_BUTTON = false;
+const SHOW_DEBUG_BUTTON = true;
 const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
   const duration = Math.max(1, totalSeconds);
   const remaining = Math.max(0, Math.min(duration, remainingSeconds));
@@ -1124,6 +1125,7 @@ export class GameUI {
         if (this.store.startTailoringBatch(id, this.atelierBatchQtys[id] ?? 5)) this.renderPanel();
         break;
       case 'atelier-customize-open': {
+        if (!ATELIER_CUSTOMIZER_ENABLED) return;
         const product = this.store.state.customProducts.find(item => item.id === id);
         if (!product) return;
         this.atelierCustomizeProductId = product.id;
@@ -1771,13 +1773,13 @@ export class GameUI {
       case 'outfit-category':
         if (!this.ensureServeVisitFocused()) break;
         this.outfitCategory = id;
-        this.dialog.querySelector('.dialog-inner')!.innerHTML = serveModal(this.store.state, this.selected, this.outfitCategory);
+        this.dialog.querySelector('.dialog-inner')!.innerHTML = this.serveModalMarkup();
         this.dialog.querySelector<HTMLButtonElement>(`[data-action="outfit-category"][data-id="${id}"]`)?.focus({ preventScroll: true });
         break;
       case 'outfit-clear':
         if (!this.ensureServeVisitFocused()) break;
         this.selected = [];
-        this.dialog.querySelector('.dialog-inner')!.innerHTML = serveModal(this.store.state, this.selected, this.outfitCategory);
+        this.dialog.querySelector('.dialog-inner')!.innerHTML = this.serveModalMarkup();
         this.dialog.querySelector<HTMLButtonElement>('[data-action="outfit-category"]')?.focus({ preventScroll: true });
         break;
       case 'display-add':
@@ -1828,7 +1830,7 @@ export class GameUI {
         }
 
         const scroll = this.dialog.querySelector('.outfit-grid')?.scrollTop ?? 0;
-        this.dialog.querySelector('.dialog-inner')!.innerHTML = serveModal(this.store.state, this.selected, this.outfitCategory);
+        this.dialog.querySelector('.dialog-inner')!.innerHTML = this.serveModalMarkup();
         const grid = this.dialog.querySelector('.outfit-grid'); if (grid) grid.scrollTop = scroll;
         this.dialog.querySelector<HTMLButtonElement>(`[data-action="select-product"][data-id="${id}"]`)?.focus({ preventScroll: true });
         break;
@@ -2293,20 +2295,20 @@ export class GameUI {
       return `<span class="sale-card-aura">
         <button class="sale-character-card is-customer ${visit.uid === s.currentVisitId ? 'is-current' : ''}" data-action="sale-visit-open" data-id="${visit.uid}" aria-label="Tư vấn cho ${escapeHtml(customer.name)}">
           <strong class="sale-card-name">${escapeHtml(customer.name)}</strong>
-          <span class="sale-character-art">${characterSvg(visualCustomer)}</span>
+          <span class="sale-character-art">${avatarImage(visualCustomer)}</span>
           <div class="sale-card-countdown ${visit.patience <= 10 ? 'is-urgent' : ''}" data-visit="${visit.uid}"><span>${visit.patience}</span></div>
         </button>
       </span>`;
     }).join('');
     const courierCards = s.onlineOrders.map((order, index) => `<span class="sale-card-aura is-courier-aura"><button class="sale-character-card is-customer is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn hỏa tốc ${index + 1}">
       <strong class="sale-card-name">Shipper ${String(index + 1).padStart(2, '0')}</strong>
-      <span class="sale-character-art">${courierSvg(order.courierVariant)}</span>
+      <span class="sale-character-art">${courierImage(order.courierVariant)}</span>
       <div class="sale-card-countdown sale-card-delivery">${icon('bag')}<span>Giao</span></div>
     </button></span>`).join('');
     const packedRegularCount = s.regularOnlineOrders.filter(order => order.packed).length;
     const regularCourierCard = packedRegularCount ? `<span class="sale-card-aura is-courier-aura is-regular-pickup"><button class="sale-character-card is-customer is-courier" data-action="regular-pickup-open" aria-label="Bàn giao ${packedRegularCount} đơn thường">
       <strong class="sale-card-name">Shipper tổng</strong>
-      <span class="sale-character-art">${courierSvg(2)}</span>
+      <span class="sale-character-art">${courierImage(2)}</span>
       <div class="sale-card-countdown sale-card-delivery">${icon('box')}<span>${packedRegularCount} kiện</span></div>
     </button></span>` : '';
     interactionBar.innerHTML = customerCards + courierCards + regularCourierCard;
@@ -2480,6 +2482,8 @@ export class GameUI {
     const panelScrollTop = panel.scrollTop;
     const horizontalRail = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid, .inventory-horizontal-rail');
     const horizontalRailScrollLeft = horizontalRail?.scrollLeft ?? 0;
+    const craftMaterialGrid = panel.querySelector<HTMLElement>('.craft-material-grid');
+    const craftMaterialScrollTop = craftMaterialGrid?.scrollTop ?? 0;
     panel.onscroll = null;
     let contentHtml = '';
     try {
@@ -2547,9 +2551,14 @@ export class GameUI {
         panel.scrollTop = panelScrollTop;
         const rail = panel.querySelector<HTMLElement>('.import-horizontal-rail, .lookbook-grid, .inventory-horizontal-rail');
         if (rail) rail.scrollLeft = horizontalRailScrollLeft;
+        const nextCraftMaterialGrid = panel.querySelector<HTMLElement>('.craft-material-grid');
+        if (nextCraftMaterialGrid) nextCraftMaterialGrid.scrollTop = craftMaterialScrollTop;
       };
       restorePanelScroll();
-      requestAnimationFrame(restorePanelScroll);
+      requestAnimationFrame(() => {
+        restorePanelScroll();
+        requestAnimationFrame(restorePanelScroll);
+      });
       if (this.tab === 'social' && this.socialSection === 'feed') this.bindReviewSummarySticky(panel);
     } else {
       panel.innerHTML = '';
@@ -2582,7 +2591,11 @@ export class GameUI {
     this.dialog.classList.toggle('is-patience-urgent', urgentConsultation);
     const label = document.querySelector('#patience-label'); if (label) label.textContent = `${s.patience}s`;
     const bar = document.querySelector<HTMLElement>('#patience-bar'); if (bar && c) bar.style.width = `${visit ? visit.patience / visit.maxPatience * 100 : 0}%`;
-    const modal = document.querySelector('#modal-patience'); if (modal) modal.innerHTML = `${icon('clock')} ${s.patience}s`;
+    const modal = document.querySelector<HTMLElement>('#modal-patience');
+    if (modal) {
+      const remainingPatience = visit?.patience ?? s.patience;
+      modal.innerHTML = `${icon('clock')} <strong>${remainingPatience}s</strong>`;
+    }
     document.querySelectorAll<HTMLElement>('.sale-card-countdown[data-visit]').forEach(countdown => {
       const visit = s.activeVisits.find(item => item.uid === countdown.dataset.visit);
       if (!visit) return;
@@ -2726,8 +2739,17 @@ export class GameUI {
     this.serveVisitId = visit.uid;
     this.selected = [];
     this.outfitCategory = 'all';
-    this.openModal('serve', serveModal(this.store.state, this.selected, this.outfitCategory));
+    this.openModal('serve', this.serveModalMarkup());
     this.updatePatience();
+  }
+  private serveModalMarkup() {
+    const visit = this.store.state.activeVisits.find(candidate => candidate.uid === this.serveVisitId)
+      ?? activeVisit(this.store.state);
+    const customer = activeCustomer(this.store.state);
+    const visualCustomer = customer && visit
+      ? this.scene?.customerVisualForVisit(customer, visit.uid)
+      : undefined;
+    return serveModal(this.store.state, this.selected, this.outfitCategory, visualCustomer);
   }
   private ensureServeVisitFocused() {
     if (this.modal !== 'serve' || !this.serveVisitId) return false;

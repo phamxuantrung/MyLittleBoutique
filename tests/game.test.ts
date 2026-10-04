@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { customers, furniture, products } from '../src/data/catalog';
 import { activeCustomer, buyPrice, canPlace, currentEvent, DAY_DURATION, dayDuration, displayCapacity, displayUpgradeCost, isOutOfTrend, isTrending, landSize, matchScore, nextStaffRequirement, onlineOrderChance, staffCapacity, validOutfit } from '../src/systems/rules';
-import { initialState, parseSave, SaveSystem } from '../src/systems/save';
+import { initialState, parseSave, recoveredFurnitureCount, SaveSystem } from '../src/systems/save';
 import { GameStore } from '../src/systems/store';
 import type { GameState } from '../src/types';
 import { shopReviewStats } from '../src/systems/reviews';
@@ -10,8 +10,8 @@ import { campaignOffers } from '../src/systems/campaigns';
 class MemorySave extends SaveSystem { snapshot = ''; override write(s: GameState) { this.snapshot = JSON.stringify(s); } }
 const stockStarter = (s: GameState) => {
   s.money = 500000;
-  s.inventory = { 'baby-tee': 2, jeans: 2, 'ribbon-dress': 1, hoodie: 1, ribbon: 2 };
-  s.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['baby-tee', 'baby-tee', 'jeans', 'jeans', 'ribbon-dress', 'hoodie'];
+  s.inventory = { 'ribbon-kiss-tee': 2, 'cyber-pop-flare': 2, 'ribbon-dress': 1, 'urban-pulse-hoodie': 1, ribbon: 2 };
+  s.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['ribbon-kiss-tee', 'ribbon-kiss-tee', 'cyber-pop-flare', 'cyber-pop-flare', 'ribbon-dress', 'urban-pulse-hoodie'];
   const plantIndex = s.layout.findIndex(item => item.uid === 'starter-plant');
   s.layout[plantIndex] = { uid: 'starter-table', id: 'table', x: 6, y: 0, rotation: 0, displayItems: ['ribbon', 'ribbon'] };
 };
@@ -39,15 +39,15 @@ describe('inventory and economy', () => {
   });
   it('rejects insufficient funds, locked items, fractional and negative amounts', () => {
     const store = makeStore(s => { s.money = 20000; }); const before = JSON.stringify(store.state);
-    expect(store.buy('baby-tee', 1)).toBe(false); expect(store.buy('silk', 1)).toBe(false);
-    expect(store.buy('baby-tee', -1)).toBe(false); expect(store.buy('baby-tee', .5)).toBe(false);
+    expect(store.buy('ribbon-kiss-tee', 1)).toBe(false); expect(store.buy('silk', 1)).toBe(false);
+    expect(store.buy('ribbon-kiss-tee', -1)).toBe(false); expect(store.buy('ribbon-kiss-tee', .5)).toBe(false);
     expect(JSON.stringify(store.state)).toBe(before);
   });
   it('accepts freely chosen non-negative selling prices and rejects invalid values', () => {
-    const store = makeStore(); store.setPrice('baby-tee', Infinity); store.setPrice('baby-tee', -1);
-    expect(store.state.prices['baby-tee']).toBeUndefined();
-    store.setPrice('baby-tee', 10000); expect(store.state.prices['baby-tee']).toBe(10000);
-    store.setPrice('baby-tee', 250000); expect(store.state.prices['baby-tee']).toBe(250000);
+    const store = makeStore(); store.setPrice('ribbon-kiss-tee', Infinity); store.setPrice('ribbon-kiss-tee', -1);
+    expect(store.state.prices['ribbon-kiss-tee']).toBeUndefined();
+    store.setPrice('ribbon-kiss-tee', 10000); expect(store.state.prices['ribbon-kiss-tee']).toBe(10000);
+    store.setPrice('ribbon-kiss-tee', 250000); expect(store.state.prices['ribbon-kiss-tee']).toBe(250000);
   });
   it('never grants free rescue stock because financing remains the recovery path', () => {
     const store = makeStore(); const before = { ...store.state.inventory };
@@ -56,23 +56,23 @@ describe('inventory and economy', () => {
   });
   it('lists warehouse stock online and creates a courier order when reach is strong', () => {
     const state = initialState(); stockStarter(state);
-    state.inventory['baby-tee'] = 3;
+    state.inventory['ribbon-kiss-tee'] = 3;
     state.followers = 500;
     const store = new GameStore(state, new MemorySave(), () => 0);
-    expect(store.listOnlineProduct('baby-tee')).toBe(true);
+    expect(store.listOnlineProduct('ribbon-kiss-tee')).toBe(true);
     store.openShop();
     store.state.onlineNextOrderIn = 0;
     store.tick();
     expect(store.state.onlineOrders).toHaveLength(1);
-    expect(store.state.onlineOrders[0].productId).toBe('baby-tee');
+    expect(store.state.onlineOrders[0].productId).toBe('ribbon-kiss-tee');
   });
   it('can create an automatic online order containing several different products', () => {
     const state = initialState(); stockStarter(state);
-    state.inventory['baby-tee'] = 3;
-    state.inventory.jeans = 3;
+    state.inventory['ribbon-kiss-tee'] = 3;
+    state.inventory['cyber-pop-flare'] = 3;
     state.inventory.ribbon = 3;
     state.followers = 500;
-    state.onlineListings = ['baby-tee', 'jeans', 'ribbon'];
+    state.onlineListings = ['ribbon-kiss-tee', 'cyber-pop-flare', 'ribbon'];
     state.onlineChannelEnabled = true;
     const store = new GameStore(state, new MemorySave(), () => 0);
     store.openShop();
@@ -80,7 +80,7 @@ describe('inventory and economy', () => {
     store.tick();
     expect(store.state.onlineOrders).toHaveLength(1);
     expect(store.state.onlineOrders[0].productIds).toHaveLength(3);
-    expect(new Set(store.state.onlineOrders[0].productIds)).toEqual(new Set(['baby-tee', 'jeans', 'ribbon']));
+    expect(new Set(store.state.onlineOrders[0].productIds)).toEqual(new Set(['ribbon-kiss-tee', 'cyber-pop-flare', 'ribbon']));
   });
   it('allows every stocked product to be listed online without a slot limit', () => {
     const state = initialState();
@@ -92,13 +92,13 @@ describe('inventory and economy', () => {
   });
   it('keeps listings while the online channel is toggled off and stops accepting orders', () => {
     const state = initialState();
-    state.inventory['baby-tee'] = 3;
-    state.layout.find(item => item.id === 'rack')!.displayItems = ['baby-tee'];
-    state.onlineListings = ['baby-tee'];
+    state.inventory['ribbon-kiss-tee'] = 3;
+    state.layout.find(item => item.id === 'rack')!.displayItems = ['ribbon-kiss-tee'];
+    state.onlineListings = ['ribbon-kiss-tee'];
     const store = new GameStore(state, new MemorySave(), () => 0);
     expect(store.toggleOnlineChannel()).toBe(true);
     expect(store.state.onlineChannelEnabled).toBe(false);
-    expect(store.state.onlineListings).toEqual(['baby-tee']);
+    expect(store.state.onlineListings).toEqual(['ribbon-kiss-tee']);
     store.openShop();
     store.state.onlineNextOrderIn = 0;
     store.tick();
@@ -115,19 +115,19 @@ describe('inventory and economy', () => {
   it('delivers all products in a multi-item online order together', () => {
     const store = makeStore(s => {
       s.phase = 'open';
-      s.inventory['baby-tee'] = 2;
-      s.inventory.jeans = 2;
-      s.onlineOrders = [{ id: 'multi', productId: 'baby-tee', productIds: ['baby-tee', 'jeans'], customerName: 'An', customerHandle: '@an_style', price: 206000, fee: 28840, createdDay: 1, courierVariant: 0 }];
+      s.inventory['ribbon-kiss-tee'] = 2;
+      s.inventory['cyber-pop-flare'] = 2;
+      s.onlineOrders = [{ id: 'multi', productId: 'ribbon-kiss-tee', productIds: ['ribbon-kiss-tee', 'cyber-pop-flare'], customerName: 'An', customerHandle: '@an_style', price: 206000, fee: 28840, createdDay: 1, courierVariant: 0 }];
     });
-    expect(store.fulfillOnlineOrder('multi', ['baby-tee', 'jeans'])).toBe(true);
-    expect(store.state.inventory['baby-tee']).toBe(1);
-    expect(store.state.inventory.jeans).toBe(1);
+    expect(store.fulfillOnlineOrder('multi', ['ribbon-kiss-tee', 'cyber-pop-flare'])).toBe(true);
+    expect(store.state.inventory['ribbon-kiss-tee']).toBe(1);
+    expect(store.state.inventory['cyber-pop-flare']).toBe(1);
     expect(store.state.onlineOrders).toHaveLength(0);
     expect(store.state.money).toBe(500000 + 177160);
   });
   it('makes online demand difficult for a new channel and sensitive to real review quality', () => {
     const state = initialState();
-    state.onlineListings = ['baby-tee'];
+    state.onlineListings = ['ribbon-kiss-tee'];
     state.followers = 5;
     expect(onlineOrderChance(state)).toBeLessThan(.01);
     state.followers = 500;
@@ -143,34 +143,34 @@ describe('inventory and economy', () => {
   });
   it('charges the online fee for a correct parcel and penalizes a wrong parcel', () => {
     const store = makeStore(s => {
-      s.inventory['baby-tee'] = 3;
-      s.inventory.jeans = 3;
+      s.inventory['ribbon-kiss-tee'] = 3;
+      s.inventory['cyber-pop-flare'] = 3;
       s.phase = 'open';
-      s.onlineOrders = [{ id: 'order-1', productId: 'baby-tee', customerName: 'An', customerHandle: '@an_style', price: 100000, fee: 14000, createdDay: 1, courierVariant: 0 }];
+      s.onlineOrders = [{ id: 'order-1', productId: 'ribbon-kiss-tee', customerName: 'An', customerHandle: '@an_style', price: 100000, fee: 14000, createdDay: 1, courierVariant: 0 }];
     });
     const beforeMoney = store.state.money;
-    expect(store.fulfillOnlineOrder('order-1', 'baby-tee')).toBe(true);
+    expect(store.fulfillOnlineOrder('order-1', 'ribbon-kiss-tee')).toBe(true);
     expect(store.state.money).toBe(beforeMoney + 86000);
     expect(store.state.onlineSales).toBe(1);
-    store.state.onlineOrders = [{ id: 'order-2', productId: 'baby-tee', customerName: 'Vy', customerHandle: '@vy_daily', price: 100000, fee: 14000, createdDay: 1, courierVariant: 1 }];
+    store.state.onlineOrders = [{ id: 'order-2', productId: 'ribbon-kiss-tee', customerName: 'Vy', customerHandle: '@vy_daily', price: 100000, fee: 14000, createdDay: 1, courierVariant: 1 }];
     const beforeReputation = store.state.reputation;
-    expect(store.fulfillOnlineOrder('order-2', 'jeans')).toBe(true);
+    expect(store.fulfillOnlineOrder('order-2', 'cyber-pop-flare')).toBe(true);
     expect(store.state.reputation).toBeLessThan(beforeReputation);
     expect(store.state.onlineRating).toBeLessThan(5);
   });
   it('protects stock reserved for another courier and allows a lighter stockout cancellation', () => {
     const store = makeStore(s => {
-      s.inventory['baby-tee'] = 3;
-      s.inventory.jeans = 3;
+      s.inventory['ribbon-kiss-tee'] = 3;
+      s.inventory['cyber-pop-flare'] = 3;
       s.phase = 'open';
       s.onlineOrders = [
-        { id: 'order-baby', productId: 'baby-tee', customerName: 'An', customerHandle: '@an_style', price: 100000, fee: 14000, createdDay: 1, courierVariant: 0 },
-        { id: 'order-jeans', productId: 'jeans', customerName: 'Vy', customerHandle: '@vy_daily', price: 120000, fee: 16800, createdDay: 1, courierVariant: 1 },
+        { id: 'order-baby', productId: 'ribbon-kiss-tee', customerName: 'An', customerHandle: '@an_style', price: 100000, fee: 14000, createdDay: 1, courierVariant: 0 },
+        { id: 'order-jeans', productId: 'cyber-pop-flare', customerName: 'Vy', customerHandle: '@vy_daily', price: 120000, fee: 16800, createdDay: 1, courierVariant: 1 },
       ];
     });
-    expect(store.fulfillOnlineOrder('order-baby', 'jeans')).toBe(false);
-    expect(store.state.inventory.jeans).toBe(3);
-    store.state.inventory['baby-tee'] = 2;
+    expect(store.fulfillOnlineOrder('order-baby', 'cyber-pop-flare')).toBe(false);
+    expect(store.state.inventory['cyber-pop-flare']).toBe(3);
+    store.state.inventory['ribbon-kiss-tee'] = 2;
     const beforeReputation = store.state.reputation;
     expect(store.cancelOutOfStockOnlineOrder('order-baby')).toBe(true);
     expect(store.state.onlineOrders.map(order => order.id)).toEqual(['order-jeans']);
@@ -180,7 +180,7 @@ describe('inventory and economy', () => {
   it('cancels an online order without revenue or reputation penalties', () => {
     const store = makeStore(s => {
       s.phase = 'open';
-      s.onlineOrders = [{ id: 'cancel-me', productId: 'baby-tee', customerName: 'An', customerHandle: '@an_style', price: 77000, fee: 10780, createdDay: 1, courierVariant: 0 }];
+      s.onlineOrders = [{ id: 'cancel-me', productId: 'ribbon-kiss-tee', customerName: 'An', customerHandle: '@an_style', price: 77000, fee: 10780, createdDay: 1, courierVariant: 0 }];
     });
     const before = { money: store.state.money, reputation: store.state.reputation, rating: store.state.onlineRating, reviews: store.state.onlineReviews, followers: store.state.followers };
     expect(store.cancelOnlineOrder('cancel-me')).toBe(true);
@@ -190,14 +190,14 @@ describe('inventory and economy', () => {
   it('allows handing a different displayed product to the courier and records a wrong delivery', () => {
     const store = makeStore(s => {
       s.phase = 'open';
-      s.inventory.jeans = 1;
+      s.inventory['cyber-pop-flare'] = 1;
       const rack = s.layout.find(item => item.id === 'rack')!;
-      rack.displayItems = ['jeans'];
-      s.onlineOrders = [{ id: 'wrong-item', productId: 'baby-tee', customerName: 'An', customerHandle: '@an_style', price: 77000, fee: 10780, createdDay: 1, courierVariant: 0 }];
+      rack.displayItems = ['cyber-pop-flare'];
+      s.onlineOrders = [{ id: 'wrong-item', productId: 'ribbon-kiss-tee', customerName: 'An', customerHandle: '@an_style', price: 77000, fee: 10780, createdDay: 1, courierVariant: 0 }];
     });
-    expect(store.fulfillOnlineOrder('wrong-item', 'jeans')).toBe(true);
-    expect(store.state.inventory.jeans).toBe(0);
-    expect(store.state.layout.find(item => item.id === 'rack')?.displayItems).not.toContain('jeans');
+    expect(store.fulfillOnlineOrder('wrong-item', 'cyber-pop-flare')).toBe(true);
+    expect(store.state.inventory['cyber-pop-flare']).toBe(0);
+    expect(store.state.layout.find(item => item.id === 'rack')?.displayItems).not.toContain('cyber-pop-flare');
     expect(store.state.onlineRating).toBe(1);
   });
   it('lets the player choose a loan within the lifetime credit limit', () => {
@@ -300,7 +300,7 @@ describe('customer interactions and day progression', () => {
   });
   it('does not open without stock or process sales while closed', () => {
     const store = makeStore(s => { s.inventory = {}; }); store.openShop(); expect(store.state.phase).toBe('preparation');
-    expect(store.serve(['baby-tee'])).toBeUndefined();
+    expect(store.serve(['ribbon-kiss-tee'])).toBeUndefined();
   });
   it('uses the same daily event for its opening status and gameplay modifiers', () => {
     const store = makeStore(s => { s.day = 2; });
@@ -308,9 +308,9 @@ describe('customer interactions and day progression', () => {
     expect(store.state.dailyLuck).toBe(currentEvent(store.state).name);
   });
   it('sells a matching outfit and consumes exactly the selected items', () => {
-    const store = makeStore(); store.openShop(); visit(store); const result = store.serve(['baby-tee', 'ribbon']);
-    expect(result?.success).toBe(true); expect(store.state.money).toBe(500000 + products.find(p => p.id === 'baby-tee')!.sellPrice + products.find(p => p.id === 'ribbon')!.sellPrice);
-    expect(store.state.inventory['baby-tee']).toBe(1); expect(store.state.inventory.ribbon).toBe(1);
+    const store = makeStore(); store.openShop(); visit(store); const result = store.serve(['ribbon-kiss-tee', 'ribbon']);
+    expect(result?.success).toBe(true); expect(store.state.money).toBe(500000 + products.find(p => p.id === 'ribbon-kiss-tee')!.sellPrice + products.find(p => p.id === 'ribbon')!.sellPrice);
+    expect(store.state.inventory['ribbon-kiss-tee']).toBe(1); expect(store.state.inventory.ribbon).toBe(1);
     expect(store.state.stats.sold).toBe(2); expect(store.state.xp).toBe(12); expect(store.state.posts).toHaveLength(1);
     expect(store.state.posts[0].reviewStars).toBe(result?.reviewStars);
     expect(shopReviewStats(store.state)).toMatchObject({ count: 1, average: result?.reviewStars });
@@ -321,7 +321,7 @@ describe('customer interactions and day progression', () => {
       s.customerLoyalty.lily = { visits: 2, purchases: 1, points: 20, lastVisitDay: 0, rewardsClaimed: [] };
     });
     store.openShop(); visit(store);
-    const result = store.serve(['baby-tee', 'ribbon']);
+    const result = store.serve(['ribbon-kiss-tee', 'ribbon']);
     expect(result?.success).toBe(true);
     expect(result?.loyaltyPoints).toBeGreaterThan(0);
     expect(result?.loyaltyTier).toBe('Khách quen');
@@ -333,7 +333,7 @@ describe('customer interactions and day progression', () => {
   it('gives loyal customers a small trust bonus when evaluating an outfit', () => {
     const state = initialState();
     const lily = customers.find(customer => customer.id === 'lily')!;
-    const hoodie = products.find(product => product.id === 'hoodie')!;
+    const hoodie = products.find(product => product.id === 'urban-pulse-hoodie')!;
     const newCustomerScore = matchScore(state, lily, [hoodie]);
     state.customerLoyalty.lily = { visits: 5, purchases: 4, points: 60, lastVisitDay: 1, rewardsClaimed: [25, 60] };
     expect(matchScore(state, lily, [hoodie])).toBe(newCustomerScore + 4);
@@ -347,14 +347,14 @@ describe('customer interactions and day progression', () => {
   });
   it('uses customer preferences and markup, not an automatic sale', () => {
     const store = makeStore(); store.openShop(); visit(store); const c = activeCustomer(store.state)!;
-    const tee = products.find(p => p.id === 'baby-tee')!, hoodie = products.find(p => p.id === 'hoodie')!;
+    const tee = products.find(p => p.id === 'ribbon-kiss-tee')!, hoodie = products.find(p => p.id === 'urban-pulse-hoodie')!;
     expect(matchScore(store.state, c, [tee])).toBeGreaterThan(matchScore(store.state, c, [hoodie]));
-    const before = matchScore(store.state, c, [tee]); store.setPrice('baby-tee', tee.sellPrice * 1.5);
+    const before = matchScore(store.state, c, [tee]); store.setPrice('ribbon-kiss-tee', tee.sellPrice * 1.5);
     expect(matchScore(store.state, c, [tee])).toBeLessThan(before);
   });
   it('prevents duplicate categories, duplicate items and incompatible dress layers', () => {
-    expect(validOutfit(['baby-tee', 'hoodie'])).toBe(false); expect(validOutfit(['baby-tee', 'baby-tee'])).toBe(false);
-    expect(validOutfit(['ribbon-dress', 'jeans'])).toBe(false); expect(validOutfit(['ribbon-dress', 'ribbon', 'sneakers'])).toBe(true);
+    expect(validOutfit(['ribbon-kiss-tee', 'urban-pulse-hoodie'])).toBe(false); expect(validOutfit(['ribbon-kiss-tee', 'ribbon-kiss-tee'])).toBe(false);
+    expect(validOutfit(['ribbon-dress', 'cyber-pop-flare'])).toBe(false); expect(validOutfit(['ribbon-dress', 'ribbon', 'sneakers'])).toBe(true);
     expect(validOutfit(['missing'])).toBe(false); expect(validOutfit([])).toBe(false);
   });
   it('does not sell out-of-stock items', () => {
@@ -377,14 +377,14 @@ describe('customer interactions and day progression', () => {
   });
   it('closes early after the last displayed item is sold', () => {
     const store = makeStore(s => {
-      s.inventory = { 'baby-tee': 1, ribbon: 1 };
+      s.inventory = { 'ribbon-kiss-tee': 1, ribbon: 1 };
       for (const fixture of s.layout) fixture.displayItems = [];
-      s.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['baby-tee'];
+      s.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['ribbon-kiss-tee'];
       s.layout.find(item => item.uid === 'starter-table')!.displayItems = ['ribbon'];
     });
     store.openShop();
     visit(store);
-    expect(store.serve(['baby-tee', 'ribbon'])?.success).toBe(true);
+    expect(store.serve(['ribbon-kiss-tee', 'ribbon'])?.success).toBe(true);
     expect(store.state.phase).toBe('open');
     expect(store.state.dayTimer).toBeGreaterThan(0);
     store.tick();
@@ -572,7 +572,7 @@ describe('employee recruitment and payroll', () => {
     });
     store.openShop();
     visit(store);
-    expect(store.serve(['baby-tee'])?.success).toBe(true);
+    expect(store.serve(['ribbon-kiss-tee'])?.success).toBe(true);
     expect(store.state.employees[0].sales).toBe(0);
     expect(store.state.employees[0].shiftSales).toBe(0);
     expect(store.state.employees[0].tipsEarned).toBe(0);
@@ -595,10 +595,10 @@ describe('decoration, upgrades and resilient saves', () => {
   it('returns displayed goods to warehouse availability when a fixture is stored', () => {
     const store = makeStore();
     const rack = store.state.layout.find(item => item.uid === 'starter-rack')!;
-    const owned = store.state.inventory['baby-tee'];
-    expect(rack.displayItems).toContain('baby-tee');
+    const owned = store.state.inventory['ribbon-kiss-tee'];
+    expect(rack.displayItems).toContain('ribbon-kiss-tee');
     store.storeFurniture(rack.uid);
-    expect(store.state.inventory['baby-tee']).toBe(owned);
+    expect(store.state.inventory['ribbon-kiss-tee']).toBe(owned);
     expect(store.state.layout.some(item => item.uid === rack.uid)).toBe(false);
   });
   it('returns the placed furniture uid for immediate move mode selection', () => {
@@ -629,17 +629,17 @@ describe('decoration, upgrades and resilient saves', () => {
     expect(store.buy('coquette-set', 1)).toBe(true);
     store.buyFurniture('mannequin');
     const mannequin = store.state.layout.find(item => item.id === 'mannequin')!;
-    expect(store.displayProduct(mannequin.uid, 'baby-tee')).toBe(false);
+    expect(store.displayProduct(mannequin.uid, 'ribbon-kiss-tee')).toBe(false);
     expect(store.displayProduct(mannequin.uid, 'coquette-set')).toBe(true);
     expect(store.displayProduct(mannequin.uid, 'coquette-set')).toBe(false);
     expect(store.upgradeDisplay(mannequin.uid)).toBe(false);
   });
   it('does not offer warehouse stock that has not been placed on a display', () => {
     const store = makeStore(s => {
-      for (const item of s.layout) item.displayItems = item.displayItems?.filter(id => id !== 'baby-tee');
+      for (const item of s.layout) item.displayItems = item.displayItems?.filter(id => id !== 'ribbon-kiss-tee');
     });
     store.openShop(); visit(store);
-    expect(store.serve(['baby-tee'])).toBeUndefined();
+    expect(store.serve(['ribbon-kiss-tee'])).toBeUndefined();
   });
   it('validates the starter layout, collisions, boundaries and entrance', () => {
     const s = initialState(); for (const p of s.layout) expect(canPlace(s.layout, p)).toBe(true);
@@ -754,10 +754,10 @@ describe('decoration, upgrades and resilient saves', () => {
     const store = makeStore(state => { state.level = 3; state.money = 1000000; });
     expect(store.selectSupplier('wholesale')).toBe(true);
     const before = store.state.money;
-    const unitPrice = buyPrice(store.state, products.find(item => item.id === 'baby-tee')!);
-    expect(store.buy('baby-tee', 5)).toBe(true);
+    const unitPrice = buyPrice(store.state, products.find(item => item.id === 'ribbon-kiss-tee')!);
+    expect(store.buy('ribbon-kiss-tee', 5)).toBe(true);
     expect(store.state.money).toBe(before - unitPrice * 5);
-    expect(store.state.pendingOrders.at(-1)).toMatchObject({ productId: 'baby-tee', quantity: 5, supplierId: 'wholesale' });
+    expect(store.state.pendingOrders.at(-1)).toMatchObject({ productId: 'ribbon-kiss-tee', quantity: 5, supplierId: 'wholesale' });
     expect(store.state.pendingOrders.at(-1)!.arrivalDay).toBeGreaterThanOrEqual(store.state.day + 1);
     expect(store.state.pendingOrders.at(-1)!.arrivalDay).toBeLessThanOrEqual(store.state.day + 2);
   });
@@ -776,7 +776,7 @@ describe('decoration, upgrades and resilient saves', () => {
   });
   it('announces delivered waiting orders when the next day starts', () => {
     const store = makeStore(state => {
-      state.pendingOrders.push({ id: 'delivery-1', productId: 'baby-tee', quantity: 4, cost: 100000, arrivalDay: 2, supplierId: 'wholesale' });
+      state.pendingOrders.push({ id: 'delivery-1', productId: 'ribbon-kiss-tee', quantity: 4, cost: 100000, arrivalDay: 2, supplierId: 'wholesale' });
       state.phase = 'closed';
     });
     let delivered = 0;
@@ -798,25 +798,25 @@ describe('decoration, upgrades and resilient saves', () => {
   it('resolves returns with a refund and keeps the returned product in stock', () => {
     const store = makeStore(state => {
       state.level = 3;
-      state.returnCases.push({ id: 'r-1', productId: 'baby-tee', customerName: 'Chloe', amount: 45000, reason: 'Sai kích cỡ', availableDay: 1, deadlineDay: 3 });
+      state.returnCases.push({ id: 'r-1', productId: 'ribbon-kiss-tee', customerName: 'Chloe', amount: 45000, reason: 'Sai kích cỡ', availableDay: 1, deadlineDay: 3 });
     });
     const beforeMoney = store.state.money;
-    const beforeStock = store.state.inventory['baby-tee'];
+    const beforeStock = store.state.inventory['ribbon-kiss-tee'];
     expect(store.resolveReturn('r-1', 'refund')).toBe(true);
     expect(store.state.money).toBe(beforeMoney - 45000);
-    expect(store.state.inventory['baby-tee']).toBe(beforeStock + 1);
+    expect(store.state.inventory['ribbon-kiss-tee']).toBe(beforeStock + 1);
     expect(store.state.returnCases).toHaveLength(0);
   });
   it('charges only return shipping for an exchange and keeps inventory unchanged', () => {
     const store = makeStore(state => {
       state.level = 3;
-      state.returnCases.push({ id: 'r-exchange', productId: 'baby-tee', customerName: 'Chloe', amount: 77000, reason: 'Đổi kích cỡ', availableDay: 1, deadlineDay: 3 });
+      state.returnCases.push({ id: 'r-exchange', productId: 'ribbon-kiss-tee', customerName: 'Chloe', amount: 77000, reason: 'Đổi kích cỡ', availableDay: 1, deadlineDay: 3 });
     });
     const beforeMoney = store.state.money;
-    const beforeStock = store.state.inventory['baby-tee'];
+    const beforeStock = store.state.inventory['ribbon-kiss-tee'];
     expect(store.resolveReturn('r-exchange', 'exchange')).toBe(true);
     expect(store.state.money).toBe(beforeMoney - 20000);
-    expect(store.state.inventory['baby-tee']).toBe(beforeStock);
+    expect(store.state.inventory['ribbon-kiss-tee']).toBe(beforeStock);
     expect(store.state.returnCases).toHaveLength(0);
   });
   it('requires quality investment before a couture order can be delivered', () => {
@@ -837,9 +837,9 @@ describe('decoration, upgrades and resilient saves', () => {
       state.level = 4;
       state.vipAppointments.push({ id: 'vip-1', customerName: 'Hạ Vy', style: 'Coquette', category: 'tops', budget: 1000000, scheduledDay: 1, minItems: 1, reward: 200000, status: 'accepted' });
     });
-    const before = store.state.inventory['baby-tee'];
+    const before = store.state.inventory['ribbon-kiss-tee'];
     store.openShop();
-    expect(store.state.inventory['baby-tee']).toBe(before - 1);
+    expect(store.state.inventory['ribbon-kiss-tee']).toBe(before - 1);
     expect(store.state.vipAppointments).toHaveLength(0);
     expect(store.state.stats.sold).toBe(1);
   });
@@ -879,15 +879,85 @@ describe('decoration, upgrades and resilient saves', () => {
     store.state.money = 450000; store.upgrade(); expect(store.state.level).toBe(2); expect(store.state.money).toBe(0);
   });
   it('roundtrips a complete session including inventory, prices and layout', () => {
-    const store = makeStore(); store.buy('ribbon', 5); store.buyFurniture('flowers'); store.setPrice('baby-tee', 118800); store.openShop(); visit(store); store.serve(['baby-tee']);
+    const store = makeStore(); store.buy('ribbon', 5); store.buyFurniture('flowers'); store.setPrice('ribbon-kiss-tee', 118800); store.openShop(); visit(store); store.serve(['ribbon-kiss-tee']);
     expect(parseSave(JSON.stringify(store.state))).toEqual({ ...store.state, inventory: Object.fromEntries(products.map(p => [p.id, store.state.inventory[p.id] ?? 0])) });
+  });
+  it('moves furniture with an invalid saved position into storage instead of losing it', () => {
+    const state = initialState();
+    state.layout = [
+      { uid: 'first-flowers', id: 'flowers', x: 3, y: 3, rotation: 0 },
+      { uid: 'overlapping-flowers', id: 'flowers', x: 3, y: 3, rotation: 0 },
+    ];
+    state.storedFurniture = ['plant'];
+    const parsed = parseSave(JSON.stringify(state));
+    expect(parsed.layout).toEqual([{ uid: 'first-flowers', id: 'flowers', x: 3, y: 3, rotation: 0 }]);
+    expect(parsed.storedFurniture).toEqual(['plant', 'flowers']);
+    expect(recoveredFurnitureCount(parsed)).toBe(1);
+  });
+  it('moves furniture beyond the thirty-item placement limit into storage after a refresh', () => {
+    const state = initialState();
+    state.layout = Array.from({ length: 35 }, (_, index) => ({
+      uid: `saved-rug-${index}`,
+      id: 'heart-rug',
+      x: 0,
+      y: 0,
+      rotation: 0,
+    }));
+    const parsed = parseSave(JSON.stringify(state));
+    expect(parsed.layout).toHaveLength(30);
+    expect(parsed.layout.at(-1)?.uid).toBe('saved-rug-29');
+    expect(parsed.storedFurniture).toEqual(Array(5).fill('heart-rug'));
+    expect(recoveredFurnitureCount(parsed)).toBe(5);
+  });
+  it('warns and does not charge when the shop already has thirty furniture items', () => {
+    const store = makeStore(state => {
+      state.layout = Array.from({ length: 30 }, (_, index) => ({ uid: `full-rug-${index}`, id: 'heart-rug', x: 0, y: 0, rotation: 0 }));
+    });
+    const messages: string[] = [];
+    store.subscribe(event => { if (event.type === 'toast') messages.push(event.message); });
+    const moneyBefore = store.state.money;
+    expect(store.buyFurniture('flowers')).toBeUndefined();
+    expect(store.state.money).toBe(moneyBefore);
+    expect(store.state.layout).toHaveLength(30);
+    expect(messages.at(-1)).toContain('tối đa 30 món nội thất');
+  });
+  it('migrates retired tops into the new collection without losing stock', () => {
+    const state = initialState();
+    state.inventory = { 'baby-tee': 2, 'ribbon-corset': 3, hoodie: 1, 'chrome-pixel-crop': 2 };
+    state.stats.soldProducts = { 'baby-tee': 4, 'ribbon-corset': 2, 'chrome-pixel-crop': 1 };
+    state.onlineListings = ['baby-tee', 'ribbon-corset', 'hoodie', 'chrome-pixel-crop'];
+    state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['baby-tee', 'ribbon-corset', 'hoodie', 'chrome-pixel-crop'];
+    const parsed = parseSave(JSON.stringify(state));
+    expect(parsed.inventory['ribbon-kiss-tee']).toBe(5);
+    expect(parsed.inventory['urban-pulse-hoodie']).toBe(1);
+    expect(parsed.inventory['vintage-maison-rose-corset']).toBe(2);
+    expect(parsed.stats.soldProducts!['ribbon-kiss-tee']).toBe(6);
+    expect(parsed.stats.soldProducts!['vintage-maison-rose-corset']).toBe(1);
+    expect(parsed.onlineListings).toEqual(['ribbon-kiss-tee', 'urban-pulse-hoodie', 'vintage-maison-rose-corset']);
+    expect(parsed.layout.find(item => item.uid === 'starter-rack')?.displayItems).toEqual(['ribbon-kiss-tee', 'ribbon-kiss-tee', 'urban-pulse-hoodie', 'vintage-maison-rose-corset']);
+  });
+  it('migrates retired bottoms into the new collection without losing stock', () => {
+    const state = initialState();
+    state.inventory = { jeans: 2, 'atelier-straight-jeans': 3, cargo: 1, 'parachute-pants': 4 };
+    state.stats.soldProducts = { jeans: 4, 'atelier-straight-jeans': 2 };
+    state.onlineListings = ['jeans', 'atelier-straight-jeans', 'cargo'];
+    state.layout.find(item => item.uid === 'starter-rack')!.displayItems = ['jeans', 'atelier-straight-jeans', 'cargo'];
+    const parsed = parseSave(JSON.stringify(state));
+    expect(parsed.inventory['cloud-sky-jeans']).toBe(2);
+    expect(parsed.inventory['daily-muse-straight-jeans']).toBe(3);
+    expect(parsed.inventory['downtown-cargo']).toBe(1);
+    expect(parsed.inventory['matcha-utility-cargo']).toBe(4);
+    expect(parsed.stats.soldProducts!['cloud-sky-jeans']).toBe(4);
+    expect(parsed.stats.soldProducts!['daily-muse-straight-jeans']).toBe(2);
+    expect(parsed.onlineListings).toEqual(['cloud-sky-jeans', 'daily-muse-straight-jeans', 'downtown-cargo']);
+    expect(parsed.layout.find(item => item.uid === 'starter-rack')?.displayItems).toEqual(['cloud-sky-jeans', 'daily-muse-straight-jeans', 'downtown-cargo']);
   });
   it('recovers from corrupt, missing and future-version saves', () => {
     for (const raw of ['{bad', 'null', '{"version":99}', null]) expect(parseSave(raw)).toEqual(initialState());
   });
   it('sanitizes invalid numbers, unknown products and overlapping furniture', () => {
-    const s = initialState(); const parsed = parseSave(JSON.stringify({ ...s, money: -500, day: -2, level: 999, inventory: { 'baby-tee': -9, evil: 20 }, layout: [...s.layout, { ...s.layout[0], uid: 'duplicate' }] }));
+    const s = initialState(); const parsed = parseSave(JSON.stringify({ ...s, money: -500, day: -2, level: 999, inventory: { 'ribbon-kiss-tee': -9, evil: 20 }, layout: [...s.layout, { ...s.layout[0], uid: 'duplicate' }] }));
     expect(parsed.money).toBe(500000); expect(parsed.day).toBe(1); expect(parsed.level).toBe(7);
-    expect(parsed.inventory['baby-tee']).toBe(0); expect(parsed.inventory.evil).toBeUndefined(); expect(parsed.layout).toHaveLength(9);
+    expect(parsed.inventory['ribbon-kiss-tee']).toBe(0); expect(parsed.inventory.evil).toBeUndefined(); expect(parsed.layout).toHaveLength(9);
   });
 });

@@ -45,3 +45,32 @@ test('sale controls and customer cards stay mounted across state renders', async
   await expect(customerCard).toHaveAttribute('data-stability-probe', 'customer');
   await expect(closeButton).toHaveAttribute('data-stability-probe', 'close');
 });
+
+test('a held modal button still receives its click when the sale ticks underneath it', async ({ page }) => {
+  const state = openState();
+  state.onlineOrders = [{
+    id: 'held-click-order',
+    productId: 'ribbon-kiss-tee',
+    customerName: 'Lily',
+    customerHandle: '@lily.sweet',
+    price: 100000,
+    fee: 14000,
+    createdDay: 1,
+    courierVariant: 0,
+  }];
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.clock.install();
+  await page.goto('/');
+  await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+  await page.locator('[data-action="online-order-open"]').click();
+
+  const closeButton = page.getByRole('dialog').locator('[data-action="close-modal"]');
+  const bounds = await closeButton.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+  await page.mouse.down();
+  await page.clock.runFor(1250);
+  await page.mouse.up();
+
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+});

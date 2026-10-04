@@ -61,12 +61,12 @@ const CENTERED_FURNITURE_ART = new Set([
   'flowers', 'plant', 'mannequin', 'monstera-plant', 'beanbag', 'vinyl-player',
   'coffee-corner', 'counter', 'sofa',
   'coquette-mirror', 'wavy-mirror', 'mirror', 'tulip-lamp', 'perfume-table',
-  'champagne-sofa', 'runway-mannequin',
+  'champagne-sofa', 'crystal-luxe', 'runway-mannequin',
   'fitting',
 ]);
 const SMALL_IMPORTED_FURNITURE_ART = new Set([
   'flowers', 'plant', 'mannequin', 'monstera-plant', 'beanbag', 'vinyl-player',
-  'coquette-mirror', 'wavy-mirror', 'mirror', 'tulip-lamp', 'perfume-table',
+  'coquette-mirror', 'wavy-mirror', 'mirror', 'tulip-lamp', 'perfume-table', 'crystal-luxe',
 ]);
 const LARGE_IMPORTED_MIRROR_ART = new Set(['coquette-mirror', 'wavy-mirror', 'mirror']);
 const IMPORTED_RUG_ART = new Set(['atelier-rug', 'heart-rug', 'checkered-rug']);

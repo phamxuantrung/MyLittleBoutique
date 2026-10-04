@@ -167,7 +167,9 @@ export class GameUI {
   private displayHoldRepeat = 0;
   private displayHoldStart?: { x: number; y: number };
   private suppressDisplayAddClick = false;
-  private earlyClickTarget?: HTMLElement;
+  private activeUiPointers = new Set<number>();
+  private pendingStoreRender = false;
+  private pendingStoreRenderTimer = 0;
   private lastSeenDramaId = '';
   constructor(private store: GameStore, private audio: AudioSystem) {
     try { this.lastSeenDramaId = localStorage.getItem(SOCIAL_DRAMA_SEEN_KEY) ?? ''; } catch { /* Storage may be unavailable. */ }
@@ -188,26 +190,8 @@ export class GameUI {
     }
     store.subscribe(event => {
       if (event.type === 'change') {
-        this.render();
-        if (this.modal === 'serve' && !store.state.activeVisits.some(visit => visit.uid === this.serveVisitId)) this.closeModal();
-        if (this.modal === 'quests') this.dialog.querySelector('.dialog-inner')!.innerHTML = questPanel(store.state);
-        if (this.modal === 'campaign') this.dialog.querySelector('.dialog-inner')!.innerHTML = campaignModal(store.state, this.campaignGuideForced);
-        if (this.modal === 'customer-care') this.dialog.querySelector('.dialog-inner')!.innerHTML = customerCareModal(store.state);
-        if (this.modal === 'crisis-detail') {
-          if (store.state.reputationCrisis) this.dialog.querySelector('.dialog-inner')!.innerHTML = this.crisisDetailMarkup();
-          else this.closeModal();
-        }
-        if (this.modal === 'staff') this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(store.state, this.staffDetailUid);
-        if (this.modal === 'online') this.refreshOnlineChannel();
-        if (this.modal === 'online-stock') this.refreshOnlineStock();
-        if (this.modal === 'online-order') this.refreshOnlineOrder();
-        if (this.modal === 'regular-order-detail') this.refreshRegularOrderDetail();
-        if (this.modal === 'regular-pickup') this.refreshRegularPickup();
-        if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(store.state, this.financeSection);
-        if (this.modal === 'debug') this.dialog.querySelector('.dialog-inner')!.innerHTML = debugPanel(store.state);
-        this.queueTutorialCue();
-        this.queueDisplayGuide();
-        this.queueCampaignUnlock();
+        if (this.activeUiPointers.size) this.pendingStoreRender = true;
+        else this.renderStoreChange();
       }
       if (event.type === 'toast') {
         if (this.suppressTransactionSuccessToast && event.tone !== 'error') return;
@@ -418,7 +402,54 @@ export class GameUI {
     this.dialog = document.querySelector('#game-dialog')!;
     this.updateDockVisibility();
   }
+  private renderStoreChange() {
+    this.pendingStoreRender = false;
+    this.render();
+    if (this.modal === 'serve' && !this.store.state.activeVisits.some(visit => visit.uid === this.serveVisitId)) this.closeModal();
+    if (this.modal === 'quests') this.dialog.querySelector('.dialog-inner')!.innerHTML = questPanel(this.store.state);
+    if (this.modal === 'campaign') this.dialog.querySelector('.dialog-inner')!.innerHTML = campaignModal(this.store.state, this.campaignGuideForced);
+    if (this.modal === 'customer-care') this.dialog.querySelector('.dialog-inner')!.innerHTML = customerCareModal(this.store.state);
+    if (this.modal === 'crisis-detail') {
+      if (this.store.state.reputationCrisis) this.dialog.querySelector('.dialog-inner')!.innerHTML = this.crisisDetailMarkup();
+      else this.closeModal();
+    }
+    if (this.modal === 'staff') this.dialog.querySelector('.dialog-inner')!.innerHTML = staffManagementModal(this.store.state, this.staffDetailUid);
+    if (this.modal === 'online') this.refreshOnlineChannel();
+    if (this.modal === 'online-stock') this.refreshOnlineStock();
+    if (this.modal === 'online-order') this.refreshOnlineOrder();
+    if (this.modal === 'regular-order-detail') this.refreshRegularOrderDetail();
+    if (this.modal === 'regular-pickup') this.refreshRegularPickup();
+    if (this.modal === 'finance') this.dialog.querySelector('.dialog-inner')!.innerHTML = financeModal(this.store.state, this.financeSection);
+    if (this.modal === 'debug') this.dialog.querySelector('.dialog-inner')!.innerHTML = debugPanel(this.store.state);
+    this.queueTutorialCue();
+    this.queueDisplayGuide();
+    this.queueCampaignUnlock();
+  }
+  private finishUiPointer(pointerId: number) {
+    this.activeUiPointers.delete(pointerId);
+    if (this.activeUiPointers.size || !this.pendingStoreRender) return;
+    window.clearTimeout(this.pendingStoreRenderTimer);
+    // Native click is dispatched after pointerup. Waiting one task keeps its
+    // original button connected until the browser has delivered that click.
+    this.pendingStoreRenderTimer = window.setTimeout(() => {
+      this.pendingStoreRenderTimer = 0;
+      if (!this.activeUiPointers.size && this.pendingStoreRender) this.renderStoreChange();
+    }, 0);
+  }
   private bind() {
+    document.addEventListener('pointerdown', event => {
+      const target = event.target as Element;
+      if (event.button !== 0 || !target.closest('[data-action], input, select, textarea, a')) return;
+      window.clearTimeout(this.pendingStoreRenderTimer);
+      this.pendingStoreRenderTimer = 0;
+      this.activeUiPointers.add(event.pointerId);
+    }, { capture: true, passive: true });
+    document.addEventListener('pointerup', event => this.finishUiPointer(event.pointerId), { capture: true, passive: true });
+    document.addEventListener('pointercancel', event => this.finishUiPointer(event.pointerId), { capture: true, passive: true });
+    window.addEventListener('blur', () => {
+      this.activeUiPointers.clear();
+      if (this.pendingStoreRender) this.finishUiPointer(-1);
+    });
     const protectCanvasFromUiPointer = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
       if (target.closest('#game-canvas')) return;
@@ -479,22 +510,7 @@ export class GameUI {
       event.stopImmediatePropagation();
       suppressedSwipeSurface = undefined;
       suppressSwipeClickUntil = 0;
-      this.earlyClickTarget = undefined;
     }, true);
-    document.addEventListener('pointerdown', event => {
-      if (event.button !== 0) return;
-      const target = (event.target as Element).closest<HTMLElement>('[data-action]');
-      if (!target || target instanceof HTMLButtonElement && target.disabled || target.closest('input[type="range"]')) return;
-      // Product grids are scrollable. Defer their sound until a real click so
-      // a swipe never produces a click sound on pointerdown.
-      if (target.closest(swipeSurfaceSelector)) return;
-      const action = target.dataset.action ?? '';
-      const isFinancePayment = this.modal === 'finance' && FINANCE_BALANCE_ACTIONS.has(action);
-      if (MONEY_PURCHASE_ACTIONS.has(action) || isFinancePayment) return;
-      void this.audio.unlock();
-      this.audio.play('click');
-      this.earlyClickTarget = target;
-    }, { capture: true, passive: true });
     let musicVolumePointer = -1;
     let musicVolumeInput: HTMLInputElement | undefined;
     const updateMusicVolumeFromPointer = (input: HTMLInputElement, clientX: number, persist: boolean) => {
@@ -747,9 +763,7 @@ export class GameUI {
       const isFinancePayment = this.modal === 'finance' && FINANCE_BALANCE_ACTIONS.has(action);
       const isMoneyPurchase = MONEY_PURCHASE_ACTIONS.has(action) || isFinancePayment;
       const moneyBefore = this.store.state.money;
-      const clickPlayedOnPointerDown = this.earlyClickTarget === target;
-      this.earlyClickTarget = undefined;
-      if (!isMoneyPurchase && !clickPlayedOnPointerDown) this.audio.play('click');
+      if (!isMoneyPurchase) this.audio.play('click');
       this.suppressSuccessToastAudio = isMoneyPurchase || action === 'online-list' || action === 'place-stored';
       this.suppressTransactionSuccessToast = isImportPayment || isFinancePayment;
       try {

@@ -30,6 +30,7 @@ const furnitureArtwork: Record<string, string> = {
   'tulip-lamp': '/assets/furniture/tulip-floor-lamp.png',
   'perfume-table': '/assets/furniture/perfume-stone-table.png',
   'champagne-sofa': '/assets/furniture/champagne-lounge-sofa.png',
+  'crystal-luxe': '/assets/furniture/crystal-luxe-isometric.gif',
   'runway-mannequin': '/assets/furniture/runway-spotlight-mannequin.png',
   fitting: '/assets/furniture/pink-curtain-fitting-room.png',
   'blush-blinds': '/assets/furniture/blush-blinds.png',

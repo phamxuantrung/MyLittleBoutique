@@ -6,4 +6,8 @@ export const courierArtwork = (variant: number) => {
   return `/assets/characters/couriers/${String(normalized + 1).padStart(2, '0')}.webp`;
 };
 
+export const allCourierArtwork = Object.freeze(
+  Array.from({ length: COURIER_APPEARANCE_COUNT }, (_, variant) => courierArtwork(variant)),
+);
+
 export const courierImage = (variant: number) => `<img class="courier-art" src="${courierArtwork(variant)}" alt="" aria-hidden="true" draggable="false" />`;

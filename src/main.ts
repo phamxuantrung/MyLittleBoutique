@@ -7,6 +7,7 @@ import { AudioSystem } from './systems/audio';
 import { GameUI } from './ui/GameUI';
 import { ShopScene } from './scenes/ShopScene';
 import { recoveredFurnitureCount } from './systems/save';
+import { preloadGameAssets } from './systems/preload';
 
 let game: Phaser.Game | undefined;
 let viewportFrame = 0;
@@ -51,6 +52,17 @@ const syncVisualViewport = () => {
 
 syncVisualViewport();
 
+const bootLoader = document.querySelector<HTMLElement>('#game-boot-loader');
+const bootProgress = document.querySelector<HTMLElement>('#boot-progress');
+const bootPercent = document.querySelector<HTMLElement>('#boot-percent');
+const bootStatus = document.querySelector<HTMLElement>('#boot-status');
+const updateBootLoader = (ratio: number, status?: string) => {
+  const percent = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+  if (bootProgress) bootProgress.style.width = `${Math.max(2, percent)}%`;
+  if (bootPercent) bootPercent.textContent = `${percent}%`;
+  if (bootStatus && status) bootStatus.textContent = status;
+};
+
 const waitForInitialLandscapeViewport = async () => {
   const coarse = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
   const landscape = isLandscapeViewport();
@@ -87,6 +99,18 @@ const waitForInitialLandscapeViewport = async () => {
 
 await waitForInitialLandscapeViewport();
 
+updateBootLoader(.02, 'Đang tải hình ảnh và âm thanh…');
+const preloadResult = await preloadGameAssets(progress => {
+  const labels = {
+    image: 'Đang tải hình ảnh…',
+    audio: 'Đang tải âm thanh…',
+    font: 'Đang chuẩn bị phông chữ…',
+  } as const;
+  updateBootLoader(.02 + progress.ratio * .86, labels[progress.kind]);
+});
+if (preloadResult.failures.length) console.warn('Một số tài nguyên không thể nạp trước:', preloadResult.failures);
+updateBootLoader(.9, 'Đang dựng cửa hàng…');
+
 const store = new GameStore();
 const audio = new AudioSystem(() => {
   if (store.state.music) store.settings('music', false);
@@ -105,6 +129,11 @@ if (recoveredFurniture) {
   }, 350);
 }
 const scene = new ShopScene(store, () => { audio.play('click'); ui.openServe(); }, uid => ui.selectFurniture(uid), orderId => ui.openOnlineOrder(orderId), () => ui.openMusicPlayer());
+const phaserProgress = (event: Event) => {
+  const ratio = Number((event as CustomEvent<number>).detail) || 0;
+  updateBootLoader(.9 + ratio * .09, 'Đang sắp xếp cửa hàng…');
+};
+window.addEventListener('game-asset-progress', phaserProgress);
 game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game-canvas',
@@ -145,8 +174,17 @@ new ResizeObserver(syncVisualViewport).observe(document.documentElement);
 settleMobileViewport();
 ui.attachScene(scene);
 game.events.once('shop-ready', () => {
+  window.removeEventListener('game-asset-progress', phaserProgress);
   document.querySelector('.game-loading')?.remove();
   document.querySelector('#game-canvas')?.setAttribute('data-ready', 'true');
+  updateBootLoader(1, 'Cửa hàng đã sẵn sàng!');
+  const app = document.querySelector<HTMLElement>('#app');
+  app?.removeAttribute('aria-hidden');
+  document.body.classList.remove('game-booting');
+  requestAnimationFrame(() => {
+    bootLoader?.classList.add('is-ready');
+    window.setTimeout(() => bootLoader?.remove(), 320);
+  });
 });
 document.addEventListener('pointerdown', () => {
   void audio.unlock().then(() => { if (store.state.music) audio.music(true); });

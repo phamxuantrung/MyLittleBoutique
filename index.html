@@ -19,9 +19,50 @@
     <link rel="manifest" href="/manifest.webmanifest?v=app-name-2" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=pink-1" />
     <link rel="apple-touch-icon" href="/icon-192.svg?v=pink-1" />
+    <style>
+      body.game-booting { margin: 0; overflow: hidden; background: #fff5fa; }
+      body.game-booting #app { visibility: hidden; }
+      #game-boot-loader {
+        position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center;
+        box-sizing: border-box; padding: 24px; overflow: hidden;
+        background: radial-gradient(circle at 50% 38%, #fff 0 10%, #fff5fb 42%, #f8dbea 100%);
+        color: #552349; font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
+        transition: opacity .28s ease, visibility .28s ease;
+      }
+      #game-boot-loader::before, #game-boot-loader::after {
+        content: ""; position: absolute; width: 42vw; aspect-ratio: 1; border-radius: 50%;
+        background: #f6b9d8; opacity: .18; filter: blur(2px);
+      }
+      #game-boot-loader::before { left: -18vw; top: -20vw; }
+      #game-boot-loader::after { right: -18vw; bottom: -23vw; }
+      #game-boot-loader.is-ready { opacity: 0; visibility: hidden; pointer-events: none; }
+      .boot-card { position: relative; width: min(390px, 82vw); text-align: center; }
+      .boot-mark {
+        display: grid; place-items: center; width: 76px; height: 76px; margin: 0 auto 16px;
+        border: 3px solid #fff; border-radius: 25px; color: #fff; font-size: 39px;
+        background: linear-gradient(145deg, #fa72b6, #d62f8b); box-shadow: 0 10px 24px #bd4f8738, inset 0 2px 0 #ffffff80;
+        animation: boot-float 1.5s ease-in-out infinite;
+      }
+      .boot-title { margin: 0 0 7px; color: #682957; font-size: clamp(21px, 5vw, 29px); font-weight: 900; letter-spacing: -.03em; }
+      .boot-status { display: block; min-height: 20px; margin-bottom: 13px; color: #93617e; font-size: 13px; font-weight: 750; }
+      .boot-track { height: 13px; padding: 3px; overflow: hidden; border: 1px solid #edb7d3; border-radius: 999px; background: #fff; box-shadow: 0 4px 12px #a6517a18; }
+      .boot-progress { display: block; width: 2%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f47eb8, #d92f91); transition: width .16s ease; }
+      .boot-percent { display: block; margin-top: 9px; color: #bd4c87; font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums; }
+      @keyframes boot-float { 50% { transform: translateY(-7px) rotate(-2deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot-mark { animation: none; } .boot-progress, #game-boot-loader { transition: none; } }
+    </style>
   </head>
-  <body>
-    <div id="app"></div>
+  <body class="game-booting">
+    <div id="game-boot-loader" role="status" aria-live="polite" aria-label="Đang tải tài nguyên trò chơi">
+      <div class="boot-card">
+        <div class="boot-mark" aria-hidden="true">♥</div>
+        <h1 class="boot-title">My Little Boutique</h1>
+        <span id="boot-status" class="boot-status">Đang chuẩn bị cửa hàng…</span>
+        <div class="boot-track" aria-hidden="true"><i id="boot-progress" class="boot-progress"></i></div>
+        <span id="boot-percent" class="boot-percent">0%</span>
+      </div>
+    </div>
+    <div id="app" aria-hidden="true"></div>
     <script type="module" src="/src/main.ts?v=social-drawer-1"></script>
   </body>
 </html>

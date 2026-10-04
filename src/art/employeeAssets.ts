@@ -5,3 +5,7 @@ export const employeeArtwork = (appearance: number) => {
   const normalized = ((integer % EMPLOYEE_APPEARANCE_COUNT) + EMPLOYEE_APPEARANCE_COUNT) % EMPLOYEE_APPEARANCE_COUNT;
   return `/assets/characters/employees/${String(normalized + 1).padStart(2, '0')}.webp`;
 };
+
+export const allEmployeeArtwork = Object.freeze(
+  Array.from({ length: EMPLOYEE_APPEARANCE_COUNT }, (_, appearance) => employeeArtwork(appearance)),
+);

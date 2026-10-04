@@ -44,6 +44,8 @@ const furnitureArtwork: Record<string, string> = {
   'neon-sign': '/assets/furniture/fashion-neon-sign.png',
 };
 
+export const allFurnitureArtwork = Object.freeze([...new Set(Object.values(furnitureArtwork))]);
+
 export function externalFurnitureArtwork(art: string): string | undefined {
   return furnitureArtwork[art];
 }

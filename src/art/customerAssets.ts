@@ -32,3 +32,8 @@ export const customerArtwork = (customerId: string, mood: 'normal' | 'happy' = '
 };
 
 export const customerArtworkIds = Object.freeze(Object.keys(customerArtworkById));
+
+export const allCustomerArtwork = Object.freeze(customerArtworkIds.flatMap(id => [
+  customerArtwork(id, 'normal')!,
+  customerArtwork(id, 'happy')!,
+]));

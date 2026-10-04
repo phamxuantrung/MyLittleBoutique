@@ -326,6 +326,9 @@ export class ShopScene extends Phaser.Scene {
     return true;
   }
   preload() {
+    this.load.on('progress', (ratio: number) => {
+      window.dispatchEvent(new CustomEvent<number>('game-asset-progress', { detail: ratio }));
+    });
     // One furniture cell is split into two visible floor tiles in roomSvg,
     // so each land tier adds exactly two floor tiles along every edge.
     for (let level = 0; level < landExpansion.length; level++) {

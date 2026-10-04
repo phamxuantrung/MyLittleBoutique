@@ -15,6 +15,8 @@ const materialArtwork: Record<string, string> = {
   cashmere: '/assets/atelier/materials/cashmere.png',
 };
 
+export const allAtelierMaterialArtwork = Object.freeze(Object.values(materialArtwork));
+
 /** Illustrated material swatches used throughout the personal atelier UI. */
 export function atelierMaterialIllustration(id: string) {
   const artwork = materialArtwork[id];

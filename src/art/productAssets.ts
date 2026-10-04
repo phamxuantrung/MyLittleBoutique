@@ -199,6 +199,17 @@ const outerwearArtworkByFile = new Map(
   Object.entries(outerwearArtworkModules).map(([path, url]) => [path.split('/').pop()!, url]),
 );
 
+export const allProductArtwork = Object.freeze([...new Set([
+  ...Object.values(atelierArtwork),
+  ...topArtworkByFile.values(),
+  ...bottomArtworkByFile.values(),
+  ...dressArtworkByFile.values(),
+  ...accessoryArtworkByFile.values(),
+  ...shoeArtworkByFile.values(),
+  ...bagArtworkByFile.values(),
+  ...outerwearArtworkByFile.values(),
+])]);
+
 export function externalProductArtwork(product: Pick<Product, 'id' | 'category' | 'art'>): string | undefined {
   const atelierFile = atelierArtwork[product.art];
   if (atelierFile) return atelierFile;

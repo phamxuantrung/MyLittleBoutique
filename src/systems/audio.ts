@@ -15,6 +15,10 @@ const SFX_URLS: Record<SfxKind, string> = {
   reward: `${AUDIO_ROOT}reward.mp3`,
   coin: `${AUDIO_ROOT}coin.mp3`,
 };
+export const GAME_AUDIO_URLS = Object.freeze([
+  ...MUSIC_TRACKS.map(track => track.url),
+  ...Object.values(SFX_URLS),
+]);
 const SFX_VOLUME: Record<SfxKind, number> = {
   click: .68,
   sale: .82,

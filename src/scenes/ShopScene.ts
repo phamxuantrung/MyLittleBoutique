@@ -977,8 +977,8 @@ export class ShopScene extends Phaser.Scene {
       expandMark.lineBetween(-37, -7, -42, -7); expandMark.lineBetween(-37, -7, -37, -2);
       expandMark.lineBetween(-49, 5, -44, 5); expandMark.lineBetween(-49, 5, -49, 0);
       expandMark.lineBetween(-37, 5, -42, 5); expandMark.lineBetween(-37, 5, -37, 0);
-      const title = this.add.text(-24, -16, 'Mở rộng', { fontFamily: "'Nunito', Arial", fontSize: '11px', fontStyle: 'bold', color: '#63234f' });
-      const price = this.add.text(-24, 0, '', { fontFamily: "'Nunito', Arial", fontSize: '9px', fontStyle: 'bold', color: '#c03b84' });
+      const title = this.add.text(-24, -16, 'Mở rộng', { fontFamily: "'Paytone One', Arial", fontSize: '11px', fontStyle: 'bold', color: '#63234f' });
+      const price = this.add.text(-24, 0, '', { fontFamily: "'Paytone One', Arial", fontSize: '9px', fontStyle: 'bold', color: '#c03b84' });
       const button = this.add.container(0, 0, [background, holdFill, expandMark, title, price]).setDepth(880).setSize(126, 48);
       // Vùng bấm rộng hơn hình hiển thị để nút dễ thao tác ở mọi mức zoom.
       // Chỉ dùng một hitbox độc lập để tránh container và zone tranh sự kiện với nhau.
@@ -1567,7 +1567,7 @@ export class ShopScene extends Phaser.Scene {
     if (!bubble) {
       const background = this.add.graphics();
       const label = this.add.text(0, -22, text, {
-        fontFamily: 'Nunito, Arial, sans-serif',
+        fontFamily: 'Paytone One, Arial, sans-serif',
         fontSize: '8px',
         fontStyle: 'bold',
         color: '#7952a6',
@@ -1705,7 +1705,7 @@ export class ShopScene extends Phaser.Scene {
       let label = this.staffWorkLabels.get(employee.uid);
       if (!label) {
         label = this.add.text(stockAnchor.x, stockAnchor.y + index * 18, `${employee.name} · Đang làm tại kho`, {
-          fontFamily: 'Nunito Variable, Arial, sans-serif',
+          fontFamily: 'Paytone One, Arial, sans-serif',
           fontSize: '9px',
           fontStyle: 'bold',
           color: '#286ea9',
@@ -1747,7 +1747,7 @@ export class ShopScene extends Phaser.Scene {
         const appearance = ((Math.trunc(employee.appearance) % EMPLOYEE_APPEARANCE_COUNT) + EMPLOYEE_APPEARANCE_COUNT) % EMPLOYEE_APPEARANCE_COUNT;
         const sprite = this.add.image(0, 0, `staff-photo-${appearance}`).setOrigin(.5, 1).setScale(STAFF_SCALE);
         const label = this.add.text(0, -106.5, employee.name, {
-          fontFamily: 'Nunito Variable, Arial, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#7b315f',
+          fontFamily: 'Paytone One, Arial, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#7b315f',
           align: 'center',
         }).setOrigin(.5).setResolution(2).setStroke('#fffdfb', 3).setShadow(0, 2, 'rgba(78,39,70,.42)', 3, true, true);
         avatar = this.add.container(home.x, home.y, [sprite, label]).setDepth(home.y - 1);
@@ -2132,7 +2132,7 @@ export class ShopScene extends Phaser.Scene {
         this.drawDashedLine(bubble, -6, -106, 0, -97, 3, 2);
         this.drawDashedLine(bubble, 0, -97, 6, -106, 3, 2);
         const label = this.add.text(visit.mode === 'advice' ? 3 : 0, -118.5, visit.mode === 'advice' ? `Chờ tư vấn... ${visit.patience}s` : `${customer.name} · xem đồ`, {
-          fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: visit.mode === 'advice' && visit.patience <= 10 ? '#d7194a' : visit.mode === 'advice' ? '#7952a6' : '#4675a1', stroke: '#fffdfb', strokeThickness: 2, align: 'center', wordWrap: { width: bubbleWidth - 12 },
+          fontFamily: 'Paytone One, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: visit.mode === 'advice' && visit.patience <= 10 ? '#d7194a' : visit.mode === 'advice' ? '#7952a6' : '#4675a1', stroke: '#fffdfb', strokeThickness: 2, align: 'center', wordWrap: { width: bubbleWidth - 12 },
         }).setOrigin(.5).setResolution(2);
         const chat = this.add.container(0, 0, [bubble, label]);
         const remembered = this.customerPositions.get(visit.uid);
@@ -2191,7 +2191,7 @@ export class ShopScene extends Phaser.Scene {
       this.drawDashedLine(bubble, -6, -101, 0, -92, 3, 2);
       this.drawDashedLine(bubble, 0, -92, 6, -101, 3, 2);
       const label = this.add.text(0, -116.5, `ĐƠN ONLINE #${index + 1}\nChạm để giao hàng`, {
-        fontFamily: 'Nunito, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: '#293a3a', stroke: '#ffffff', strokeThickness: 2, align: 'center', lineSpacing: 1,
+        fontFamily: 'Paytone One, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: '#293a3a', stroke: '#ffffff', strokeThickness: 2, align: 'center', lineSpacing: 1,
       }).setOrigin(.5).setResolution(2);
       const container = this.add.container(spot.x, spot.y, [sprite, bubble, label]).setDepth(spot.y + 4).setSize(100, 170).setInteractive(new Phaser.Geom.Rectangle(0, -85, 100, 170), Phaser.Geom.Rectangle.Contains);
       container.input!.cursor = 'pointer';
@@ -2361,7 +2361,7 @@ export class ShopScene extends Phaser.Scene {
         customerNeedsAdvice(this.store.state, c)) this.focusCallback();
     });
     this.speechBubbleText = this.add.text(0, 0, '', {
-      fontFamily: 'Nunito, Arial, sans-serif',
+      fontFamily: 'Paytone One, Arial, sans-serif',
       fontSize: '7.5px',
       fontStyle: 'bold',
       color: '#35263b',
@@ -2708,7 +2708,7 @@ export class ShopScene extends Phaser.Scene {
         const startX = this.owner.x + noteSpec.side * (10 + index * 3);
         const startY = this.owner.y - this.owner.displayHeight * this.owner.originY + 15;
         const note = this.add.text(startX, startY, noteSpec.glyph, {
-          fontFamily: "'Nunito', Arial, sans-serif",
+          fontFamily: "'Paytone One', Arial, sans-serif",
           fontSize: index === 1 ? '20px' : '17px',
           fontStyle: 'bold',
           color: noteSpec.color,
@@ -2740,7 +2740,7 @@ export class ShopScene extends Phaser.Scene {
   setupOwnerSpeechBubble() {
     this.ownerSpeechGfx = this.add.graphics();
     this.ownerSpeechText = this.add.text(0, 0, '', {
-      fontFamily: 'Nunito Variable, Arial, sans-serif',
+      fontFamily: 'Paytone One, Arial, sans-serif',
       fontSize: '8px',
       fontStyle: 'bold',
       color: '#3e2740',

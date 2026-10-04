@@ -43,9 +43,7 @@ const loadFile = async (url: string) => {
 const fontJobs = () => {
   if (!document.fonts) return [] as Array<() => Promise<unknown>>;
   return [
-    () => document.fonts.load('700 16px "Nunito Variable"', 'Cửa hàng thời trang'),
-    () => document.fonts.load('700 16px "DM Sans Variable"', 'Tiệm thời trang nhỏ'),
-    () => document.fonts.load('700 22px "Playfair Display Variable"', 'Boutique'),
+    () => document.fonts.load('400 16px "Paytone One"', 'Cửa hàng thời trang Việt Nam'),
     () => document.fonts.load('700 22px Mali', 'Tiệm Mây Nhỏ'),
     () => document.fonts.ready,
   ];

@@ -384,6 +384,21 @@ export class ShopScene extends Phaser.Scene {
   preserveSelectionForUiAction() {
     this.selectionClearBlockedUntil = Date.now() + 180;
   }
+  /**
+   * Restore the scene input after a browser gesture was interrupted by a DOM
+   * overlay, an app switch, or iOS losing the matching pointer-up event.
+   * This deliberately leaves a real contact alone while it is still down.
+   */
+  ensurePointerInputReady() {
+    if (!this.scene.isActive() || (this.currentTab !== 'shop' && this.currentTab !== 'decor')) return;
+    if (!this.input.enabled) this.input.enabled = true;
+    if (this.activeNativeTouchPointerIds.size) return;
+    if (this.isPanning || this.isDraggingPiece || this.panPointerId >= 0
+      || this.pinchPointerIds || this.furnitureGesturePointerId >= 0
+      || this.furnitureContactPointerId >= 0 || this.furnitureDragPointerId >= 0) {
+      this.releasePointerGesture();
+    }
+  }
   releasePointerGesture() {
     const wasDraggingPiece = this.isDraggingPiece;
     this.isPanning = false;
@@ -790,16 +805,27 @@ export class ShopScene extends Phaser.Scene {
     });
     const parent = document.getElementById('game-canvas');
     if (parent) { this.resizeObserver = new ResizeObserver(() => this.scale.refresh()); this.resizeObserver.observe(parent); }
-    const finishNativeTouchGesture = (event: PointerEvent) => {
+    const beginNativePointerGesture = (event: PointerEvent) => {
+      // `isPrimary` means the browser sees this as the first contact of a new
+      // gesture. Any ownership left in Phaser at this point belongs to a lost
+      // pointer-up from the previous gesture and must not block the new tap.
+      if (event.isPrimary && !this.activeNativeTouchPointerIds.has(event.pointerId)
+        && (this.isPanning || this.isDraggingPiece || this.panPointerId >= 0
+          || this.pinchPointerIds || this.furnitureGesturePointerId >= 0
+          || this.furnitureContactPointerId >= 0 || this.furnitureDragPointerId >= 0)) {
+        this.releasePointerGesture();
+      }
+      this.activeNativeTouchPointerIds.add(event.pointerId);
+    };
+    const finishNativePointerGesture = (event: PointerEvent) => {
       if (event.pointerId === this.furnitureContactPointerId) {
         this.furnitureContactPointerId = -1;
         this.furnitureContactUid = undefined;
       }
-      if (event.pointerType !== 'touch' && !this.coarsePointer) return;
       this.activeNativeTouchPointerIds.delete(event.pointerId);
       const finishedEpoch = this.gestureEpoch;
-      // Run after Phaser's dragend / pointerup pipeline. If a new finger has
-      // already started, its newer epoch protects it from this cleanup.
+      // Run after Phaser's dragend / pointerup pipeline. If a new contact has
+      // already started, its newer epoch or the native contact set protects it.
       requestAnimationFrame(() => {
         if (finishedEpoch === this.gestureEpoch && this.activeNativeTouchPointerIds.size === 0) {
           this.releasePointerGesture();
@@ -807,17 +833,19 @@ export class ShopScene extends Phaser.Scene {
       });
     };
     const cancelNativeGesture = () => this.releasePointerGesture();
-    this.game.canvas.addEventListener('pointercancel', cancelNativeGesture, { capture: true, passive: true });
-    window.addEventListener('pointerup', finishNativeTouchGesture, { passive: true });
-    window.addEventListener('pointercancel', finishNativeTouchGesture, { passive: true });
+    this.game.canvas.addEventListener('pointerdown', beginNativePointerGesture, { capture: true, passive: true });
+    window.addEventListener('pointerup', finishNativePointerGesture, { passive: true });
+    window.addEventListener('pointercancel', finishNativePointerGesture, { passive: true });
+    this.game.canvas.addEventListener('lostpointercapture', finishNativePointerGesture, { passive: true });
     window.addEventListener('blur', cancelNativeGesture, { passive: true });
     document.addEventListener('visibilitychange', cancelNativeGesture, { passive: true });
     this.events.once('shutdown', () => {
       this.unsubscribe?.();
       this.resizeObserver?.disconnect();
-      this.game.canvas.removeEventListener('pointercancel', cancelNativeGesture, true);
-      window.removeEventListener('pointerup', finishNativeTouchGesture);
-      window.removeEventListener('pointercancel', finishNativeTouchGesture);
+      this.game.canvas.removeEventListener('pointerdown', beginNativePointerGesture, true);
+      window.removeEventListener('pointerup', finishNativePointerGesture);
+      window.removeEventListener('pointercancel', finishNativePointerGesture);
+      this.game.canvas.removeEventListener('lostpointercapture', finishNativePointerGesture);
       window.removeEventListener('blur', cancelNativeGesture);
       document.removeEventListener('visibilitychange', cancelNativeGesture);
     });

@@ -244,6 +244,7 @@ export class GameUI {
       const modalPausesSale = !['none', 'serve', 'online-order', 'regular-pickup', 'campaign'].includes(this.modal);
       const paused = document.hidden || this.moveMode || this.tab !== 'shop' || modalPausesSale;
       if (!paused && this.store.state.phase === 'open') {
+        this.repairSaleInteraction();
         this.saleTickProgress += this.saleSpeed / 4;
         if (this.saleTickProgress >= 1) {
           this.saleTickProgress -= 1;
@@ -276,6 +277,16 @@ export class GameUI {
       if (innerCanvas) innerCanvas.style.pointerEvents = enabled ? 'auto' : 'none';
     }
     if (this.scene?.input) this.scene.input.enabled = enabled;
+  }
+  private repairSaleInteraction() {
+    if (this.store.state.phase !== 'open' || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode) return;
+    const panel = document.querySelector<HTMLElement>('#content-panel');
+    if (panel && !panel.hidden) panel.hidden = true;
+    const canvasEl = document.querySelector<HTMLElement>('#game-canvas');
+    if (canvasEl?.style.pointerEvents !== 'auto') canvasEl?.style.setProperty('pointer-events', 'auto');
+    const innerCanvas = canvasEl?.querySelector<HTMLElement>('canvas');
+    if (innerCanvas?.style.pointerEvents !== 'auto') innerCanvas?.style.setProperty('pointer-events', 'auto');
+    this.scene?.ensurePointerInputReady();
   }
   private shell() {
     document.querySelector('#app')!.innerHTML = `
@@ -415,6 +426,12 @@ export class GameUI {
     };
     document.addEventListener('pointerdown', protectCanvasFromUiPointer, true);
     document.addEventListener('pointerup', protectCanvasFromUiPointer, true);
+    // Run before Phaser's canvas listener. If a previous touch was interrupted,
+    // the very next intentional tap can repair input and continue immediately.
+    document.addEventListener('pointerdown', event => {
+      if (!(event.target as Element).closest('#game-canvas')) return;
+      this.repairSaleInteraction();
+    }, { capture: true, passive: true });
     const swipeSurfaceSelector = '.outfit-grid, .livestream-product-grid, .livestream-pin-list, .online-stock-grid, .storefront-product-grid, .regular-orders-list';
     let swipePointerId = -1;
     let swipeStartX = 0;
@@ -2221,6 +2238,34 @@ export class GameUI {
       </button>
     `).join('');
   }
+  private reconcileSaleInteractionBar(
+    bar: HTMLElement,
+    cards: Array<{ key: string; html: string }>,
+  ) {
+    const existing = new Map<string, HTMLElement>();
+    Array.from(bar.children).forEach(child => {
+      const element = child as HTMLElement;
+      const key = element.dataset.saleCardKey;
+      if (key) existing.set(key, element);
+    });
+    const ordered = cards.map(card => {
+      const current = existing.get(card.key);
+      if (current) {
+        existing.delete(card.key);
+        return current;
+      }
+      const template = document.createElement('template');
+      template.innerHTML = card.html.trim();
+      const created = template.content.firstElementChild as HTMLElement | null;
+      if (!created) return undefined;
+      created.dataset.saleCardKey = card.key;
+      return created;
+    }).filter((card): card is HTMLElement => !!card);
+    existing.forEach(element => element.remove());
+    ordered.forEach((element, index) => {
+      if (bar.children[index] !== element) bar.insertBefore(element, bar.children[index] ?? null);
+    });
+  }
   private render() {
     const s = this.store.state;
     const crisisWarning = !!s.reputationCrisis || s.loanOverdueDays >= 5 || s.rentOverdueDays >= 5;
@@ -2269,46 +2314,78 @@ export class GameUI {
     const timerVal = s.dayTimer ?? DAY_DURATION;
     const shiftDuration = dayDuration(s);
     const saleControls = document.querySelector<HTMLElement>('#sale-controls')!;
-    saleControls.innerHTML = isOpen ? `          <button class="close-shop-button" data-action="close-shop" title="Kết thúc ngày bán và xem tổng kết">
+    if (!isOpen) {
+      saleControls.replaceChildren();
+    } else if (!saleControls.querySelector('[data-action="close-shop"]') || !saleControls.querySelector('[data-action="sale-speed"]')) {
+      saleControls.innerHTML = `          <button class="close-shop-button" data-action="close-shop" title="Kết thúc ngày bán và xem tổng kết">
             <span class="sale-btn-icon">${icon('shop')}</span>
             <span class="sale-btn-text">Đóng cửa</span>
           </button>
           <button class="sale-speed-button" data-action="sale-speed" aria-label="Tốc độ bán hàng ${this.saleSpeed}x" title="Đổi tốc độ: 1x → 2x → 4x → 1x" data-speed="${this.saleSpeed}">
             <span class="speed-icon-wrap">${icon('arrow')}</span>
             <strong class="speed-val">${this.saleSpeed}x</strong>
-          </button>` : '';
+          </button>`;
+    }
+    const speedButton = saleControls.querySelector<HTMLButtonElement>('[data-action="sale-speed"]');
+    if (speedButton) {
+      speedButton.dataset.speed = String(this.saleSpeed);
+      speedButton.setAttribute('aria-label', `Tốc độ bán hàng ${this.saleSpeed}x`);
+      const speedValue = speedButton.querySelector<HTMLElement>('.speed-val');
+      if (speedValue) speedValue.textContent = `${this.saleSpeed}x`;
+    }
     saleControls.hidden = !isOpen || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode;
     const saleTimer = document.querySelector<HTMLOutputElement>('#sale-shift-timer')!;
     saleTimer.hidden = !isOpen || this.tab !== 'shop';
     saleTimer.classList.toggle('is-urgent', timerVal <= 15);
-    saleTimer.innerHTML = isOpen ? `<span>GIỜ TRONG NGÀY</span><strong id="day-timer-label">${saleClockLabel(timerVal, shiftDuration)}</strong>` : '';
+    if (!isOpen) saleTimer.replaceChildren();
+    else {
+      if (!saleTimer.querySelector('#day-timer-label')) saleTimer.innerHTML = '<span>GIỜ TRONG NGÀY</span><strong id="day-timer-label"></strong>';
+      const timerLabel = saleTimer.querySelector<HTMLElement>('#day-timer-label');
+      if (timerLabel) timerLabel.textContent = saleClockLabel(timerVal, shiftDuration);
+    }
 
     const interactionBar = document.querySelector<HTMLElement>('#sale-interaction-bar')!;
     const adviceVisits = s.activeVisits.filter(visit => visit.mode === 'advice' && !visit.assignedStaffUid);
-    const customerCards = adviceVisits.map(visit => {
+    const customerCards = adviceVisits.flatMap(visit => {
       const customer = customers.find(item => item.id === visit.customerId) ?? lookupCustomer(visit.customerId);
-      if (!customer) return '';
+      if (!customer) return [];
       const visualCustomer = this.scene?.customerVisualForVisit(customer, visit.uid) ?? customer;
-      return `<span class="sale-card-aura">
+      return [{ key: `advice:${visit.uid}:${visualCustomer.id}`, html: `<span class="sale-card-aura">
         <button class="sale-character-card is-customer ${visit.uid === s.currentVisitId ? 'is-current' : ''}" data-action="sale-visit-open" data-id="${visit.uid}" aria-label="Tư vấn cho ${escapeHtml(customer.name)}">
           <strong class="sale-card-name">${escapeHtml(customer.name)}</strong>
           <span class="sale-character-art">${avatarImage(visualCustomer)}</span>
           <div class="sale-card-countdown ${visit.patience <= 10 ? 'is-urgent' : ''}" data-visit="${visit.uid}"><span>${visit.patience}</span></div>
         </button>
-      </span>`;
-    }).join('');
-    const courierCards = s.onlineOrders.map((order, index) => `<span class="sale-card-aura is-courier-aura"><button class="sale-character-card is-customer is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn hỏa tốc ${index + 1}">
+      </span>` }];
+    });
+    const courierCards = s.onlineOrders.map((order, index) => ({ key: `courier:${order.id}:${order.courierVariant}`, html: `<span class="sale-card-aura is-courier-aura"><button class="sale-character-card is-customer is-courier" data-action="online-order-open" data-id="${order.id}" aria-label="Giao đơn hỏa tốc ${index + 1}">
       <strong class="sale-card-name">Shipper ${String(index + 1).padStart(2, '0')}</strong>
       <span class="sale-character-art">${courierImage(order.courierVariant)}</span>
       <div class="sale-card-countdown sale-card-delivery">${icon('bag')}<span>Giao</span></div>
-    </button></span>`).join('');
+    </button></span>` }));
     const packedRegularCount = s.regularOnlineOrders.filter(order => order.packed).length;
-    const regularCourierCard = packedRegularCount ? `<span class="sale-card-aura is-courier-aura is-regular-pickup"><button class="sale-character-card is-customer is-courier" data-action="regular-pickup-open" aria-label="Bàn giao ${packedRegularCount} đơn thường">
+    const regularCourierCards = packedRegularCount ? [{ key: 'regular-pickup', html: `<span class="sale-card-aura is-courier-aura is-regular-pickup"><button class="sale-character-card is-customer is-courier" data-action="regular-pickup-open" aria-label="Bàn giao ${packedRegularCount} đơn thường">
       <strong class="sale-card-name">Shipper tổng</strong>
       <span class="sale-character-art">${courierImage(2)}</span>
       <div class="sale-card-countdown sale-card-delivery">${icon('box')}<span>${packedRegularCount} kiện</span></div>
-    </button></span>` : '';
-    interactionBar.innerHTML = customerCards + courierCards + regularCourierCard;
+    </button></span>` }] : [];
+    this.reconcileSaleInteractionBar(interactionBar, [...customerCards, ...courierCards, ...regularCourierCards]);
+    interactionBar.querySelectorAll<HTMLButtonElement>('[data-action="sale-visit-open"]').forEach(button => {
+      button.classList.toggle('is-current', button.dataset.id === s.currentVisitId);
+    });
+    interactionBar.querySelectorAll<HTMLButtonElement>('[data-action="online-order-open"]').forEach(button => {
+      const index = s.onlineOrders.findIndex(order => order.id === button.dataset.id);
+      if (index < 0) return;
+      button.setAttribute('aria-label', `Giao đơn hỏa tốc ${index + 1}`);
+      const name = button.querySelector<HTMLElement>('.sale-card-name');
+      if (name) name.textContent = `Shipper ${String(index + 1).padStart(2, '0')}`;
+    });
+    const regularPickup = interactionBar.querySelector<HTMLButtonElement>('[data-action="regular-pickup-open"]');
+    if (regularPickup) {
+      regularPickup.setAttribute('aria-label', `Bàn giao ${packedRegularCount} đơn thường`);
+      const count = regularPickup.querySelector<HTMLElement>('.sale-card-delivery span');
+      if (count) count.textContent = `${packedRegularCount} kiện`;
+    }
     interactionBar.hidden = !isOpen || this.tab !== 'shop' || this.modal !== 'none' || this.moveMode || !interactionBar.childElementCount;
     document.querySelector('#shop-status')!.innerHTML = '';
 

@@ -40109,15 +40109,43 @@ dialog.dialog-serve[open].is-patience-urgent {
   }
 }
 
-/* Crop customer avatars to a head-and-shoulders portrait. */
+/* Reviews and drama threads use the same head-and-shoulders crop. */
+.drawer-review-avatar img,
 .is-character-avatar img {
-  top: -2px;
+  position: absolute;
+  top: 0;
   bottom: auto;
-  width: 150%;
-  height: 216%;
+  left: 50%;
+  width: 128%;
+  height: 185%;
   max-width: none;
   object-fit: contain;
+  object-position: center top;
   transform: translateX(-50%);
+}
+.thread-post-layout {
+  grid-template-columns: 39px minmax(0, 1fr);
+}
+.thread-author-rail {
+  grid-template-rows: 39px 1fr;
+}
+.thread-avatar.is-character-avatar.drawer-review-avatar {
+  width: 39px;
+  height: 39px;
+  flex-basis: 39px;
+  border: 0;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--review-color, #d95699) 24%, #fff), #f6e9ff);
+  box-shadow: 0 0 0 1px rgba(197, 130, 171, .38), 0 3px 7px rgba(87, 38, 67, .12);
+}
+@media (max-width: 700px) {
+  .thread-post-layout {
+    grid-template-columns: 39px minmax(0, 1fr);
+  }
+  .thread-avatar.is-character-avatar.drawer-review-avatar {
+    width: 39px;
+    height: 39px;
+    flex-basis: 39px;
+  }
 }
 /* Threads-style activity bar and comment controls. */
 .thread-feed-toolbar {

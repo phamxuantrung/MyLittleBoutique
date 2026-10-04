@@ -27,4 +27,27 @@ test('opens a mixed drama and review feed from a legacy save', async ({ page }) 
   await expect(page.locator('.social-drawer-panel')).toBeVisible();
   await expect(page.locator('[data-drama-card="drama-legacy"]')).toBeVisible();
   await expect(page.locator('.drawer-review-card')).toBeVisible();
+  const avatarStyles = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const frame = document.querySelector<HTMLElement>(selector)!;
+      const image = frame.querySelector<HTMLImageElement>('img')!;
+      const frameStyle = getComputedStyle(frame);
+      const imageStyle = getComputedStyle(image);
+      return {
+        frameWidth: frameStyle.width,
+        frameHeight: frameStyle.height,
+        imageTop: imageStyle.top,
+        imageLeft: imageStyle.left,
+        imageWidth: imageStyle.width,
+        imageHeight: imageStyle.height,
+        objectFit: imageStyle.objectFit,
+        objectPosition: imageStyle.objectPosition,
+      };
+    };
+    return {
+      drama: read('[data-drama-card="drama-legacy"] .thread-avatar'),
+      review: read('.drawer-review-card .drawer-review-avatar'),
+    };
+  });
+  expect(avatarStyles.drama).toEqual(avatarStyles.review);
 });

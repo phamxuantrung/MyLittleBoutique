@@ -668,6 +668,14 @@ describe('decoration, upgrades and resilient saves', () => {
     store.sellFurniture(piece.uid); const money = store.state.money; store.sellFurniture(piece.uid); expect(store.state.money).toBe(money);
     expect(money).toBe(575000);
   });
+  it('moves rotated floor furniture to the nearest free cell when its current space is blocked', () => {
+    const store = makeStore();
+    const rack = { uid: 'rotating-rack', id: 'rack', x: 1, y: 1, rotation: 0, displayItems: [] };
+    store.state.layout = [rack, { uid: 'rotation-blocker', id: 'plant', x: 1, y: 2, rotation: 0 }];
+    expect(store.moveFurniture(rack.uid, rack.x, rack.y, true)).toBe(true);
+    expect(rack).toMatchObject({ x: 1, y: 0, rotation: 1 });
+    expect(canPlace(store.state.layout, rack)).toBe(true);
+  });
   it('rotates wall decorations onto the opposite wall at the matching distance', () => {
     const store = makeStore();
     const print = store.state.layout.find(item => item.uid === 'starter-fashion-print')!;
@@ -894,9 +902,10 @@ describe('decoration, upgrades and resilient saves', () => {
     expect(parsed.storedFurniture).toEqual(['plant', 'flowers']);
     expect(recoveredFurnitureCount(parsed)).toBe(1);
   });
-  it('moves furniture beyond the thirty-item placement limit into storage after a refresh', () => {
+  it('moves furniture beyond the forty-item placement limit into storage after a refresh', () => {
     const state = initialState();
-    state.layout = Array.from({ length: 35 }, (_, index) => ({
+    state.storedFurniture = [];
+    state.layout = Array.from({ length: 45 }, (_, index) => ({
       uid: `saved-rug-${index}`,
       id: 'heart-rug',
       x: 0,
@@ -904,22 +913,22 @@ describe('decoration, upgrades and resilient saves', () => {
       rotation: 0,
     }));
     const parsed = parseSave(JSON.stringify(state));
-    expect(parsed.layout).toHaveLength(30);
-    expect(parsed.layout.at(-1)?.uid).toBe('saved-rug-29');
+    expect(parsed.layout).toHaveLength(40);
+    expect(parsed.layout.at(-1)?.uid).toBe('saved-rug-39');
     expect(parsed.storedFurniture).toEqual(Array(5).fill('heart-rug'));
     expect(recoveredFurnitureCount(parsed)).toBe(5);
   });
-  it('warns and does not charge when the shop already has thirty furniture items', () => {
+  it('warns and does not charge when the shop already has forty furniture items', () => {
     const store = makeStore(state => {
-      state.layout = Array.from({ length: 30 }, (_, index) => ({ uid: `full-rug-${index}`, id: 'heart-rug', x: 0, y: 0, rotation: 0 }));
+      state.layout = Array.from({ length: 40 }, (_, index) => ({ uid: `full-rug-${index}`, id: 'heart-rug', x: 0, y: 0, rotation: 0 }));
     });
     const messages: string[] = [];
     store.subscribe(event => { if (event.type === 'toast') messages.push(event.message); });
     const moneyBefore = store.state.money;
     expect(store.buyFurniture('flowers')).toBeUndefined();
     expect(store.state.money).toBe(moneyBefore);
-    expect(store.state.layout).toHaveLength(30);
-    expect(messages.at(-1)).toContain('tối đa 30 món nội thất');
+    expect(store.state.layout).toHaveLength(40);
+    expect(messages.at(-1)).toContain('tối đa 40 món nội thất');
   });
   it('migrates retired tops into the new collection without losing stock', () => {
     const state = initialState();

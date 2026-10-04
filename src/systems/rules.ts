@@ -307,7 +307,7 @@ const wallFurnitureIds = new Set(['boutique-window', 'blush-blinds', 'shop-sign'
 export const isWallFurnitureId = (id: string) => wallFurnitureIds.has(id);
 const rugFurnitureIds = new Set(['atelier-rug', 'heart-rug', 'checkered-rug']);
 export const isRugFurnitureId = (id: string) => rugFurnitureIds.has(id);
-export const MAX_PLACED_FURNITURE = 30;
+export const MAX_PLACED_FURNITURE = 40;
 export function canPlace(layout: PlacedFurniture[], item: PlacedFurniture, landLevel = 0) {
   const def = furniture.find(f => f.id === item.id);
   if (!def || !Number.isInteger(item.x) || !Number.isInteger(item.y)) return false;

@@ -1829,10 +1829,7 @@ export class GameUI {
           }
         }
 
-        const scroll = this.dialog.querySelector('.outfit-grid')?.scrollTop ?? 0;
-        this.dialog.querySelector('.dialog-inner')!.innerHTML = this.serveModalMarkup();
-        const grid = this.dialog.querySelector('.outfit-grid'); if (grid) grid.scrollTop = scroll;
-        this.dialog.querySelector<HTMLButtonElement>(`[data-action="select-product"][data-id="${id}"]`)?.focus({ preventScroll: true });
+        this.refreshServeSelection();
         break;
       }
       case 'serve':
@@ -2750,6 +2747,45 @@ export class GameUI {
       ? this.scene?.customerVisualForVisit(customer, visit.uid)
       : undefined;
     return serveModal(this.store.state, this.selected, this.outfitCategory, visualCustomer);
+  }
+  private refreshServeSelection() {
+    const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
+    const grid = inner?.querySelector<HTMLElement>('.outfit-grid');
+    if (!inner || !grid) return;
+    const scrollTop = grid.scrollTop;
+
+    // Keep the wardrobe nodes mounted. Rebuilding the whole modal causes all
+    // product images to disappear for a frame and makes the bottom of the
+    // scroll list flash on mobile browsers.
+    const template = document.createElement('template');
+    template.innerHTML = this.serveModalMarkup();
+    const nextRoot = template.content;
+    for (const selector of ['.fitting-outfit-slots', '.studio-checkout-dock']) {
+      const current = inner.querySelector<HTMLElement>(selector);
+      const next = nextRoot.querySelector<HTMLElement>(selector);
+      if (current && next) current.replaceWith(next.cloneNode(true));
+    }
+
+    grid.querySelectorAll<HTMLButtonElement>('.outfit-option[data-id]').forEach(option => {
+      const id = option.dataset.id;
+      const next = id
+        ? [...nextRoot.querySelectorAll<HTMLButtonElement>('.outfit-option[data-id]')].find(candidate => candidate.dataset.id === id)
+        : undefined;
+      if (!next) return;
+      option.className = next.className;
+      option.setAttribute('aria-pressed', next.getAttribute('aria-pressed') ?? 'false');
+      option.setAttribute('aria-label', next.getAttribute('aria-label') ?? '');
+      const currentCheck = option.querySelector<HTMLElement>('.outfit-check');
+      const nextCheck = next.querySelector<HTMLElement>('.outfit-check');
+      if (currentCheck && nextCheck) {
+        currentCheck.className = nextCheck.className;
+        currentCheck.innerHTML = nextCheck.innerHTML;
+      }
+    });
+
+    const restoreScroll = () => { grid.scrollTop = scrollTop; };
+    restoreScroll();
+    requestAnimationFrame(restoreScroll);
   }
   private ensureServeVisitFocused() {
     if (this.modal !== 'serve' || !this.serveVisitId) return false;

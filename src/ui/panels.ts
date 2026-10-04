@@ -904,7 +904,7 @@ function socialDramaFeed(s: GameState, activityOrder: Map<string, number>) {
       return `<article class="boutique-drama-card ${hasConversation ? 'is-discussing' : 'is-live'}" data-drama-card="${escapeHtml(drama.id)}" data-drama-source="${drama.source === 'ai' ? 'ai' : 'fallback'}" style="order:${activityOrder.get(`drama:${drama.id}`) ?? 1}">
         <div class="thread-discussion-body">
         <div class="thread-post-layout">
-          <aside class="thread-author-rail"><span class="thread-avatar is-character-avatar">${threadAvatar(drama.authorName, drama.authorHandle)}</span><i></i></aside>
+          <aside class="thread-author-rail"><span class="thread-avatar is-character-avatar drawer-review-avatar">${threadAvatar(drama.authorName, drama.authorHandle)}</span><i></i></aside>
           <div class="thread-post-main">
             <header class="thread-post-header"><p><strong>${escapeHtml(drama.authorName)}</strong><span>${escapeHtml(drama.authorHandle)} · ${gameDate(drama.day)}</span></p><button type="button" tabindex="-1" aria-label="Tùy chọn bài viết">•••</button></header>
             <h3>${escapeHtml(drama.title)}</h3>

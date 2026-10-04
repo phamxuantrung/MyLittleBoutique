@@ -2139,6 +2139,38 @@ export class GameStore {
         };
       }
     }
+    if (rotate && !wallMounted && !canPlace(this.state.layout, moved, this.state.landLevel)) {
+      const definition = furniture.find(candidate => candidate.id === item.id);
+      if (definition) {
+        const size = landSize(this.state);
+        const oldWidth = item.rotation % 2 ? definition.height : definition.width;
+        const oldHeight = item.rotation % 2 ? definition.width : definition.height;
+        const newWidth = nextRotation % 2 ? definition.height : definition.width;
+        const newHeight = nextRotation % 2 ? definition.width : definition.height;
+        const preferredCenterX = x + oldWidth / 2;
+        const preferredCenterY = y + oldHeight / 2;
+        const candidates: Array<{ x: number; y: number; distance: number; gridDistance: number }> = [];
+        for (let candidateY = 0; candidateY <= size - newHeight; candidateY++) {
+          for (let candidateX = 0; candidateX <= size - newWidth; candidateX++) {
+            const centerDx = candidateX + newWidth / 2 - preferredCenterX;
+            const centerDy = candidateY + newHeight / 2 - preferredCenterY;
+            candidates.push({
+              x: candidateX,
+              y: candidateY,
+              distance: centerDx * centerDx + centerDy * centerDy,
+              gridDistance: Math.abs(centerDx) + Math.abs(centerDy),
+            });
+          }
+        }
+        const nearestFreeCell = candidates
+          .sort((a, b) => a.distance - b.distance
+            || a.gridDistance - b.gridDistance
+            || a.y - b.y
+            || a.x - b.x)
+          .find(candidate => canPlace(this.state.layout, { ...moved, x: candidate.x, y: candidate.y }, this.state.landLevel));
+        if (nearestFreeCell) moved = { ...moved, x: nearestFreeCell.x, y: nearestFreeCell.y };
+      }
+    }
     if (!canPlace(this.state.layout, moved, this.state.landLevel)) {
       if (rotate && wallMounted) {
         this.toast('Tường bên kia không còn đủ chỗ. Hãy dời hoặc cất bớt đồ treo tường rồi xoay lại.', 'error');

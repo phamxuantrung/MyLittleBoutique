@@ -153,6 +153,73 @@ test.describe('manual landscape on phones', () => {
     await page.screenshot({ path: 'test-results/landscape-portrait.png' });
   });
 
+  test('dragging a selected piece across another piece keeps the original drag target', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    const state = preparedState();
+    state.layout = [
+      { uid: 'drag-table', id: 'table', x: 1, y: 2, rotation: 0, displayItems: [] },
+      { uid: 'crossed-plant', id: 'plant', x: 2, y: 2, rotation: 0 },
+    ];
+    await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+    await page.goto('/');
+    await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+
+    // Start on the painted centre of the table; imported furniture is anchored
+    // by its feet, below the centre of the PNG.
+    const start = await canvasPoint(page, 444, 285);
+    const crossed = await canvasPoint(page, 500, 313);
+    const end = await canvasPoint(page, 556, 341);
+    await page.touchscreen.tap(start.x, start.y);
+    await page.locator('[data-action="move-start"]').tap();
+    await page.waitForTimeout(200);
+
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+    for (const point of [crossed, end]) {
+      for (let step = 1; step <= 6; step++) {
+        const from = point === crossed ? start : crossed;
+        await session.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: from.x + (point.x - from.x) * step / 6, y: from.y + (point.y - from.y) * step / 6 }],
+        });
+      }
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+    await expect.poll(() => page.evaluate(key => {
+      const layout = JSON.parse(localStorage.getItem(key)!).layout as Array<{ uid: string; x: number; y: number }>;
+      const table = layout.find(item => item.uid === 'drag-table')!;
+      const plant = layout.find(item => item.uid === 'crossed-plant')!;
+      return { table: [table.x, table.y], plant: [plant.x, plant.y] };
+    }, SAVE_KEY)).toEqual({ table: [3, 2], plant: [2, 2] });
+    await session.detach();
+  });
+
+  test('move mode keeps the original selection when another piece is tapped', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    const state = preparedState();
+    state.layout = [
+      { uid: 'selected-table', id: 'table', x: 1, y: 2, rotation: 0, displayItems: [] },
+      { uid: 'nearby-plant', id: 'plant', x: 2, y: 2, rotation: 0 },
+    ];
+    await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+    await page.goto('/');
+    await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+
+    const table = await canvasPoint(page, 444, 285);
+    const plant = await canvasPoint(page, 500, 313);
+    await page.touchscreen.tap(table.x, table.y);
+    await page.locator('[data-action="move-start"]').tap();
+    await page.waitForTimeout(150);
+    await page.touchscreen.tap(plant.x, plant.y);
+    await page.locator('[data-action="move-rotate"]').tap();
+
+    await expect.poll(() => page.evaluate(key => {
+      const layout = JSON.parse(localStorage.getItem(key)!).layout as Array<{ uid: string; rotation: number }>;
+      return layout.map(item => [item.uid, item.rotation]);
+    }, SAVE_KEY)).toEqual([['selected-table', 1], ['nearby-plant', 0]]);
+  });
+
   test('cancelled multi-touch gestures do not turn the next furniture drag into zoom', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     const state = preparedState();

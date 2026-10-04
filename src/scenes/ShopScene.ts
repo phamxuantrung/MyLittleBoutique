@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { decompressFrames, parseGIF, type ParsedFrame } from 'gifuct-js';
 import { characterSvg, furnitureSvg, getCustomerArchetype, heartSvg, isWallArtAsset, roomSvg, roomSvgBounds, svgUrl } from '../art/svg';
 import { EMPLOYEE_APPEARANCE_COUNT, employeeArtwork } from '../art/employeeAssets';
 import { customerAppearanceAffinity, customerArtwork } from '../art/customerAssets';
@@ -66,7 +67,7 @@ const CENTERED_FURNITURE_ART = new Set([
 ]);
 const SMALL_IMPORTED_FURNITURE_ART = new Set([
   'flowers', 'plant', 'mannequin', 'monstera-plant', 'beanbag', 'vinyl-player',
-  'coquette-mirror', 'wavy-mirror', 'mirror', 'tulip-lamp', 'perfume-table', 'crystal-luxe',
+  'coquette-mirror', 'wavy-mirror', 'mirror', 'tulip-lamp', 'perfume-table',
 ]);
 const LARGE_IMPORTED_MIRROR_ART = new Set(['coquette-mirror', 'wavy-mirror', 'mirror']);
 const IMPORTED_RUG_ART = new Set(['atelier-rug', 'heart-rug', 'checkered-rug']);
@@ -86,6 +87,8 @@ const IMPORTED_WALL_LIFT: Partial<Record<string, number>> = {
 // line is normalized to y=440. Use that exact point as the ground anchor.
 const CENTERED_FURNITURE_ORIGIN = { x: .5, y: 440 / 460 };
 const SHOP_SIGN_FONT_SCALE = 0.9;
+const CRYSTAL_LUXE_TEXTURE = 'f-crystal-luxe';
+const CRYSTAL_LUXE_LIVE_TEXTURE = 'f-crystal-luxe-live';
 
 const shopSignTextLayout = (name: string) => {
   const normalized = (name.trim() || 'My Little Boutique').normalize('NFC');
@@ -192,6 +195,15 @@ export class ShopScene extends Phaser.Scene {
   private landExpandButtons: Phaser.GameObjects.Container[] = [];
   private pendingSvgTextures = new Set<string>();
   private furnitureVisualOrigins = new Map<string, { x: number; y: number }>();
+  private crystalLuxeTexture?: Phaser.Textures.CanvasTexture;
+  private crystalLuxeFrames: ParsedFrame[] = [];
+  private crystalLuxeFrameImages: ImageData[] = [];
+  private crystalLuxeFrameIndex = 0;
+  private crystalLuxePreviousFrame?: ParsedFrame;
+  private crystalLuxeRestore?: ImageData;
+  private crystalLuxePatchCanvas?: HTMLCanvasElement;
+  private crystalLuxeFrameTimer?: Phaser.Time.TimerEvent;
+  private crystalLuxeLoadGeneration = 0;
   private furnitureVisibleTopRows = new Map<string, number>();
   private furnitureHitMasks = new Map<string, {
     cellSize: number;
@@ -487,6 +499,7 @@ export class ShopScene extends Phaser.Scene {
   }
   create() {
     this.input.setTopOnly(true);
+    this.setupCrystalLuxeAnimation();
     const landLevel = Math.max(0, Math.min(landExpansion.length - 1, this.store.state.landLevel ?? 0));
     const roomBounds = roomSvgBounds(landExpansion[landLevel].size);
     const showDefaultLamp = !this.store.state.layout.some(item => item.id === 'crystal-chandelier');
@@ -840,6 +853,8 @@ export class ShopScene extends Phaser.Scene {
     window.addEventListener('blur', cancelNativeGesture, { passive: true });
     document.addEventListener('visibilitychange', cancelNativeGesture, { passive: true });
     this.events.once('shutdown', () => {
+      this.crystalLuxeLoadGeneration++;
+      this.crystalLuxeFrameTimer?.remove(false);
       this.unsubscribe?.();
       this.resizeObserver?.disconnect();
       this.game.canvas.removeEventListener('pointerdown', beginNativePointerGesture, true);
@@ -850,6 +865,77 @@ export class ShopScene extends Phaser.Scene {
       document.removeEventListener('visibilitychange', cancelNativeGesture);
     });
     this.game.events.emit('shop-ready');
+  }
+  private setupCrystalLuxeAnimation() {
+    const generation = ++this.crystalLuxeLoadGeneration;
+    void fetch('/assets/furniture/crystal-luxe-isometric.gif', { cache: 'force-cache' })
+      .then(response => {
+        if (!response.ok) throw new Error(`Crystal Luxe GIF: ${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then(buffer => {
+        if (generation !== this.crystalLuxeLoadGeneration || !this.scene.isActive()) return;
+        const parsed = parseGIF(buffer);
+        const frames = decompressFrames(parsed, true);
+        if (!frames.length || !parsed.lsd.width || !parsed.lsd.height) return;
+        if (this.textures.exists(CRYSTAL_LUXE_LIVE_TEXTURE)) this.textures.remove(CRYSTAL_LUXE_LIVE_TEXTURE);
+        const texture = this.textures.createCanvas(CRYSTAL_LUXE_LIVE_TEXTURE, parsed.lsd.width, parsed.lsd.height);
+        if (!texture) return;
+        this.crystalLuxeTexture = texture;
+        this.crystalLuxeFrames = frames;
+        this.crystalLuxeFrameImages = frames.map(frame => {
+          const pixels = new Uint8ClampedArray(frame.patch.length);
+          pixels.set(frame.patch);
+          return new ImageData(pixels, frame.dims.width, frame.dims.height);
+        });
+        this.crystalLuxeFrameIndex = 0;
+        this.crystalLuxePreviousFrame = undefined;
+        this.crystalLuxeRestore = undefined;
+        this.crystalLuxePatchCanvas = document.createElement('canvas');
+        this.playCrystalLuxeFrame();
+        // The item may already be on the floor while the decoder was working.
+        // Switch that existing Image from the static loader texture to the live one.
+        this.refreshFurniture();
+      })
+      .catch(error => console.warn('Không thể phát chuyển động Crystal Luxe:', error));
+  }
+  private playCrystalLuxeFrame() {
+    const texture = this.crystalLuxeTexture;
+    const patchCanvas = this.crystalLuxePatchCanvas;
+    const frames = this.crystalLuxeFrames;
+    if (!texture || !patchCanvas || !frames.length) return;
+    this.crystalLuxeFrameTimer?.remove(false);
+    if (document.hidden || !this.store.state.layout.some(item => item.id === 'crystal-luxe')) {
+      this.crystalLuxeFrameTimer = this.time.delayedCall(250, () => this.playCrystalLuxeFrame());
+      return;
+    }
+
+    const previous = this.crystalLuxePreviousFrame;
+    if (previous?.disposalType === 2) {
+      texture.context.clearRect(previous.dims.left, previous.dims.top, previous.dims.width, previous.dims.height);
+    } else if (previous?.disposalType === 3 && this.crystalLuxeRestore) {
+      texture.context.putImageData(this.crystalLuxeRestore, 0, 0);
+    }
+
+    const frameIndex = this.crystalLuxeFrameIndex;
+    const frame = frames[frameIndex];
+    if (frame.disposalType === 3) {
+      this.crystalLuxeRestore = texture.context.getImageData(0, 0, texture.canvas.width, texture.canvas.height);
+    } else {
+      this.crystalLuxeRestore = undefined;
+    }
+    if (patchCanvas.width !== frame.dims.width) patchCanvas.width = frame.dims.width;
+    if (patchCanvas.height !== frame.dims.height) patchCanvas.height = frame.dims.height;
+    const patchContext = patchCanvas.getContext('2d');
+    if (!patchContext) return;
+    patchContext.clearRect(0, 0, patchCanvas.width, patchCanvas.height);
+    patchContext.putImageData(this.crystalLuxeFrameImages[frameIndex], 0, 0);
+    texture.context.drawImage(patchCanvas, frame.dims.left, frame.dims.top);
+    texture.refresh();
+
+    this.crystalLuxePreviousFrame = frame;
+    this.crystalLuxeFrameIndex = (frameIndex + 1) % frames.length;
+    this.crystalLuxeFrameTimer = this.time.delayedCall(Math.max(20, frame.delay || 100), () => this.playCrystalLuxeFrame());
   }
   private drawGrid() {
     this.drawLandFloor();
@@ -1273,7 +1359,9 @@ export class ShopScene extends Phaser.Scene {
       const f = furniture.find(f => f.id === p.id)!;
       const wallMounted = isWallArtAsset(f.art);
       const wallSide = p.rotation === 1 ? 'left' : 'right';
-      const textureKey = f.art === 'shop-sign'
+      const textureKey = f.art === 'crystal-luxe' && this.textures.exists(CRYSTAL_LUXE_LIVE_TEXTURE)
+        ? CRYSTAL_LUXE_LIVE_TEXTURE
+        : f.art === 'shop-sign'
         ? shopSignTextureKey(wallSide, this.store.state.shopName)
         : wallMounted ? `f-${f.art}-${wallSide}` : `f-${f.art}`;
       if (f.art === 'shop-sign' && !this.textures.exists(textureKey)) this.ensureShopSignTexture(textureKey, wallSide);
@@ -1291,6 +1379,7 @@ export class ShopScene extends Phaser.Scene {
           : IMPORTED_WALL_ART.has(f.art) ? .47
           : LARGE_IMPORTED_MIRROR_ART.has(f.art) ? .38
           : SMALL_IMPORTED_FURNITURE_ART.has(f.art) ? .29
+          : f.art === 'crystal-luxe' ? .32
           : CENTERED_FURNITURE_ART.has(f.art) && f.art !== 'table' ? .47
             : f.art === 'table' ? .425
           : f.art === 'atelier-rug' ? 1.45

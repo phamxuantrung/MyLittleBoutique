@@ -104,7 +104,7 @@ export const furniture: Furniture[] = [
   { id: 'runway-mannequin', name: 'Ma-nơ-canh Runway Spotlight', price: 980000, appeal: 15, level: 6, art: 'runway-mannequin', width: 2, height: 1, style: 'K-pop', description: 'Bục runway có đèn viền, trưng một set chủ đạo.', display: { kind: 'outfit', capacity: 1, categories: ['sets'] } },
   { id: 'global-showcase', name: 'Tủ túi Global Flagship', price: 1650000, appeal: 19, level: 7, art: 'global-showcase', width: 2, height: 1, style: 'Luxury', description: 'Tủ flagship ánh pha lê trưng 36 mẫu túi biểu tượng.', display: { kind: 'bags', capacity: 36, categories: ['bags'], upgrade: { maxLevel: 3, slotsPerLevel: 18, baseCost: 780000 } } },
   { id: 'champagne-sofa', name: 'Sofa Champagne Lounge', price: 1350000, appeal: 18, level: 7, art: 'champagne-sofa', width: 2, height: 1, style: 'Luxury', description: 'Sofa lounge bọc nhung kem với khung kim loại champagne.' },
-  { id: 'crystal-luxe', name: 'Quả cầu pha lê Crystal Luxe', price: 15000000, appeal: 35, level: 9, art: 'crystal-luxe', width: 1, height: 1, style: 'Luxury', description: 'Bảo vật pha lê ánh cực quang trên bệ vàng hồng, tạo điểm nhấn xa hoa cho boutique.' },
+  { id: 'crystal-luxe', name: 'Quả cầu pha lê Crystal Luxe', price: 15000000, appeal: 35, level: 9, art: 'crystal-luxe', width: 2, height: 2, style: 'Luxury', description: 'Bảo vật pha lê ánh cực quang trên bệ vàng hồng, tạo điểm nhấn xa hoa cho boutique.' },
 ];
 const functionalFurniturePrices: Record<string, number> = {
   rack: 150000,

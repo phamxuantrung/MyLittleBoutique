@@ -1,4 +1,6 @@
 /* Font tên boutique: tự host để canvas dùng đúng trên Safari/iOS và đủ dấu Việt. */
+@import '@fontsource-variable/nunito';
+@import '@fontsource-variable/nunito/wght-italic.css';
 @import '@fontsource/mali/latin-700.css';
 @import '@fontsource/mali/vietnamese-700.css';
 
@@ -17,6 +19,7 @@
    ========================================================================== */
 :root {
   --font-main: 'Paytone One', ui-rounded, 'Arial Rounded MT Bold', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-social-reading: 'Nunito Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
   --font-serif: var(--font-main);
   --font-body: var(--font-main);
   --font-sans: var(--font-main);

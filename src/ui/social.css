@@ -290,3 +290,45 @@
   .cover-fashion-print:first-of-type, .cover-fashion-print:last-of-type { display: none; }
   .profile-statistics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Drama and review copy keeps the original readable Nunito typography. */
+:is(.boutique-drama-card, .drawer-review-card, .social-post-card),
+:is(.boutique-drama-card, .drawer-review-card, .social-post-card) * {
+  font-family: var(--font-social-reading) !important;
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  :is(.boutique-drama-card, .drawer-review-card, .social-post-card)
+    :is(p, li, label, small, em, output) {
+    font-size: clamp(10.5px, 1.35vw, 12.5px) !important;
+    line-height: 1.4 !important;
+  }
+
+  :is(.boutique-drama-card, .drawer-review-card, .social-post-card)
+    :is(span, strong, b) {
+    font-size: max(10.5px, 1em) !important;
+    line-height: 1.3;
+  }
+
+  :is(.boutique-drama-card, .drawer-review-card, .social-post-card)
+    :is(.eyebrow, [class*="label"], [class*="badge"], [class*="chip"], [class*="tag"]) {
+    font-size: clamp(9.5px, 1.15vw, 11.5px) !important;
+    line-height: 1.25 !important;
+  }
+
+  :is(.boutique-drama-card, .drawer-review-card, .social-post-card) h3 {
+    font-size: clamp(13.5px, 1.75vw, 17px) !important;
+    line-height: 1.22 !important;
+  }
+
+  :is(.boutique-drama-card, .drawer-review-card, .social-post-card) button {
+    font-size: clamp(10.5px, 1.3vw, 12.5px) !important;
+    line-height: 1.2 !important;
+  }
+
+  :is(.boutique-drama-card, .drawer-review-card, .social-post-card)
+    :is(input:not([type="range"]), select, textarea) {
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+  }
+}

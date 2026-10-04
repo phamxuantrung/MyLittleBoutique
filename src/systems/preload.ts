@@ -44,6 +44,7 @@ const fontJobs = () => {
   if (!document.fonts) return [] as Array<() => Promise<unknown>>;
   return [
     () => document.fonts.load('400 16px "Paytone One"', 'Cửa hàng thời trang Việt Nam'),
+    () => document.fonts.load('700 16px "Nunito Variable"', 'Nội dung drama và đánh giá'),
     () => document.fonts.load('700 22px Mali', 'Tiệm Mây Nhỏ'),
     () => document.fonts.ready,
   ];

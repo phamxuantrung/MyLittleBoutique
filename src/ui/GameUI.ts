@@ -122,6 +122,7 @@ export class GameUI {
   private socialSection: 'feed' | 'recruitment' = 'feed';
   private dialog!: HTMLDialogElement;
   private beforeDialogFocus?: HTMLElement;
+  private modalScrollResetVersion = 0;
   private lastAnnouncement = '';
   private moveMode = false;
   private tutorialStep = 0;
@@ -130,6 +131,7 @@ export class GameUI {
   private displayGuideTimer = 0;
   private onlineOrderId = '';
   private regularOrderId = '';
+  private onlineDashboardScroll = { dashboardTop: 0, regularOrdersTop: 0 };
   private pendingDisplayUpgradeUid = '';
   private campaignGuideForced = false;
   private campaignGuideTimer = 0;
@@ -1606,7 +1608,10 @@ export class GameUI {
       case 'couture-start': this.store.startCoutureOrder(); break;
       case 'couture-advance': this.store.advanceCouture(target?.dataset.value as 'safe' | 'premium'); break;
       case 'couture-deliver': this.store.deliverCouture(); break;
-      case 'online-open': this.openModal('online', onlineChannelModal(this.store.state)); break;
+      case 'online-open':
+        this.onlineDashboardScroll = { dashboardTop: 0, regularOrdersTop: 0 };
+        this.openModal('online', onlineChannelModal(this.store.state));
+        break;
       case 'online-stock-open': this.openModal('online-stock', onlineStockModal(this.store.state)); break;
       case 'online-stock-back': this.openModal('online', onlineChannelModal(this.store.state)); break;
       case 'online-list': this.store.listOnlineProduct(id); break;
@@ -1633,13 +1638,14 @@ export class GameUI {
         break;
       }
       case 'regular-order-open':
+        this.rememberOnlineDashboardScroll();
         this.regularOrderId = id;
         this.openModal('regular-order-detail', regularOrderDetailModal(this.store.state, id));
         break;
-      case 'regular-order-back': this.openModal('online', onlineChannelModal(this.store.state)); break;
+      case 'regular-order-back': this.returnToOnlineDashboard(); break;
       case 'regular-pack': this.store.packRegularOnlineOrder(id); break;
       case 'regular-cancel':
-        if (this.store.cancelRegularOnlineOrder(id) && this.modal === 'regular-order-detail') this.openModal('online', onlineChannelModal(this.store.state));
+        if (this.store.cancelRegularOnlineOrder(id) && this.modal === 'regular-order-detail') this.returnToOnlineDashboard();
         break;
       case 'regular-pack-all': this.store.packAllRegularOrdersWithStaff(); break;
       case 'packing-upgrade': this.store.upgradeOnlinePacking(); break;
@@ -2874,6 +2880,26 @@ export class GameUI {
     if (this.store.state.currentVisitId !== visit.uid) this.store.focusCustomer(visit.uid);
     return true;
   }
+  private rememberOnlineDashboardScroll() {
+    this.onlineDashboardScroll = {
+      dashboardTop: this.dialog.querySelector<HTMLElement>('.online-dashboard')?.scrollTop ?? 0,
+      regularOrdersTop: this.dialog.querySelector<HTMLElement>('.regular-orders-list')?.scrollTop ?? 0,
+    };
+  }
+  private restoreOnlineDashboardScroll() {
+    const restore = () => {
+      const dashboard = this.dialog.querySelector<HTMLElement>('.online-dashboard');
+      const orders = this.dialog.querySelector<HTMLElement>('.regular-orders-list');
+      if (dashboard) dashboard.scrollTop = this.onlineDashboardScroll.dashboardTop;
+      if (orders) orders.scrollTop = this.onlineDashboardScroll.regularOrdersTop;
+    };
+    restore();
+    requestAnimationFrame(restore);
+  }
+  private returnToOnlineDashboard() {
+    this.openModal('online', onlineChannelModal(this.store.state), false);
+    this.restoreOnlineDashboardScroll();
+  }
   private refreshOnlineChannel() {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
     if (!inner) return;
@@ -3367,10 +3393,17 @@ export class GameUI {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
     if (!inner) return;
     if (!this.store.state.regularOnlineOrders.some(order => order.id === this.regularOrderId)) {
-      this.openModal('online', onlineChannelModal(this.store.state));
+      this.returnToOnlineDashboard();
       return;
     }
+    const productsScrollTop = inner.querySelector<HTMLElement>('.regular-order-detail-product-scroll')?.scrollTop ?? 0;
     inner.innerHTML = regularOrderDetailModal(this.store.state, this.regularOrderId);
+    const restore = () => {
+      const list = inner.querySelector<HTMLElement>('.regular-order-detail-product-scroll');
+      if (list) list.scrollTop = productsScrollTop;
+    };
+    restore();
+    requestAnimationFrame(restore);
   }
   private refreshRegularPickup() {
     const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
@@ -3401,7 +3434,9 @@ export class GameUI {
     }
   }
   private scrollModalToTop() {
+    const version = ++this.modalScrollResetVersion;
     const reset = () => {
+      if (version !== this.modalScrollResetVersion) return;
       this.dialog.scrollTop = 0;
       const inner = this.dialog.querySelector<HTMLElement>('.dialog-inner');
       if (!inner) return;
@@ -3417,19 +3452,20 @@ export class GameUI {
     });
     window.setTimeout(reset, 80);
   }
-  private openModal(type: Modal, html: string) {
+  private openModal(type: Modal, html: string, resetScroll = true) {
     if (!this.dialog.open) this.beforeDialogFocus = document.activeElement as HTMLElement;
     this.modal = type;
     this.syncSceneInteraction();
     this.dialog.querySelector('.dialog-inner')!.innerHTML = html;
     this.dialog.className = `dialog-${type}`;
     if (!this.dialog.open) this.dialog.showModal();
-    this.scrollModalToTop();
+    if (resetScroll) this.scrollModalToTop();
+    else this.modalScrollResetVersion++;
     // Summary actions sit at the bottom. Focusing one makes iOS Safari scroll there.
     if (type === 'summary') {
       this.dialog.tabIndex = -1;
       this.dialog.focus({ preventScroll: true });
-      this.scrollModalToTop();
+      if (resetScroll) this.scrollModalToTop();
     } else {
       // Focus the dismiss/continue action rather than a product to prevent accidental purchases.
       this.dialog.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });

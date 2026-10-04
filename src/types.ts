@@ -175,6 +175,8 @@ export interface RegularOnlineOrder {
   createdDay: number;
   dueDay: number;
   packed: boolean;
+  /** True after packing has already removed the order's products from inventory. */
+  stockCommitted?: boolean;
   source: 'storefront' | 'livestream';
 }
 export interface LivestreamRequest {

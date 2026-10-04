@@ -695,6 +695,7 @@ export function parseSave(raw: string | null): GameState {
       price: Math.round(order.price), fee: Math.round(order.fee),
       createdDay: Math.max(1, order.createdDay), dueDay: Math.max(order.createdDay, order.dueDay),
       packed: order.packed === true,
+      ...(order.stockCommitted === true ? { stockCommitted: true } : {}),
       source: order.source === 'livestream' ? 'livestream' : 'storefront',
     })).filter((order: RegularOnlineOrder) => order.productIds.length > 0).slice(0, [0, 6, 10, 15][state.onlinePackingLevel]) : [];
     // Pending international orders

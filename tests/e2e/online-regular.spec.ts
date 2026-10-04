@@ -6,9 +6,9 @@ test('regular orders can be packed and livestream creates another regular order'
   const state = preparedState();
   state.inventory['ribbon-kiss-tee'] = 6;
   state.inventory.ribbon = 5;
-  state.inventory['cyber-pop-flare'] = 5;
+  state.inventory['ribbon-dress'] = 5;
   state.inventory['urban-pulse-hoodie'] = 4;
-  state.onlineListings = ['ribbon-kiss-tee', 'ribbon', 'cyber-pop-flare'];
+  state.onlineListings = ['ribbon-kiss-tee', 'ribbon', 'ribbon-dress'];
   state.onlineChannelEnabled = true;
   state.regularOnlineOrders = [{
     id: 'regular-e2e', productIds: ['ribbon-kiss-tee'], customerName: 'Linh', customerHandle: '@linh_closet',
@@ -23,17 +23,20 @@ test('regular orders can be packed and livestream creates another regular order'
   const dialog = page.getByRole('dialog');
   await dialog.locator('[data-action="online-stock-open"]').click();
   await expect(dialog).toHaveClass('dialog-online-stock');
-  await dialog.locator('[data-action="online-list"][data-id="hoodie"]').click();
+  await dialog.locator('button[data-action="online-list"][data-id="urban-pulse-hoodie"]').click();
   await expect(dialog.locator('.online-stock-card.is-listed')).toHaveCount(4);
   await dialog.locator('[data-action="online-stock-back"]').click();
   await expect(dialog).toHaveClass('dialog-online');
-  await expect(dialog.locator('.storefront-product-grid [data-id="hoodie"]')).toHaveCount(1);
+  await expect(dialog.locator('.storefront-product-grid [data-id="urban-pulse-hoodie"]')).toHaveCount(1);
 
   await expect(dialog.locator('.regular-order-card')).toHaveCount(1);
   await dialog.locator('[data-action="regular-order-open"]').click();
   await expect(dialog).toHaveClass('dialog-regular-order-detail');
   await dialog.locator('[data-action="regular-pack"]').click();
   await expect(dialog.locator('.regular-order-detail')).toContainText('Đã đóng gói');
+  const packedSave = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
+  expect(packedSave.inventory['ribbon-kiss-tee']).toBe(5);
+  expect(packedSave.regularOnlineOrders[0].stockCommitted).toBe(true);
   await dialog.locator('.regular-order-detail > footer [data-action="regular-order-back"]').click();
   await expect(dialog).toHaveClass('dialog-online');
   await expect(dialog.locator('.regular-order-card')).toHaveClass(/is-packed/);
@@ -50,7 +53,7 @@ test('regular orders can be packed and livestream creates another regular order'
   const livestreamFitsFrame = await dialog.locator('.dialog-inner').evaluate(element => element.scrollWidth <= element.clientWidth + 1);
   expect(livestreamFitsFrame).toBe(true);
   await dialog.locator('[data-action="livestream-pool-select"][data-id="ribbon-kiss-tee"]').click();
-  await dialog.locator('[data-action="livestream-pool-select"][data-id="cyber-pop-flare"]').click();
+  await dialog.locator('[data-action="livestream-pool-select"][data-id="ribbon-dress"]').click();
   await expect(dialog.locator('.livestream-product.is-selected')).toHaveCount(2);
   await dialog.locator('[data-action="livestream-start"]').click();
   await expect(dialog.locator('.livestream-two-pane')).toBeVisible();
@@ -59,8 +62,8 @@ test('regular orders can be packed and livestream creates another regular order'
   await expect(dialog.locator('.livestream-time')).toBeVisible();
   await dialog.locator('[data-action="livestream-round-select"][data-id="ribbon-kiss-tee"]').click();
   await expect(dialog.locator('.livestream-pin-card.is-pinned')).toHaveCount(1);
-  await dialog.locator('[data-action="livestream-round-select"][data-id="cyber-pop-flare"]').click();
-  await expect(dialog.locator('.livestream-pin-card.is-pinned')).toHaveAttribute('data-id', 'cyber-pop-flare');
+  await dialog.locator('[data-action="livestream-round-select"][data-id="ribbon-dress"]').click();
+  await expect(dialog.locator('.livestream-pin-card.is-pinned')).toHaveAttribute('data-id', 'ribbon-dress');
   await dialog.locator('[data-action="livestream-round-select"][data-id="ribbon-kiss-tee"]').click();
   const liveSessionFitsFrame = await dialog.locator('.dialog-inner').evaluate(element => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1);
   expect(liveSessionFitsFrame).toBe(true);
@@ -69,6 +72,46 @@ test('regular orders can be packed and livestream creates another regular order'
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
   expect(saved.regularOnlineOrders.length).toBeGreaterThanOrEqual(1);
   if (saved.regularOnlineOrders.length > 1) expect(saved.regularOnlineOrders[1].source).toBe('livestream');
+});
+
+test('returning from a regular order restores the online dashboard scroll position', async ({ page }) => {
+  const state = preparedState();
+  const detailProductIds = ['ribbon-kiss-tee', 'ribbon-dress', 'urban-pulse-hoodie', 'ribbon', 'sneakers', 'bag'];
+  for (const productId of detailProductIds) state.inventory[productId] = 30;
+  state.onlineListings = ['ribbon-kiss-tee'];
+  state.onlineChannelEnabled = true;
+  state.onlinePackingLevel = 3;
+  state.regularOnlineOrders = Array.from({ length: 10 }, (_, index) => ({
+    id: `regular-scroll-${index}`,
+    productIds: index === 9 ? detailProductIds : ['ribbon-kiss-tee'],
+    customerName: `Khách ${index + 1}`,
+    customerHandle: `@khach_${index + 1}`,
+    price: 99000,
+    fee: 7920,
+    createdDay: 1,
+    dueDay: 2,
+    packed: false,
+    source: 'storefront' as const,
+  }));
+
+  await page.addInitScript(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), { key: SAVE_KEY, state });
+  await page.goto('/');
+  await expect(page.locator('#game-canvas')).toHaveAttribute('data-ready', 'true');
+  await page.locator('#online-channel-button').click();
+
+  const dialog = page.getByRole('dialog');
+  const dashboard = dialog.locator('.online-dashboard');
+  await page.waitForTimeout(120);
+  await dashboard.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  const before = await dashboard.evaluate(element => element.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  await dialog.locator('[data-action="regular-order-open"]').last().click();
+  await expect(dialog).toHaveClass('dialog-regular-order-detail');
+  const productListScrolls = await dialog.locator('.regular-order-detail-product-scroll').evaluate(element => element.scrollHeight > element.clientHeight);
+  expect(productListScrolls).toBe(true);
+  await dialog.locator('[data-action="regular-order-back"]').click();
+  await expect(dialog).toHaveClass('dialog-online');
+  await expect.poll(() => dashboard.evaluate(element => element.scrollTop)).toBe(before);
 });
 
 test('debug button opens the prepared online warehouse test', async ({ page }) => {

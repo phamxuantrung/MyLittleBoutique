@@ -1,5 +1,5 @@
 import { compatible, customers, dailyEvents, furniture, products, trends } from '../data/catalog';
-import type { Customer, CustomerLoyalty, CustomerVisit, Furniture, GameState, LoyaltyTier, PlacedFurniture, Product, Style } from '../types';
+import type { Customer, CustomerLoyalty, CustomerVisit, Furniture, GameState, LoyaltyTier, PlacedFurniture, Product, StaffMember, Style } from '../types';
 import { lookupCustomer } from './customerGen';
 
 export const currentTrend = (state: GameState) => trends[(state.day - 1) % trends.length];
@@ -108,11 +108,34 @@ export function activeEmployees(state: GameState) {
     && (employee.assignment ?? 'service') !== 'off' && (employee.energy ?? 100) >= 15)
     .slice(0, staffCapacity(state));
 }
-export function staffAdviceBonus(state: GameState) {
-  const staff = activeEmployees(state);
+export function staffAdviceProfile(employee: Pick<StaffMember, 'service' | 'persuasion' | 'reliability' | 'skillLevel'>) {
+  const skillLevel = Math.max(1, employee.skillLevel ?? 1);
+  const expertise = Math.max(0, Math.min(1,
+    (employee.service * .48 + employee.persuasion * .37 + employee.reliability * .1 + Math.min(20, skillLevel) * 1.25) / 100));
+  return {
+    expertise,
+    maxItems: Math.max(2, Math.min(MAX_OUTFIT_ITEMS, 2 + Math.floor(expertise * 4))),
+    targetBudgetRatio: .7 + expertise * .25,
+    matchBonus: Math.max(2, Math.min(14, Math.round(employee.service * .06 + employee.persuasion * .09))),
+    assistChance: Math.min(.82, .08 + employee.service * .004 + employee.persuasion * .002 + employee.reliability * .001),
+  };
+}
+
+export function staffStockProfile(employee: Pick<StaffMember, 'reliability' | 'service' | 'skillLevel'>) {
+  const skillLevel = Math.max(1, employee.skillLevel ?? 1);
+  return {
+    packingEnergyPerOrder: Math.max(1, 4 - Math.floor((employee.reliability + skillLevel * 2) / 40)),
+    deliveryDaysSaved: employee.reliability >= 88 || skillLevel >= 10 ? 2 : 1,
+    packingPriority: employee.reliability * 2 + employee.service * .35 + skillLevel * 3,
+  };
+}
+
+export function staffAdviceBonus(state: GameState, employeeUid?: string) {
+  const staff = activeEmployees(state).filter(employee => (employee.assignment ?? 'service') === 'service');
+  const selected = employeeUid ? staff.find(employee => employee.uid === employeeUid) : undefined;
+  if (selected) return staffAdviceProfile(selected).matchBonus;
   if (!staff.length) return 0;
-  const best = Math.max(...staff.map(employee => employee.service * .06 + employee.persuasion * .09));
-  return Math.max(2, Math.min(14, Math.round(best)));
+  return Math.max(...staff.map(employee => staffAdviceProfile(employee).matchBonus));
 }
 export const advicePatience = (customer: Customer, level = 1) => Math.max(55, Math.min(90, Math.round(customer.patience * .5))) + (Math.max(1, Math.min(7, Math.floor(level))) - 1) * 5;
 export function activeVisit(state: GameState): CustomerVisit | undefined {
@@ -256,6 +279,96 @@ export function evaluateCustomerSelfPick(state: GameState, customer: Customer): 
     speech,
   };
 }
+
+/** Build a complete outfit without letting a large catalogue stall the sales tick. */
+export function evaluateStaffAdvice(state: GameState, customer: Customer, employee: StaffMember): {
+  success: boolean; items: Product[]; score: number; total: number; speech: string;
+} {
+  const profile = staffAdviceProfile(employee);
+  const available = Object.entries(displayedInventory(state))
+    .filter(([, quantity]) => quantity > 0)
+    .map(([id]) => products.find(product => product.id === id))
+    .filter((product): product is Product => !!product && sellPrice(state, product) <= customer.budget);
+  if (available.length < 2) {
+    return { success: false, items: [], score: 0, total: 0, speech: 'Chưa có đủ sản phẩm để phối thành một set hoàn chỉnh.' };
+  }
+
+  const targetTotal = customer.budget * profile.targetBudgetRatio;
+  const categoryOrder: Product['category'][] = ['sets', 'dresses', 'tops', 'bottoms', 'outerwear', 'shoes', 'bags', 'accessories'];
+  const categoryCandidates = categoryOrder.map(category => available
+    .filter(product => product.category === category)
+    .sort((a, b) => {
+      const matchDelta = matchScore(state, customer, [b]) - matchScore(state, customer, [a]);
+      if (matchDelta) return matchDelta;
+      return Math.abs(sellPrice(state, a) - targetTotal / profile.maxItems)
+        - Math.abs(sellPrice(state, b) - targetTotal / profile.maxItems);
+    })
+    .slice(0, 5));
+
+  type CandidateSet = { items: Product[]; total: number };
+  const partialRank = (candidate: CandidateSet) => {
+    if (!candidate.items.length) return 0;
+    const ratio = candidate.total / Math.max(1, customer.budget);
+    return matchScore(state, customer, candidate.items) * 2
+      + Math.min(1, ratio / profile.targetBudgetRatio) * 32
+      + candidate.items.length * 5;
+  };
+  let beam: CandidateSet[] = [{ items: [], total: 0 }];
+  for (const candidates of categoryCandidates) {
+    const expanded: CandidateSet[] = [...beam];
+    for (const current of beam) for (const product of candidates) {
+      if (current.items.length >= profile.maxItems) continue;
+      const total = current.total + sellPrice(state, product);
+      const ids = [...current.items.map(item => item.id), product.id];
+      if (total > customer.budget || !validOutfit(ids)) continue;
+      expanded.push({ items: [...current.items, product], total });
+    }
+    const unique = new Map<string, CandidateSet>();
+    for (const candidate of expanded) unique.set(candidate.items.map(item => item.id).sort().join('|'), candidate);
+    beam = [...unique.values()].sort((a, b) => partialRank(b) - partialRank(a)).slice(0, 180);
+  }
+
+  const hasOutfitCore = (items: Product[]) => {
+    const categories = new Set(items.map(item => item.category));
+    return categories.has('dresses') || categories.has('sets') || (categories.has('tops') && categories.has('bottoms'));
+  };
+  const completeness = (items: Product[]) => {
+    const categories = new Set(items.map(item => item.category));
+    const finishing = Number(categories.has('shoes')) + Number(categories.has('bags'))
+      + Number(categories.has('accessories')) + Number(categories.has('outerwear'));
+    return (hasOutfitCore(items) ? 1 : 0) + finishing * .18;
+  };
+  const finalRank = (candidate: CandidateSet) => {
+    const ratio = candidate.total / Math.max(1, customer.budget);
+    const budgetFit = Math.max(0, 1 - Math.abs(ratio - profile.targetBudgetRatio) / .3);
+    const minimumBudgetPenalty = ratio < .7 ? (.7 - ratio) * 110 : 0;
+    return matchScore(state, customer, candidate.items) * 2.4
+      + completeness(candidate.items) * 24
+      + budgetFit * (28 + profile.expertise * 24)
+      + candidate.items.length * (4 + profile.expertise * 4)
+      - minimumBudgetPenalty;
+  };
+  const options = beam.filter(candidate => candidate.items.length >= 2 && candidate.items.length <= profile.maxItems);
+  const completeOptions = options.filter(candidate => hasOutfitCore(candidate.items));
+  const selected = (completeOptions.length ? completeOptions : options)
+    .sort((a, b) => finalRank(b) - finalRank(a))[0];
+  if (!selected) {
+    return { success: false, items: [], score: 0, total: 0, speech: 'Chưa ghép được set từ 2 món phù hợp trong ngân sách.' };
+  }
+  const score = matchScore(state, customer, selected.items);
+  const success = score + profile.matchBonus >= threshold(customer);
+  const usedPercent = Math.round(selected.total / Math.max(1, customer.budget) * 100);
+  return {
+    success,
+    items: selected.items,
+    score,
+    total: selected.total,
+    speech: success
+      ? `${employee.name} đã phối set ${selected.items.length} món đúng gu, dùng ${usedPercent}% ngân sách.`
+      : 'Set đã phối vẫn chưa đủ hợp gu của khách.',
+  };
+}
+
 export function matchScore(state: GameState, customer: Customer, items: Product[]) {
   if (!items.length) return 0;
   const price = items.reduce((sum, item) => sum + sellPrice(state, item), 0);

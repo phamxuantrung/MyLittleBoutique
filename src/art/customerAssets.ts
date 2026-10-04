@@ -1,3 +1,5 @@
+import type { Customer } from '../types';
+
 const CUSTOMER_ART_BASE = '/assets/characters/customers';
 
 const customerArtworkById: Readonly<Record<string, string>> = {
@@ -37,3 +39,16 @@ export const allCustomerArtwork = Object.freeze(customerArtworkIds.flatMap(id =>
   customerArtwork(id, 'normal')!,
   customerArtwork(id, 'happy')!,
 ]));
+
+/** Prefer an authored avatar whose visible palette agrees with a generated customer's request. */
+type CustomerAppearancePreferences = {
+  colors: readonly string[];
+  styles: readonly Customer['styles'][number][];
+};
+
+export function customerAppearanceAffinity(customer: CustomerAppearancePreferences, appearance: CustomerAppearancePreferences) {
+  const colorOverlap = customer.colors.filter(color => appearance.colors.includes(color)).length;
+  const styleOverlap = customer.styles.filter(style => appearance.styles.includes(style)).length;
+  const primaryColorMatch = customer.colors[0] === appearance.colors[0] ? 1 : 0;
+  return colorOverlap * 20 + primaryColorMatch * 12 + styleOverlap * 3;
+}

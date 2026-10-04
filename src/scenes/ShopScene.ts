@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { characterSvg, furnitureSvg, getCustomerArchetype, heartSvg, isWallArtAsset, roomSvg, roomSvgBounds, svgUrl } from '../art/svg';
 import { EMPLOYEE_APPEARANCE_COUNT, employeeArtwork } from '../art/employeeAssets';
-import { customerArtwork } from '../art/customerAssets';
+import { customerAppearanceAffinity, customerArtwork } from '../art/customerAssets';
 import { COURIER_APPEARANCE_COUNT, courierArtwork } from '../art/courierAssets';
 import { externalFurnitureArtwork } from '../art/furnitureAssets';
 import { customers, furniture, products } from '../data/catalog';
@@ -2199,12 +2199,21 @@ export class ShopScene extends Phaser.Scene {
           if (active.uid !== visitUid && activeCustomer && this.textures.exists(`c-${activeCustomer.id}`)) used.add(`c-${activeCustomer.id}`);
         }
         const hash = Array.from(c.id).reduce((value, char) => Math.imul(value ^ (char.codePointAt(0) ?? 0), 16777619) >>> 0, 2166136261);
-        for (let offset = 0; offset < customers.length; offset++) {
-          const candidate = `c-${customers[(hash + offset) % customers.length].id}`;
-          if (!used.has(candidate)) { assigned = candidate; break; }
-        }
-        assigned ??= `c-${customers[hash % customers.length].id}`;
+        const rankedAppearances = customers.map((appearance, index) => ({
+          key: `c-${appearance.id}`,
+          score: customerAppearanceAffinity(c, appearance),
+          tieBreak: (index - hash % customers.length + customers.length) % customers.length,
+        })).filter(candidate => this.textures.exists(candidate.key))
+          .sort((a, b) => b.score - a.score || a.tieBreak - b.tieBreak);
+        assigned = rankedAppearances.find(candidate => !used.has(candidate.key))?.key
+          ?? rankedAppearances[0]?.key
+          ?? `c-${customers[hash % customers.length].id}`;
         this.customerTextureAssignments.set(visitUid, assigned);
+        const matchedAppearance = customers.find(appearance => assigned === `c-${appearance.id}`);
+        if (c.id.startsWith('gen_') && matchedAppearance) {
+          c.colors = [...matchedAppearance.colors];
+          c.outfit = matchedAppearance.outfit;
+        }
       }
       if (this.textures.exists(`${assigned}${suffix}`)) return `${assigned}${suffix}`;
       if (this.textures.exists(assigned)) return assigned;

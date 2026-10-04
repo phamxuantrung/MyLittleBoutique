@@ -3,7 +3,7 @@ import { courierImage } from '../art/courierAssets';
 import { shopReviewStats } from '../systems/reviews';
 import { categories, customers, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
-import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
+import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffAdviceProfile, staffCapacity, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
 import type { Customer, Furniture, GameState, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
 import { avatarImage, compact, escapeHtml, furnitureImage, money, productImage, staffImage } from './format';
 import { icon } from './icons';
@@ -570,6 +570,13 @@ export function staffManagementModal(s: GameState, detailUid = '') {
     const skillLevel = detailEmployee.skillLevel ?? 1;
     const experience = detailEmployee.experience ?? 0;
     const experienceTarget = 35 + skillLevel * 15;
+    const adviceProfile = staffAdviceProfile(detailEmployee);
+    const stockProfile = staffStockProfile(detailEmployee);
+    const assignmentDetail = assignment === 'service'
+      ? `<div class="employee-role-effect is-service"><strong>${icon('users')} Hiệu quả tư vấn</strong><span>Phối tối đa <b>${adviceProfile.maxItems} món</b></span><span>Nhắm <b>${Math.round(adviceProfile.targetBudgetRatio * 100)}% ngân sách</b></span><span>+<b>${adviceProfile.matchBonus}</b> điểm chốt</span><span><b>${Math.round(adviceProfile.assistChance * 100)}%</b> nhận khách</span></div>`
+      : assignment === 'stock'
+        ? `<div class="employee-role-effect is-stock"><strong>${icon('box')} Hiệu quả kho</strong><span>Tốn <b>${stockProfile.packingEnergyPerOrder} năng lượng/đơn</b></span><span>Rút <b>${stockProfile.deliveryDaysSaved} ngày</b> giao lô gần nhất</span><span>Ưu tiên đóng gói <b>${Math.round(stockProfile.packingPriority)}</b></span></div>`
+        : '';
     const status = onLeave ? `Nghỉ phép đến ${gameDate(detailEmployee.leaveUntilDay!)}` : assignment === 'off' ? 'Nghỉ chờ xếp ca' : 'Đang trong ca';
     const detailHeader = `<header class="staff-modal-header employee-profile-header"><strong>${working.length}/${capacity}</strong><h2>${escapeHtml(detailEmployee.name)} <em>Cấp ${skillLevel}</em></h2><button class="staff-modal-close staff-modal-back" data-action="staff-detail-close" aria-label="Quay lại danh sách nhân viên" title="Quay lại">${icon('arrow')}</button></header>`;
     return `<div class="staff-modal staff-detail-mode">
@@ -590,10 +597,11 @@ export function staffManagementModal(s: GameState, detailUid = '') {
             <span>${icon('shield')}<small>Ổn định</small><b>${detailEmployee.reliability}</b></span>
             <span>${icon('star')}<small>Kinh nghiệm</small><b>${experience}/${experienceTarget}</b></span>
           </div>
+          ${assignmentDetail}
           <div class="employee-shift-control employee-detail-shift">
             <strong class="employee-detail-label">Phân công ca làm</strong>
             <div class="shift-options" role="group" aria-label="Xếp ca cho ${escapeHtml(detailEmployee.name)}">${(Object.keys(assignmentLabels) as StaffAssignment[]).map(value => `<button data-action="staff-assignment" data-id="${detailEmployee.uid}" data-value="${value}" class="${value === assignment ? 'is-active' : ''}" ${onLeave || s.phase === 'open' ? 'disabled' : ''}>${assignmentLabels[value]}</button>`).join('')}</div>
-            <small>Tư vấn tự chốt đơn · Thu ngân giữ đánh giá · Kho rút ngắn giao hàng · Nghỉ để hồi năng lượng.</small>
+            <small>Tư vấn phối set 2–5 món theo gu và ngân sách · Kho tự đóng đơn, tiết kiệm năng lượng và thúc lô nhập gần nhất · Thu ngân giữ đánh giá · Nghỉ để hồi năng lượng.</small>
           </div>
           <footer class="employee-detail-footer"><div class="employee-record employee-detail-record"><span>${icon('bag')} <b>${detailEmployee.sales}</b> đơn hỗ trợ</span><span>${icon('star')} <b>${money(detailEmployee.tipsEarned)}</b> tip</span><span>${icon('sun')} Gia nhập ${gameDate(detailEmployee.hiredDay)}</span></div><button class="employee-fire employee-detail-fire" data-action="staff-fire" data-id="${detailEmployee.uid}">${icon('close')} Cho nghỉ việc</button></footer>
         </div>
@@ -1215,11 +1223,13 @@ export function displayFixtureModal(s: GameState, uid: string) {
 }
 
 const onlineOrderProductIds = (order: OnlineOrder) => order.productIds?.length ? order.productIds : [order.productId];
+const onlineReservedFor = (s: GameState, productId: string, exceptOrderId = '') =>
+  s.onlineOrders.filter(order => order.id !== exceptOrderId && onlineOrderProductIds(order).includes(productId)).length
+  + s.regularOnlineOrders.filter(order => order.id !== exceptOrderId && !order.stockCommitted && order.productIds.includes(productId)).length;
 
 export function onlineChannelModal(s: GameState) {
   const listed = s.onlineListings.map(id => products.find(product => product.id === id)).filter(Boolean) as typeof products;
-  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
-    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
+  const reservedFor = (productId: string) => onlineReservedFor(s, productId);
   const eligibleListings = listed.filter(product => {
     return Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id)) > reservedFor(product.id);
   });
@@ -1277,8 +1287,7 @@ export function onlineChannelModal(s: GameState) {
 }
 
 export function onlineStockModal(s: GameState) {
-  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
-    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
+  const reservedFor = (productId: string) => onlineReservedFor(s, productId);
   const warehouse = products.map(product => ({
     product,
     available: Math.max(0, (s.inventory[product.id] ?? 0) - displayedQuantity(s, product.id) - reservedFor(product.id)),
@@ -1299,9 +1308,9 @@ export function onlineStockModal(s: GameState) {
     <div class="online-stock-grid">${warehouse.length ? warehouse.map(({ product, available }) => {
       const isListed = s.onlineListings.includes(product.id);
       const listingAction = isListed ? 'online-unlist' : 'online-list';
-      return `<article class="online-stock-card online-product-card ${isListed ? 'is-listed' : ''}" ${canEdit ? `data-action="${listingAction}" data-id="${product.id}"` : ''}>
+      return `<article class="online-stock-card online-product-card ${isListed ? 'is-listed' : ''} ${available < 1 ? 'is-out-of-stock' : ''}" ${canEdit ? `data-action="${listingAction}" data-id="${product.id}"` : ''}>
         <span class="online-stock-card-photo online-product-photo">${productImage(product)}<i>${escapeHtml(product.style)}</i><b>×${available}</b></span>
-        <div class="online-product-info"><strong>${escapeHtml(product.name)}</strong><b>${money(s.prices[product.id] ?? product.sellPrice)}</b><small>${isListed ? 'Đang bán trên gian hàng' : `Còn ${available} sản phẩm trong kho`}</small></div>
+        <div class="online-product-info"><strong>${escapeHtml(product.name)}</strong><b>${money(s.prices[product.id] ?? product.sellPrice)}</b><small>${available < 1 ? 'Tạm hết hàng' : isListed ? 'Đang bán trên gian hàng' : `Còn ${available} sản phẩm trong kho`}</small></div>
         <button data-action="${listingAction}" data-id="${product.id}" ${!canEdit ? 'disabled' : ''} aria-label="${isListed ? 'Gỡ' : 'Đăng'} ${escapeHtml(product.name)}" title="${isListed ? 'Gỡ khỏi gian hàng' : 'Thêm vào gian hàng'}">${icon(isListed ? 'check' : 'plus')}</button>
       </article>`;
     }).join('') : `<div class="online-stock-empty">${icon('box')}<strong>Kho chưa có hàng sẵn sàng</strong><small>Nhập thêm hàng hoặc cất bớt sản phẩm khỏi kệ để đăng bán.</small></div>`}</div>
@@ -1313,9 +1322,7 @@ export function onlineOrderModal(s: GameState, orderId: string, selectedProductI
   if (!order) return onlineChannelModal(s);
   const requestedIds = onlineOrderProductIds(order);
   const requestedProducts = requestedIds.map(id => products.find(item => item.id === id)).filter((product): product is Product => !!product);
-  const handoverQuantity = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0)
-    - s.onlineOrders.filter(candidate => candidate.id !== orderId && onlineOrderProductIds(candidate).includes(productId)).length
-    - s.regularOnlineOrders.filter(candidate => candidate.productIds.includes(productId)).length);
+  const handoverQuantity = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - onlineReservedFor(s, productId, orderId));
   const warehouse = products.filter(product => (s.inventory[product.id] ?? 0) > 0);
   const selectedProducts = selectedProductIds.map(id => warehouse.find(product => product.id === id && handoverQuantity(product.id) > 0)).filter((product): product is Product => !!product);
   const readyToShip = selectedProducts.length === requestedProducts.length;
@@ -1351,7 +1358,10 @@ export function regularOrderDetailModal(s: GameState, orderId: string) {
       <div><small>${order.source === 'livestream' ? 'ĐƠN TỪ LIVESTREAM' : 'ĐƠN TỪ GIAN HÀNG'}</small><h2>${escapeHtml(order.customerHandle)}</h2></div>
     </header>
     <div class="regular-order-detail-body">
-      <section class="regular-order-detail-products"><div><small>SẢN PHẨM KHÁCH ĐẶT</small><strong>${orderProducts.length} món</strong></div>${orderProducts.map(product => `<article><span>${productImage(product)}</span><p><small>${escapeHtml(product.style)}</small><strong>${escapeHtml(product.name)}</strong><em>${money(s.prices[product.id] ?? product.sellPrice)}</em></p><b>${icon('check')}</b></article>`).join('')}</section>
+      <section class="regular-order-detail-products">
+        <div class="regular-order-detail-products-heading"><small>SẢN PHẨM KHÁCH ĐẶT</small><strong>${orderProducts.length} món</strong></div>
+        <div class="regular-order-detail-product-scroll" role="list" tabindex="0" aria-label="Sản phẩm khách đặt">${orderProducts.map(product => `<article role="listitem"><span>${productImage(product)}</span><p><small>${escapeHtml(product.style)}</small><strong>${escapeHtml(product.name)}</strong><em>${money(s.prices[product.id] ?? product.sellPrice)}</em></p><b>${icon('check')}</b></article>`).join('')}</div>
+      </section>
       <aside class="regular-order-detail-summary">
         <small>CHI TIẾT THANH TOÁN</small>
         <dl><div><dt>Khách thanh toán</dt><dd>${money(listPrice)}</dd></div><div><dt>Phí sàn 8%</dt><dd>−${money(order.fee)}</dd></div><div><dt>Shop nhận</dt><dd>${money(net)}</dd></div></dl>
@@ -1417,8 +1427,7 @@ export function livestreamRequest(s: GameState, poolIds: string[], round: number
 export function legacyLivestreamModal(s: GameState, poolIds: string[], round = 0, selectedIds: string[] = [], discount = 0, result?: LivestreamRoundResult, session?: LivestreamSessionStats, remainingSeconds = 0, durationSeconds = 0) {
   const listed = s.onlineListings.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
   const capacity = [0, 6, 10, 15][Math.max(1, Math.min(3, s.onlinePackingLevel))];
-  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
-    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
+  const reservedFor = (productId: string) => onlineReservedFor(s, productId);
   const availableFor = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - displayedQuantity(s, productId) - reservedFor(productId));
   if (!round) return `<section class="livestream-modal livestream-setup">
     <header><span class="live-dot">LIVE</span><div><small>PHÒNG LIVE CỦA ${escapeHtml(s.shopName)}</small><h2>Chuẩn bị giỏ hàng livestream</h2></div><button class="studio-close-btn" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></header>
@@ -1476,8 +1485,7 @@ export function livestreamModal(
   const pinned = products.find(product => product.id === pinnedId);
   const conversionRate = liveStats.intents ? Math.round(liveStats.orders / liveStats.intents * 100) : 0;
   const clockLabel = `${String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:${String(remainingSeconds % 60).padStart(2, '0')}`;
-  const reservedFor = (productId: string) => s.onlineOrders.filter(order => onlineOrderProductIds(order).includes(productId)).length
-    + s.regularOnlineOrders.filter(order => order.productIds.includes(productId)).length;
+  const reservedFor = (productId: string) => onlineReservedFor(s, productId);
   const availableFor = (productId: string) => Math.max(0, (s.inventory[productId] ?? 0) - displayedQuantity(s, productId) - reservedFor(productId));
   if (remainingSeconds <= 0) return `<section class="livestream-modal livestream-session livestream-ended">
     <header class="livestream-summary-header"><div><small>TỔNG KẾT PHIÊN LIVE</small><h2>${escapeHtml(s.shopName)}</h2></div></header>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { customerArtwork, customerArtworkIds } from '../src/art/customerAssets';
+import { customerAppearanceAffinity, customerArtwork, customerArtworkIds } from '../src/art/customerAssets';
 import { customers, products } from '../src/data/catalog';
 import { avatarImage } from '../src/ui/format';
 import { serveModal, socialPanel } from '../src/ui/panels';
@@ -17,6 +17,21 @@ describe('customer artwork', () => {
     expect(new Set(customerArtworkIds)).toEqual(new Set(customerIds));
     expect(artwork.every(Boolean)).toBe(true);
     expect(new Set(artwork).size).toBe(20);
+  });
+
+  it('keeps every authored preference palette aligned with its avatar artwork', () => {
+    const expectedPrimaryColors = [
+      'Hồng', 'Nâu', 'Xanh lá', 'Tím', 'Tím', 'Bạc', 'Hồng', 'Hồng', 'Xanh lá', 'Hồng',
+      'Hồng', 'Vàng', 'Kem', 'Tím', 'Xanh lá', 'Xanh', 'Hồng', 'Tím', 'Xanh lá', 'Kem',
+    ];
+    expect(customers.map(customer => customer.colors[0])).toEqual(expectedPrimaryColors);
+  });
+
+  it('selects generated-customer artwork by palette before secondary style similarity', () => {
+    const request = { colors: ['Xanh', 'Xanh lá'], styles: ['Sporty Chic'] } as const;
+    const ranked = [...customers].sort((a, b) => customerAppearanceAffinity(request, b) - customerAppearanceAffinity(request, a));
+    expect(ranked[0].id).toBe('rina');
+    expect(ranked[0].colors).toEqual(['Xanh', 'Xanh lá', 'Kem']);
   });
 
   it('keeps the advisor model fixed when selected products change and provides its happy state', () => {

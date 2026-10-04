@@ -20000,8 +20000,7 @@ dialog.dialog-staff .dialog-inner {
   color: #a48699;
   font-size: 6px;
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .employee-detail-stats {
@@ -20108,6 +20107,56 @@ dialog.dialog-staff .dialog-inner {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.employee-role-effect {
+  display: grid;
+  grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 5px;
+  padding: 6px 7px;
+  border: 1px solid #e5cfe0;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #fff8fc, #f6efff);
+  color: #79596f;
+  font-size: 6.5px;
+}
+
+.employee-role-effect.is-service {
+  grid-template-columns: 1.35fr repeat(4, minmax(0, 1fr));
+}
+
+.employee-role-effect.is-stock {
+  background: linear-gradient(135deg, #f7fffd, #eef9ff);
+}
+
+.employee-role-effect strong,
+.employee-role-effect span {
+  min-width: 0;
+}
+
+.employee-role-effect strong {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #60364f;
+  font-size: 7px;
+}
+
+.employee-role-effect .icon {
+  width: 13px;
+  height: 13px;
+  color: #ca438d;
+}
+
+.employee-role-effect span {
+  padding-left: 5px;
+  border-left: 1px solid #e8d9e4;
+  line-height: 1.2;
+}
+
+.employee-role-effect b {
+  color: #b52f79;
 }
 
 .employee-detail-footer .employee-detail-fire {
@@ -42131,6 +42180,8 @@ dialog.dialog-livestream .dialog-inner {
 dialog.dialog-regular-order-detail {
   width: min(620px,calc(100dvw - 24px));
   max-width: min(620px,calc(100dvw - 24px));
+  height: min(520px,calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
   padding: 0;
   overflow: hidden;
   border: 1px solid #ead5e1;
@@ -42138,11 +42189,15 @@ dialog.dialog-regular-order-detail {
   background: #fff9fc;
 }
 dialog.dialog-regular-order-detail .dialog-inner {
+  height: 100%;
   padding: 0;
   overflow: hidden;
 }
 .regular-order-detail {
+  height: 100%;
   display: grid;
+  grid-template-rows: auto minmax(0,1fr) auto;
+  overflow: hidden;
   color: #513249;
   background: radial-gradient(circle at 100% 0,rgba(255,216,236,.7),transparent 34%),linear-gradient(145deg,#fff,#fff8fc);
 }
@@ -42212,29 +42267,45 @@ dialog.dialog-regular-order-detail .dialog-inner {
   grid-template-columns: minmax(0,1.35fr) minmax(180px,.8fr);
   gap: 12px;
   padding: 14px 16px;
+  overflow: hidden;
 }
 .regular-order-detail-products {
   min-width: 0;
+  min-height: 0;
   display: grid;
+  grid-template-rows: auto minmax(0,1fr);
   align-content: start;
   gap: 7px;
+  overflow: hidden;
 }
-.regular-order-detail-products > div {
+.regular-order-detail-products-heading {
   display: flex;
   justify-content: space-between;
   gap: 8px;
 }
-.regular-order-detail-products > div small {
+.regular-order-detail-products-heading small {
   color: #b64079;
   font-size: 7px;
   font-weight: 950;
   letter-spacing: .7px;
 }
-.regular-order-detail-products > div strong {
+.regular-order-detail-products-heading strong {
   color: #8f7283;
   font-size: 8px;
 }
-.regular-order-detail-products > article {
+.regular-order-detail-product-scroll {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  padding-right: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+.regular-order-detail-product-scroll > article {
   display: grid;
   grid-template-columns: 48px minmax(0,1fr) 22px;
   align-items: center;
@@ -42244,7 +42315,7 @@ dialog.dialog-regular-order-detail .dialog-inner {
   border-radius: 12px;
   background: #fff;
 }
-.regular-order-detail-products > article > span {
+.regular-order-detail-product-scroll > article > span {
   width: 46px;
   height: 48px;
   display: grid;
@@ -42383,8 +42454,9 @@ dialog.dialog-regular-order-detail .dialog-inner {
   }
   .regular-order-detail-body {
     grid-template-columns: 1fr;
-    max-height: calc(100dvh - 170px);
-    overflow-y: auto;
+    grid-template-rows: minmax(0,1fr) auto;
+    max-height: none;
+    overflow: hidden;
   }
 }
 

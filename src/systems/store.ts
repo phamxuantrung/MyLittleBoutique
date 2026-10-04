@@ -1,6 +1,6 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
-import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, MAX_PLACED_FURNITURE, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffCapacity, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
+import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, RegularOnlineOrder, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
+import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, evaluateStaffAdvice, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, MAX_PLACED_FURNITURE, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffAdviceProfile, staffCapacity, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
 import { recordPublicShopReview, shopReviewStats } from './reviews';
@@ -952,7 +952,10 @@ export class GameStore {
       employee.energy = assignment === 'off' ? Math.min(100, (employee.energy ?? 100) + 38) : Math.max(0, (employee.energy ?? 100) - 24);
       if (assignment === 'stock' && (employee.energy ?? 0) >= 15) {
         const nextOrder = s.pendingOrders.filter(order => order.arrivalDay > s.day).sort((a, b) => a.arrivalDay - b.arrivalDay)[0];
-        if (nextOrder) nextOrder.arrivalDay = Math.max(s.day + 1, nextOrder.arrivalDay - 1);
+        if (nextOrder) {
+          nextOrder.arrivalDay = Math.max(s.day + 1, nextOrder.arrivalDay - staffStockProfile(employee).deliveryDaysSaved);
+          employee.shiftSales = (employee.shiftSales ?? 0) + 1;
+        }
       }
       const quitChance = employee.deniedLeaves >= 2 ? .04 + employee.deniedLeaves * .07 + (100 - employee.morale) * .003 : 0;
       if (quitChance && this.random() < quitChance) {
@@ -1060,7 +1063,7 @@ export class GameStore {
     const assistingStaff = assistingStaffUid
       ? availableStaff.find(employee => employee.uid === assistingStaffUid)
       : undefined;
-    const score = Math.min(100, matchScore(this.state, customer, items) + (assistingStaff ? staffAdviceBonus(this.state) : 0));
+    const score = Math.min(100, matchScore(this.state, customer, items) + (assistingStaff ? staffAdviceBonus(this.state, assistingStaff.uid) : 0));
     const thresh = threshold(customer);
     // Điều kiện mua: tổng tiền không vượt budget và score đạt chuẩn phong cách
     const withinBudget = total <= customer.budget;
@@ -1346,7 +1349,8 @@ export class GameStore {
 
   private onlineReservedQuantity(productId: string, exceptOrderId = '') {
     const express = this.state.onlineOrders.reduce((total, order) => total + (order.id !== exceptOrderId && this.onlineOrderProductIds(order).includes(productId) ? 1 : 0), 0);
-    const regular = this.state.regularOnlineOrders.reduce((total, order) => total + (order.productIds.includes(productId) ? 1 : 0), 0);
+    const regular = this.state.regularOnlineOrders.reduce((total, order) => total
+      + (order.id !== exceptOrderId && !order.stockCommitted && order.productIds.includes(productId) ? 1 : 0), 0);
     return express + regular;
   }
 
@@ -1518,29 +1522,56 @@ export class GameStore {
     return { score, conversionChance: Math.max(.03, Math.min(.92, .04 + score * .0072 + discountImpact + channelTrust + intentStrength - responsePenalty)) };
   }
 
+  private commitRegularOrderStock(order: RegularOnlineOrder) {
+    if (order.stockCommitted) {
+      order.packed = true;
+      return true;
+    }
+    const unavailable = order.productIds.some(id => this.onlineWarehouseQuantity(id) - this.onlineReservedQuantity(id, order.id) < 1);
+    if (unavailable) return false;
+    for (const productId of order.productIds) {
+      this.state.inventory[productId] = Math.max(0, (this.state.inventory[productId] ?? 0) - 1);
+    }
+    order.packed = true;
+    order.stockCommitted = true;
+    return true;
+  }
+
+  private restoreRegularOrderStock(order: RegularOnlineOrder) {
+    if (!order.stockCommitted) return false;
+    for (const productId of order.productIds) {
+      this.state.inventory[productId] = Math.min(999, (this.state.inventory[productId] ?? 0) + 1);
+    }
+    order.stockCommitted = false;
+    return true;
+  }
+
   packRegularOnlineOrder(orderId: string) {
     const s = this.state;
     const order = s.regularOnlineOrders.find(item => item.id === orderId);
     if (!order || s.phase === 'open' || order.packed) return false;
-    if (order.productIds.some(id => (s.inventory[id] ?? 0) < 1)) {
+    if (!this.commitRegularOrderStock(order)) {
       this.toast('Kho không còn đủ sản phẩm đã giữ cho đơn này.', 'error');
       return false;
     }
-    order.packed = true;
     this.commit();
     this.toast(`Đã đóng gói đơn của ${order.customerHandle}.`);
     return true;
   }
 
   private autoPackRegularOrdersWithStaff() {
-    const employee = activeEmployees(this.state).find(item => item.assignment === 'stock');
+    const employee = activeEmployees(this.state)
+      .filter(item => item.assignment === 'stock')
+      .sort((a, b) => staffStockProfile(b).packingPriority - staffStockProfile(a).packingPriority)[0];
     if (!employee) return;
-    const pending = this.state.regularOnlineOrders.filter(order => !order.packed
-      && order.productIds.every(id => (this.state.inventory[id] ?? 0) >= 1));
+    const pending = this.state.regularOnlineOrders.filter(order => !order.packed);
     if (!pending.length) return;
-    for (const order of pending) order.packed = true;
-    employee.energy = Math.max(0, (employee.energy ?? 100) - Math.min(18, pending.length * 3));
-    return { employee, count: pending.length };
+    const packed = pending.filter(order => this.commitRegularOrderStock(order));
+    if (!packed.length) return;
+    const stockProfile = staffStockProfile(employee);
+    employee.energy = Math.max(0, (employee.energy ?? 100) - Math.min(18, packed.length * stockProfile.packingEnergyPerOrder));
+    employee.shiftSales = (employee.shiftSales ?? 0) + packed.length;
+    return { employee, count: packed.length };
   }
 
   packAllRegularOrdersWithStaff() {
@@ -1583,7 +1614,8 @@ export class GameStore {
     for (const order of packed) {
       const orderProducts = order.productIds.map(id => products.find(product => product.id === id)).filter((product): product is Product => !!product);
       for (const product of orderProducts) {
-        s.inventory[product.id] = Math.max(0, (s.inventory[product.id] ?? 0) - 1);
+        // Older saves did not commit stock while packing, so they still deduct at pickup.
+        if (!order.stockCommitted) s.inventory[product.id] = Math.max(0, (s.inventory[product.id] ?? 0) - 1);
         s.stats.soldProducts ??= {};
         s.stats.soldProducts[product.id] = (s.stats.soldProducts[product.id] ?? 0) + 1;
       }
@@ -1612,10 +1644,13 @@ export class GameStore {
     const s = this.state;
     const order = s.regularOnlineOrders.find(item => item.id === orderId);
     if (!order || s.phase === 'open') return false;
+    const restored = this.restoreRegularOrderStock(order);
     s.regularOnlineOrders = s.regularOnlineOrders.filter(item => item.id !== orderId);
     this.applyOnlineReview(3, .35);
     this.commit();
-    this.toast('Đã hủy đơn thường. Đánh giá online bị ảnh hưởng nhẹ.', 'error');
+    this.toast(restored
+      ? 'Đã hủy đơn thường và hoàn sản phẩm về kho. Đánh giá online bị ảnh hưởng nhẹ.'
+      : 'Đã hủy đơn thường. Đánh giá online bị ảnh hưởng nhẹ.', 'error');
     return true;
   }
 
@@ -1740,7 +1775,7 @@ export class GameStore {
       if (!employee) continue;
       visit.staffAttempted = true;
       changed = true;
-      const chance = Math.min(.82, .08 + employee.service * .004 + employee.persuasion * .002 + employee.reliability * .001);
+      const chance = staffAdviceProfile(employee).assistChance;
       if (this.random() >= chance) continue;
       visit.assignedStaffUid = employee.uid;
       visit.staffResolveIn = 4;
@@ -1757,7 +1792,7 @@ export class GameStore {
     if (!visit || !employee || !this.focusVisit(visitUid)) return false;
     const customer = activeCustomer(this.state);
     if (!customer) return false;
-    const suggestion = evaluateCustomerSelfPick(this.state, customer);
+    const suggestion = evaluateStaffAdvice(this.state, customer, employee);
     if (!suggestion.items.length) {
       delete visit.assignedStaffUid;
       delete visit.staffResolveIn;
@@ -1976,6 +2011,7 @@ export class GameStore {
   private expireRegularOnlineOrders() {
     const expired = this.state.regularOnlineOrders.filter(order => order.dueDay < this.state.day);
     if (!expired.length) return;
+    for (const order of expired) this.restoreRegularOrderStock(order);
     this.state.regularOnlineOrders = this.state.regularOnlineOrders.filter(order => order.dueDay >= this.state.day);
     for (const _order of expired) this.applyOnlineReview(2, .45);
     this.toast(`${expired.length} đơn thường đã quá hạn và bị hủy. Đánh giá online bị giảm.`, 'error');
@@ -2446,7 +2482,10 @@ export class GameStore {
           if (!s.onlineListings.includes(product.id)) s.onlineListings.push(product.id);
         }
         s.onlineChannelEnabled = true;
-        if (s.regularOnlineOrders.length >= this.regularOnlineCapacity()) s.regularOnlineOrders.shift();
+        if (s.regularOnlineOrders.length >= this.regularOnlineCapacity()) {
+          const removed = s.regularOnlineOrders.shift();
+          if (removed) this.restoreRegularOrderStock(removed);
+        }
         const created = this.createRegularOnlineOrder(orderProducts.map(product => product.id), 'storefront');
         this.commit();
         this.toast(created ? 'Debug: Đã tạo một đơn hàng thường ảo.' : 'Debug: Không thể tạo đơn hàng thường.', created ? 'success' : 'error');

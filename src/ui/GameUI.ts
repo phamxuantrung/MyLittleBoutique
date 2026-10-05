@@ -32,7 +32,7 @@ const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'orde
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
 const EQUIP_ACTIONS = new Set(['select-product', 'display-add', 'livestream-pool-select', 'livestream-round-select', 'move-done']);
 const REWARD_ACTIONS = new Set(['claim', 'campaign-claim']);
-const SHOW_DEBUG_BUTTON = true;
+const SHOW_DEBUG_BUTTON = false;
 const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
   const duration = Math.max(1, totalSeconds);
   const remaining = Math.max(0, Math.min(duration, remainingSeconds));

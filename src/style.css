@@ -45496,6 +45496,8 @@ dialog.dialog-summary {
   max-height: none !important;
   margin: 0 !important;
   padding: clamp(8px, 1.15vw, 18px) !important;
+  padding-right: max(clamp(8px, 1.15vw, 18px), calc(env(safe-area-inset-right, 0px) + 8px)) !important;
+  padding-left: max(clamp(8px, 1.15vw, 18px), calc(env(safe-area-inset-left, 0px) + 8px)) !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-sizing: border-box;
@@ -45626,6 +45628,25 @@ dialog.dialog-summary .summary-finance-details[open] > summary {
 
 dialog.dialog-summary .summary-finance-details .finance-breakdown-box {
   padding: 6px;
+}
+
+dialog.dialog-summary .summary-finance-details[open] .finance-breakdown-box {
+  max-height: clamp(110px, 28dvh, 230px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d55b9d #f8eaf2;
+  -webkit-overflow-scrolling: touch;
+}
+
+dialog.dialog-summary .summary-finance-details[open] .finance-breakdown-box::-webkit-scrollbar {
+  width: 5px;
+}
+
+dialog.dialog-summary .summary-finance-details[open] .finance-breakdown-box::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d55b9d;
 }
 
 dialog.dialog-summary .is-expense-total {

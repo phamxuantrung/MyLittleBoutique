@@ -1127,12 +1127,21 @@ export class GameUI {
       this.closeModal();
     });
     this.dialog.addEventListener('click', event => {
-      if (event.target !== this.dialog || this.modal === 'none' || this.modal === 'gameover') return;
+      if (this.modal === 'none' || this.modal === 'gameover') return;
+      if (this.modal === 'checkout' && this.checkoutStage === 'transfer') {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('.transfer-panel')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeModal(true);
+        return;
+      }
+      if (event.target !== this.dialog) return;
       const bounds = this.dialog.getBoundingClientRect();
       const outside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
       if (!outside) return;
       event.preventDefault();
-      this.closeModal(this.modal === 'checkout' && this.checkoutStage === 'transfer');
+      this.closeModal();
     });
     window.addEventListener('boutique-display', event => {
       const uid = (event as CustomEvent<string>).detail;

@@ -267,7 +267,7 @@ export class GameUI {
           this.saleTickProgress -= 1;
           this.store.tick(
             this.modal === 'serve' ? this.serveVisitId : '',
-            this.modal === 'checkout' ? this.checkoutVisitId : '',
+            this.modal === 'checkout' || this.hasPendingTransferCheckout() ? this.checkoutVisitId : '',
           );
           if (this.isSaleSpeedLocked()) this.resetSaleSpeed();
         }
@@ -698,6 +698,15 @@ export class GameUI {
     document.addEventListener('pointerup', () => this.stopDisplayAddHold(), { passive: true });
     document.addEventListener('pointercancel', () => this.stopDisplayAddHold(), { passive: true });
     window.addEventListener('blur', () => this.stopDisplayAddHold());
+    this.dialog.addEventListener('contextmenu', event => {
+      if (this.modal === 'display' && (event.target as Element).closest('.fixture-studio')) event.preventDefault();
+    });
+    this.dialog.addEventListener('dragstart', event => {
+      if (this.modal === 'display' && (event.target as Element).closest('.fixture-studio')) event.preventDefault();
+    });
+    this.dialog.addEventListener('selectstart', event => {
+      if (this.modal === 'display' && (event.target as Element).closest('.fixture-studio')) event.preventDefault();
+    });
     document.addEventListener('pointerdown', event => {
       const canvas = (event.target as HTMLElement).closest<HTMLElement>('[data-design-canvas]');
       if (!canvas || this.modal !== 'atelier-customize' || !this.atelierDrawingEnabled || event.button !== 0 || (event.target as Element).closest('[data-design-sticker], [data-shape-node]')) return;
@@ -1118,12 +1127,12 @@ export class GameUI {
       this.closeModal();
     });
     this.dialog.addEventListener('click', event => {
-      if (event.target !== this.dialog || this.modal === 'none' || this.modal === 'gameover' || this.modal === 'checkout' && this.checkoutStage === 'transfer') return;
+      if (event.target !== this.dialog || this.modal === 'none' || this.modal === 'gameover') return;
       const bounds = this.dialog.getBoundingClientRect();
       const outside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
       if (!outside) return;
       event.preventDefault();
-      this.closeModal();
+      this.closeModal(this.modal === 'checkout' && this.checkoutStage === 'transfer');
     });
     window.addEventListener('boutique-display', event => {
       const uid = (event as CustomEvent<string>).detail;
@@ -3080,11 +3089,16 @@ export class GameUI {
     const paymentMethod = this.store.checkoutPaymentMethod(visitUid);
     if (!paymentMethod) return;
     if (paymentMethod === 'cash') this.store.checkoutTender(visitUid);
+    const pendingTransferEndsAt = paymentMethod === 'transfer'
+      && this.checkoutVisitId === visit.uid
+      && this.checkoutStage === 'transfer'
+      ? this.checkoutTransferEndsAt
+      : 0;
     this.checkoutVisitId = visit.uid;
     this.checkoutStage = paymentMethod;
     this.checkoutChange = {};
     this.checkoutTransferEndsAt = paymentMethod === 'transfer'
-      ? Date.now() + (3 + (visit.customerId.length % 5)) * 1000
+      ? pendingTransferEndsAt || Date.now() + (3 + (visit.customerId.length % 5)) * 1000
       : 0;
     this.checkoutCardProcessingEndsAt = 0;
     this.checkoutCompleting = false;
@@ -3107,12 +3121,20 @@ export class GameUI {
     if (!result.ok) {
       this.checkoutCompleting = false;
       this.toast(result.message ?? 'Không thể hoàn tất thanh toán.', 'error');
+      if (method === 'transfer' && this.modal !== 'checkout') this.clearCheckoutSession();
+      return;
     }
+    if (method === 'transfer' && this.modal !== 'checkout') this.clearCheckoutSession();
   }
   private updateCheckoutPayment() {
-    if (this.modal !== 'checkout') return;
+    const transferRunsInBackground = this.modal !== 'checkout' && this.hasPendingTransferCheckout();
+    if (this.modal !== 'checkout' && !transferRunsInBackground) return;
     const visit = this.store.state.activeVisits.find(item => item.uid === this.checkoutVisitId);
-    if (!visit) { this.closeModal(); return; }
+    if (!visit) {
+      if (this.modal === 'checkout') this.closeModal();
+      else this.clearCheckoutSession();
+      return;
+    }
     if (this.checkoutStage === 'card' && this.checkoutCardProcessingEndsAt && !this.checkoutCompleting) {
       const remaining = Math.max(0, Math.ceil((this.checkoutCardProcessingEndsAt - Date.now()) / 1000));
       const label = this.dialog.querySelector<HTMLElement>('#checkout-card-status');
@@ -3125,6 +3147,15 @@ export class GameUI {
     const label = this.dialog.querySelector<HTMLElement>('#checkout-transfer-countdown');
     if (label) label.textContent = remaining ? String(remaining) : '✓';
     if (!remaining) { this.checkoutCompleting = true; this.finishCheckout('transfer'); }
+  }
+  private hasPendingTransferCheckout() {
+    return this.checkoutStage === 'transfer' && !!this.checkoutVisitId && this.checkoutTransferEndsAt > 0;
+  }
+  private clearCheckoutSession() {
+    this.checkoutVisitId = '';
+    this.checkoutTransferEndsAt = 0;
+    this.checkoutCardProcessingEndsAt = 0;
+    this.checkoutCompleting = false;
   }
   private serveModalMarkup() {
     const visit = this.store.state.activeVisits.find(candidate => candidate.uid === this.serveVisitId)
@@ -3892,7 +3923,7 @@ export class GameUI {
       <footer class="arrivals-footer"><span>${icon('box')} Sẵn sàng sử dụng trong kho</span><button class="btn btn-primary arrivals-confirm" data-action="close-modal">Đã hiểu ${icon('check')}</button></footer>
     </section>`;
   }
-  private closeModal() {
+  private closeModal(preserveTransferCheckout = false) {
     const closingModal = this.modal;
     const advanceAfterSummary = this.modal === 'summary' && this.store.state.phase === 'closed';
     const returnToSummary = (this.modal === 'debt-warning' || this.modal === 'finance') &&
@@ -3904,12 +3935,7 @@ export class GameUI {
     const showPreparationRecap = this.modal === 'display' && this.tutorialStep === 5 && this.tutorialActive();
     if (this.modal === 'tutorial-recap') this.finishGuidedTutorial();
     if (this.modal === 'serve') this.serveVisitId = '';
-    if (this.modal === 'checkout') {
-      this.checkoutVisitId = '';
-      this.checkoutTransferEndsAt = 0;
-      this.checkoutCardProcessingEndsAt = 0;
-      this.checkoutCompleting = false;
-    }
+    if (this.modal === 'checkout' && !preserveTransferCheckout) this.clearCheckoutSession();
     if (this.modal === 'staff') this.staffDetailUid = '';
     if (closingModal === 'atelier-customize') {
       this.atelierDrawingStroke = undefined;

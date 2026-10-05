@@ -45485,3 +45485,167 @@ dialog.dialog-regular-pickup .regular-pickup-modal {
 .regular-board-actions .regular-packing-automation.is-active .icon {
   color: #2f9d88;
 }
+
+/* Let the end-of-day report use the complete game viewport. */
+dialog.dialog-summary {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100dvw !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: clamp(8px, 1.15vw, 18px) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-sizing: border-box;
+}
+
+dialog.dialog-summary .dialog-inner,
+dialog.dialog-summary .summary-modal-card {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none !important;
+  box-sizing: border-box;
+}
+
+dialog.dialog-summary .dialog-inner {
+  overflow: hidden;
+}
+
+dialog.dialog-summary .summary-modal-card {
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+dialog.dialog-summary .summary-body {
+  overscroll-behavior: contain;
+  overflow-y: auto !important;
+}
+
+dialog.dialog-summary .summary-payment-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 7px;
+}
+
+dialog.dialog-summary .summary-payment-source {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid #ead3e1;
+  border-radius: 7px;
+  background: #fffafd;
+}
+
+dialog.dialog-summary .summary-payment-source span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #8c6179;
+  font-size: 7px;
+  font-weight: 850;
+}
+
+dialog.dialog-summary .summary-payment-source .icon {
+  width: 12px;
+  height: 12px;
+}
+
+dialog.dialog-summary .summary-payment-source strong {
+  flex: 0 0 auto;
+  color: #61304e;
+  font-size: 10px;
+}
+
+dialog.dialog-summary .summary-payment-source.is-cash {
+  background: #fff9ec;
+}
+
+dialog.dialog-summary .summary-payment-source.is-account {
+  background: #f4f8ff;
+}
+
+dialog.dialog-summary .summary-net-profit {
+  margin-top: 7px;
+}
+
+dialog.dialog-summary .summary-finance-details {
+  margin-top: 7px;
+  border: 1px solid #ead3e1;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .76);
+}
+
+dialog.dialog-summary .summary-finance-details > summary {
+  min-height: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  color: #7d4565;
+  cursor: pointer;
+  list-style: none;
+  font-size: 7.5px;
+  font-weight: 900;
+}
+
+dialog.dialog-summary .summary-finance-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+dialog.dialog-summary .summary-finance-details > summary span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+dialog.dialog-summary .summary-finance-details > summary .icon {
+  width: 12px;
+  height: 12px;
+}
+
+dialog.dialog-summary .summary-finance-details > summary b {
+  color: #bd3b7f;
+  font-size: 7px;
+}
+
+dialog.dialog-summary .summary-finance-details[open] > summary {
+  border-bottom: 1px solid #efdce7;
+}
+
+dialog.dialog-summary .summary-finance-details .finance-breakdown-box {
+  padding: 6px;
+}
+
+dialog.dialog-summary .is-expense-total {
+  border-top: 1px solid #eccddd;
+  background: #fff5fa;
+}
+
+/* iOS must not treat a display-item hold as text selection or image download. */
+dialog.dialog-display .fixture-studio,
+dialog.dialog-display .fixture-studio :is(button, span, img, svg) {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+dialog.dialog-display .fixture-studio img {
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+dialog.dialog-display :is(.fixture-stock-option, .fixture-hanging-product) {
+  touch-action: manipulation;
+}

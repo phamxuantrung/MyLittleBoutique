@@ -18,7 +18,7 @@ const imageUrls = Object.freeze([...new Set([
   '/assets/characters/main-character.svg',
   '/assets/ui/qr-payment-pastel.png',
   '/assets/ui/visa-card-pastel.png',
-  ...CASH_DENOMINATIONS.map(value => `/assets/ui/cash/${value}.png`),
+  ...CASH_DENOMINATIONS.map(value => `/assets/ui/cash/display/${value}.webp`),
   ...allFurnitureArtwork,
   ...allCustomerArtwork,
   ...allEmployeeArtwork,
@@ -26,6 +26,8 @@ const imageUrls = Object.freeze([...new Set([
   ...allAtelierMaterialArtwork,
   ...allProductArtwork,
 ])]);
+
+const retainedInterfaceImages: HTMLImageElement[] = [];
 
 const loadImage = async (url: string) => {
   const image = new Image();
@@ -36,6 +38,8 @@ const loadImage = async (url: string) => {
     image.addEventListener('error', () => reject(new Error(`Không tải được ${url}`)), { once: true });
   });
   if (typeof image.decode === 'function') await image.decode().catch(() => undefined);
+  // Keep small interface assets decoded so the first modal paint cannot flash.
+  if (url.includes('/assets/ui/cash/display/')) retainedInterfaceImages.push(image);
 };
 
 const loadFile = async (url: string) => {

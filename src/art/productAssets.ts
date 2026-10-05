@@ -31,6 +31,9 @@ const topArtworkFiles: Record<string, string> = {
   'lavender-haze-offshoulder': '14-lavender-haze-offshoulder.webp',
   'city-girls-jersey': '15-city-girls-jersey.webp',
   'vintage-maison-rose-corset': '16-maison-rose-corset.webp',
+  'vanilla-line-blouse': '17-vanilla-line-blouse.webp',
+  'noir-downtown-hoodie': '18-noir-downtown-hoodie.webp',
+  'blue-pop-crop': '19-blue-pop-crop.webp',
 };
 
 const topArtworkModules = import.meta.glob<string>('../assets/products/tops/*.webp', {
@@ -53,6 +56,12 @@ const bottomArtworkFiles: Record<string, string> = {
   'ribbon-campus-skirt': '08-ribbon-campus-skirt.webp',
   'cocoa-edit-skirt': '09-cocoa-edit-skirt.webp',
   'campus-crush-skirt': '10-campus-crush-skirt.webp',
+  'golden-bloom-skirt': '11-golden-bloom-skirt.webp',
+  'silver-star-mini': '12-silver-star-mini.webp',
+  'lavender-campus-pleat': '13-lavender-campus-pleat.webp',
+  'ruby-beat-jogger': '14-ruby-beat-jogger.webp',
+  'cocoa-daily-pants': '15-cocoa-daily-pants.webp',
+  'matcha-trail-cargo': '16-matcha-trail-cargo.webp',
 };
 
 const bottomArtworkModules = import.meta.glob<string>('../assets/products/bottoms/*.webp', {

@@ -94,7 +94,7 @@ const movableDecorStarters: PlacedFurniture[] = [
   { uid: 'starter-window-left-a', id: 'boutique-window', x: 0, y: 2, rotation: 1 },
   { uid: 'starter-window-left-b', id: 'boutique-window', x: 0, y: 5, rotation: 1 },
 ];
-export const emptyStats = (): DayStats => ({ revenue: 0, spent: 0, costOfGoods: 0, sold: 0, served: 0, happy: 0, trendSales: 0, followers: 0, rent: 0, loanInterest: 0, tips: 0, staffWages: 0, walkouts: 0, soldProducts: {} });
+export const emptyStats = (): DayStats => ({ revenue: 0, cashRevenue: 0, accountRevenue: 0, spent: 0, costOfGoods: 0, sold: 0, served: 0, happy: 0, trendSales: 0, followers: 0, rent: 0, loanInterest: 0, tips: 0, staffWages: 0, walkouts: 0, soldProducts: {} });
 export function initialState(): GameState {
   return {
     version: 1, money: 500000, cashDrawer: initialCashDrawer(), shortChangeViolations: 0, shortChangeFraudFines: 0, xp: 0, level: 1, reputation: 4.5, reviews: 0, followers: 0,
@@ -321,6 +321,10 @@ export function parseSave(raw: string | null): GameState {
     }
     for (const key of Object.keys(state.stats) as (keyof DayStats)[]) {
       if (key !== 'soldProducts') state.stats[key] = finite(s.stats?.[key], 0) as never;
+    }
+    if (s.stats?.cashRevenue == null && s.stats?.accountRevenue == null) {
+      // Older saves did not distinguish payment sources; preserve the total as account income.
+      state.stats.accountRevenue = state.stats.revenue;
     }
     state.stats.soldProducts = {};
     if (s.stats?.soldProducts && typeof s.stats.soldProducts === 'object') {

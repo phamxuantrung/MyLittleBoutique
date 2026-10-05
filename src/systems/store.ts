@@ -442,6 +442,7 @@ export class GameStore {
       s.followers += 25;
       s.industryReputation += 3;
       s.stats.revenue += total + appointment.reward;
+      s.stats.accountRevenue += total + appointment.reward;
       s.stats.costOfGoods += pickedItems.reduce((sum, item) => sum + item.buyPrice, 0);
       s.stats.sold += pickedItems.length;
       s.stats.served++;
@@ -1115,7 +1116,7 @@ export class GameStore {
     s.stats.served++;
     if (success) {
       for (const p of items) { s.inventory[p.id]--; this.consumeDisplayedItem(p.id); s.stats.soldProducts ??= {}; s.stats.soldProducts[p.id] = (s.stats.soldProducts[p.id] ?? 0) + 1; }
-      s.money += total + tip; s.xp += xpEarned; s.stats.revenue += total + tip; s.stats.tips += tip;
+      s.money += total + tip; s.xp += xpEarned; s.stats.revenue += total + tip; s.stats.accountRevenue += total + tip; s.stats.tips += tip;
       s.stats.costOfGoods += items.reduce((sum, p) => sum + p.buyPrice, 0);
       s.stats.sold += items.length; s.stats.happy++;
       s.stats.trendSales += items.filter(p => isTrending(s, p)).length;
@@ -1321,6 +1322,12 @@ export class GameStore {
     if (payment !== 'cash') s.money += total;
     s.money += tip;
     s.xp += xpEarned; s.stats.revenue += total + tip; s.stats.tips += tip;
+    if (payment === 'cash') {
+      s.stats.cashRevenue += total;
+      s.stats.accountRevenue += tip;
+    } else {
+      s.stats.accountRevenue += total + tip;
+    }
     s.stats.costOfGoods += items.reduce((sum, p) => sum + p.buyPrice, 0);
     s.stats.sold += items.length; s.stats.happy++;
     s.stats.trendSales += items.filter(p => isTrending(s, p)).length;
@@ -1909,6 +1916,7 @@ export class GameStore {
     }
     s.money += netTotal;
     s.stats.revenue += netTotal;
+    s.stats.accountRevenue += netTotal;
     s.stats.sold += itemCount;
     s.regularOnlineOrders = s.regularOnlineOrders.filter(order => !order.packed);
     const stars = this.applyOnlineReview(4.5, .45);
@@ -1985,6 +1993,7 @@ export class GameStore {
     const net = Math.max(0, order.price - order.fee);
     s.money += net;
     s.stats.revenue += net;
+    s.stats.accountRevenue += net;
     s.stats.costOfGoods += handedProducts.reduce((total, product) => total + buyPrice(s, product), 0);
     s.stats.sold += handedProducts.length;
     s.stats.served++;

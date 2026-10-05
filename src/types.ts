@@ -114,7 +114,7 @@ export interface SocialDrama {
   shopReply?: string;
   outcome?: string;
 }
-export interface DayStats { revenue: number; spent: number; costOfGoods: number; sold: number; served: number; happy: number; trendSales: number; followers: number; rent: number; loanInterest: number; tips: number; staffWages: number; walkouts?: number; soldProducts?: Record<string, number>; }
+export interface DayStats { revenue: number; cashRevenue: number; accountRevenue: number; spent: number; costOfGoods: number; sold: number; served: number; happy: number; trendSales: number; followers: number; rent: number; loanInterest: number; tips: number; staffWages: number; walkouts?: number; soldProducts?: Record<string, number>; }
 export interface ShopLoan {
   principal: number;
   balance: number;

@@ -1878,7 +1878,8 @@ export function summaryModal(s: GameState) {
   const isSlowDay = s.stats.sold === 0;
   const appeal = decorAppealScore(s);
   const walkouts = s.stats.walkouts ?? Math.max(0, s.stats.served - s.stats.happy);
-  const netProfit = s.stats.revenue - s.stats.costOfGoods - s.stats.rent - s.stats.loanInterest - s.stats.staffWages;
+  const totalExpenses = s.stats.costOfGoods + s.stats.rent + s.stats.loanInterest + s.stats.staffWages;
+  const netProfit = s.stats.revenue - totalExpenses;
   return `
     <div class="summary-modal-card ${isSlowDay ? 'is-slow-day' : 'is-success-day'}">
       <!-- Hero Banner với bầu trời hoàng hôn/ánh nắng ấm áp -->
@@ -1912,7 +1913,7 @@ export function summaryModal(s: GameState) {
         <!-- Spotlight Tài Chính: Doanh thu, Chi phí thuê, Lợi nhuận ròng -->
         <div class="summary-finance-spotlight">
           <div class="finance-header-row">
-            <span class="finance-label">${icon('coins')} TỔNG KẾT DOANH THU</span>
+            <span class="finance-label">${icon('coin')} TỔNG KẾT DOANH THU</span>
             <span class="finance-happy-pill">
               ${icon('heart')} ${s.stats.happy} nụ cười ${walkouts > 0 ? `· <small>${walkouts} khách về</small>` : ''}
             </span>
@@ -1926,30 +1927,50 @@ export function summaryModal(s: GameState) {
             </span>
           </div>
 
-          <div class="finance-breakdown-box">
-            <div class="breakdown-item">
+          <div class="summary-payment-split" aria-label="Nguồn tiền thu được">
+            <div class="summary-payment-source is-cash">
+              <span>${icon('coin')} Tiền mặt vào két</span>
+              <strong>${money(s.stats.cashRevenue)}</strong>
+            </div>
+            <div class="summary-payment-source is-account">
+              <span>${icon('bank')} Tiền vào tài khoản</span>
+              <strong>${money(s.stats.accountRevenue)}</strong>
+            </div>
+          </div>
+
+          <div class="breakdown-item net-profit-item summary-net-profit">
+            <span class="breakdown-title">Lợi nhuận ròng hôm nay</span>
+            <strong class="breakdown-value net-profit-value ${netProfit > 0 ? 'profit-pos' : netProfit === 0 ? 'profit-neutral' : 'profit-neg'}">
+              ${netProfit > 0 ? `+${money(netProfit)}` : netProfit === 0 ? '0₫' : `-${money(Math.abs(netProfit))}`}
+            </strong>
+          </div>
+
+          <details class="summary-finance-details">
+            <summary><span>${icon('box')} Xem chi tiết các khoản tiền</span><b>${money(totalExpenses)} chi phí</b></summary>
+            <div class="finance-breakdown-box">
+              <div class="breakdown-item is-income-detail">
+                <span class="breakdown-title">Tiền tip đã nhận</span>
+                <span class="breakdown-value rent-free">+${money(s.stats.tips)}</span>
+              </div>
+              <div class="breakdown-item">
               <span class="breakdown-title">Giá vốn hàng đã bán</span>
               <span class="breakdown-value ${s.stats.costOfGoods > 0 ? 'rent-cost' : 'rent-free'}">
                 ${s.stats.costOfGoods > 0 ? `-${money(s.stats.costOfGoods)}` : '0₫'}
               </span>
-            </div>
-            <div class="breakdown-item">
+              </div>
+              <div class="breakdown-item">
               <span class="breakdown-title">
                 Tiền thuê phát sinh
               </span>
               <span class="breakdown-value ${s.stats.rent > 0 ? 'rent-cost' : 'rent-free'}">
                 ${s.stats.rent > 0 ? `-${money(s.stats.rent)}` : '0₫'}
               </span>
+              </div>
+              <div class="breakdown-item"><span class="breakdown-title">Lãi vay trong ngày</span><span class="breakdown-value ${s.stats.loanInterest ? 'rent-cost' : 'rent-free'}">${s.stats.loanInterest ? `-${money(s.stats.loanInterest)}` : '0₫'}</span></div>
+              <div class="breakdown-item"><span class="breakdown-title">Lương nhân viên</span><span class="breakdown-value ${s.stats.staffWages ? 'rent-cost' : 'rent-free'}">${s.stats.staffWages ? `-${money(s.stats.staffWages)}` : '0₫'}</span></div>
+              <div class="breakdown-item is-expense-total"><span class="breakdown-title">Tổng chi phí trong ngày</span><strong class="breakdown-value rent-cost">-${money(totalExpenses)}</strong></div>
             </div>
-            ${s.loan ? `<div class="breakdown-item"><span class="breakdown-title">Lãi vay trong ngày</span><span class="breakdown-value ${s.stats.loanInterest ? 'rent-cost' : 'rent-free'}">${s.stats.loanInterest ? `-${money(s.stats.loanInterest)}` : '0₫'}</span></div>` : ''}
-            ${s.employees.length || s.stats.staffWages ? `<div class="breakdown-item"><span class="breakdown-title">Lương nhân viên ${s.stats.tips ? `<span class="free-rent-tag">Tip +${money(s.stats.tips)}</span>` : ''}</span><span class="breakdown-value ${s.stats.staffWages ? 'rent-cost' : 'rent-free'}">${s.stats.staffWages ? `-${money(s.stats.staffWages)}` : '0₫'}</span></div>` : ''}
-            <div class="breakdown-item net-profit-item">
-              <span class="breakdown-title">Lợi nhuận ròng hôm nay</span>
-              <strong class="breakdown-value net-profit-value ${netProfit > 0 ? 'profit-pos' : netProfit === 0 ? 'profit-neutral' : 'profit-neg'}">
-                ${netProfit > 0 ? `+${money(netProfit)}` : netProfit === 0 ? '0₫' : `-${money(Math.abs(netProfit))}`}
-              </strong>
-            </div>
-          </div>
+          </details>
         </div>
 
         <!-- Lưới 4 chỉ số thống kê nổi bật -->
@@ -2044,15 +2065,15 @@ export function checkoutModal(s: GameState, visit: CustomerVisit, stage: Checkou
     const count = tender[String(value)] ?? 0;
     if (count <= 0) return [];
     const visibleNotes = Math.min(count, 4);
-    return `<span class="cash-tender-stack" aria-label="${count} tờ ${money(value)}">${Array.from({ length: visibleNotes }, (_, index) => `<i style="--tender-note-y:${index * 2}px;--tender-note-x:${index * 3}px"><img src="/assets/ui/cash/${value}.png" alt="" draggable="false"></i>`).join('')}${count > 1 ? `<b>×${count}</b>` : ''}</span>`;
+    return `<span class="cash-tender-stack" aria-label="${count} tờ ${money(value)}">${Array.from({ length: visibleNotes }, (_, index) => `<i style="--tender-note-y:${index * 2}px;--tender-note-x:${index * 3}px"><img src="/assets/ui/cash/display/${value}.webp" alt="" draggable="false"></i>`).join('')}${count > 1 ? `<b>×${count}</b>` : ''}</span>`;
   }).join('');
   const selectedNoteStacks = CASH_DENOMINATIONS.flatMap(value => {
     const count = change[String(value)] ?? 0;
     if (count <= 0) return [];
     const visibleNotes = Math.min(count, 4);
-    return `<button class="cash-note-stack" data-action="checkout-change-note-remove" data-id="${value}" aria-label="Trả lại một tờ ${money(value)}"><span class="cash-note-stack-visual">${Array.from({ length: visibleNotes }, (_, index) => `<i style="--note-offset:${index * 4}px;--note-offset-x:${index * 5}px"><img src="/assets/ui/cash/${value}.png" alt="" draggable="false">${index === visibleNotes - 1 ? `<small class="cash-selected-count">×${count}</small>` : ''}</i>`).join('')}</span></button>`;
+    return `<button class="cash-note-stack" data-action="checkout-change-note-remove" data-id="${value}" aria-label="Trả lại một tờ ${money(value)}"><span class="cash-note-stack-visual">${Array.from({ length: visibleNotes }, (_, index) => `<i style="--note-offset:${index * 4}px;--note-offset-x:${index * 5}px"><img src="/assets/ui/cash/display/${value}.webp" alt="" draggable="false">${index === visibleNotes - 1 ? `<small class="cash-selected-count">×${count}</small>` : ''}</i>`).join('')}</span></button>`;
   }).join('');
-  const body = stage === 'cash' ? `<section class="checkout-cash"><div class="cash-transaction-summary"><span class="cash-tender-summary"><small>Khách đưa · ${money(tenderTotal)}</small><span>${tenderNoteStacks}</span></span><span class="cash-total-card cash-order-total"><i>${icon('bag')}</i><span><small>Tiền đơn hàng</small><strong>${money(total)}</strong></span></span><span class="cash-total-card is-change"><i>${icon('coin')}</i><span><small>Cần trả lại</small><strong>${money(changeDue)}</strong></span></span></div><div class="cash-layout"><aside class="cash-selection-preview"><div class="cash-customer-row"><p><small>Khách hàng</small><strong>${escapeHtml(customer?.name ?? 'Khách hàng')}</strong></p></div><header><strong>Tiền đã chọn</strong><small>${money(selectedChange)} / ${money(changeDue)}</small></header><div class="cash-selected-notes">${selectedNoteStacks || `<div class="cash-notes-empty"><b>₫</b><span>Chọn tiền từ khay bên phải</span></div>`}</div></aside><div class="cash-workspace"><header class="cash-drawer-header"><h3>Khay đựng tiền</h3><span>Trong két: ${money(cashDrawerTotal(s.cashDrawer))}</span></header><div class="cash-drawer-grid">${CASH_DENOMINATIONS.map(value => { const available = (s.cashDrawer[String(value)] ?? 0) + (tender[String(value)] ?? 0); return `<button data-action="checkout-change-note" data-id="${value}" aria-label="Chọn tờ ${money(value)}, hiện có ${available} tờ" ${available <= (change[String(value)] ?? 0) ? 'disabled' : ''}><img src="/assets/ui/cash/${value}.png" alt="" draggable="false"><small class="cash-note-count">×${available}</small></button>`; }).join('')}</div><footer><button class="btn btn-secondary checkout-change-method" data-action="checkout-fallback">Bảo khách đổi phương thức thanh toán</button><button class="btn btn-primary" data-action="checkout-cash-complete">Trả tiền & hoàn tất</button></footer></div></div></section>`
+  const body = stage === 'cash' ? `<section class="checkout-cash"><div class="cash-transaction-summary"><span class="cash-tender-summary"><small>Khách đưa · ${money(tenderTotal)}</small><span>${tenderNoteStacks}</span></span><span class="cash-total-card cash-order-total"><i>${icon('bag')}</i><span><small>Tiền đơn hàng</small><strong>${money(total)}</strong></span></span><span class="cash-total-card is-change"><i>${icon('coin')}</i><span><small>Cần trả lại</small><strong>${money(changeDue)}</strong></span></span></div><div class="cash-layout"><aside class="cash-selection-preview"><div class="cash-customer-row"><p><small>Khách hàng</small><strong>${escapeHtml(customer?.name ?? 'Khách hàng')}</strong></p></div><header><strong>Tiền đã chọn</strong><small>${money(selectedChange)} / ${money(changeDue)}</small></header><div class="cash-selected-notes">${selectedNoteStacks || `<div class="cash-notes-empty"><b>₫</b><span>Chọn tiền từ khay bên phải</span></div>`}</div></aside><div class="cash-workspace"><header class="cash-drawer-header"><h3>Khay đựng tiền</h3><span>Trong két: ${money(cashDrawerTotal(s.cashDrawer))}</span></header><div class="cash-drawer-grid">${CASH_DENOMINATIONS.map(value => { const available = (s.cashDrawer[String(value)] ?? 0) + (tender[String(value)] ?? 0); return `<button data-action="checkout-change-note" data-id="${value}" aria-label="Chọn tờ ${money(value)}, hiện có ${available} tờ" ${available <= (change[String(value)] ?? 0) ? 'disabled' : ''}><img src="/assets/ui/cash/display/${value}.webp" alt="" draggable="false"><small class="cash-note-count">×${available}</small></button>`; }).join('')}</div><footer><button class="btn btn-secondary checkout-change-method" data-action="checkout-fallback">Bảo khách đổi phương thức thanh toán</button><button class="btn btn-primary" data-action="checkout-cash-complete">Trả tiền & hoàn tất</button></footer></div></div></section>`
     : stage === 'transfer' ? `<section class="checkout-transfer"><div class="transfer-panel"><aside class="transfer-qr-card"><div class="transfer-shop"><span>${icon('shop')}</span><p><small>THANH TOÁN CHO</small><strong>${escapeHtml(s.shopName || 'My Little Boutique')}</strong></p></div><div class="transfer-qr-frame"><img class="transfer-qr-image" src="/assets/ui/qr-payment-pastel.png" alt="Mã QR thanh toán" draggable="false"></div><small class="transfer-qr-hint">Mở ứng dụng ngân hàng và quét mã</small></aside><main class="transfer-details"><span class="transfer-eyebrow">${icon('coin')} CHUYỂN KHOẢN QR</span><h2>Chờ khách thanh toán</h2><p class="transfer-customer">Đơn của <strong>${escapeHtml(customer?.name ?? 'Khách hàng')}</strong></p><article class="transfer-amount"><small>SỐ TIỀN CẦN CHUYỂN</small><strong>${money(total)}</strong><span>Đã điền sẵn số tiền</span></article><p class="transfer-wait"><small>Chờ khách chuyển khoản</small><strong id="checkout-transfer-countdown">…</strong></p></main></div></section>`
     : `<section class="checkout-card"><div class="card-payment-panel"><aside class="card-drag-side"><span class="card-payment-tag">THẺ CỦA KHÁCH</span><h2>Kéo thẻ vào máy POS</h2><p>Giữ và kéo thẻ sang vùng máy thanh toán.</p><div class="card-drag-home"><img class="checkout-bank-card" data-checkout-bank-card src="/assets/ui/visa-card-pastel.png" alt="Thẻ VISA của ${escapeHtml(customer?.name ?? 'khách hàng')}" draggable="false"></div><small>${escapeHtml(customer?.name ?? 'Khách hàng')} · VISA</small></aside><main class="pos-terminal-zone" data-card-drop-zone><span class="pos-terminal-tag">${icon('coin')} MÁY THANH TOÁN</span><div class="pos-terminal"><div class="pos-screen"><small>SỐ TIỀN THANH TOÁN</small><strong>${money(total)}</strong><span id="checkout-card-status">Sẵn sàng nhận thẻ</span></div><div class="pos-contactless"><i></i><i></i><i></i></div><div class="pos-keypad">${Array.from({ length: 9 }, (_, index) => `<i>${index + 1}</i>`).join('')}<i>•</i><i>0</i><i>✓</i></div><div class="pos-card-slot"><span></span></div></div><p class="card-drop-hint">Thả thẻ vào máy để thanh toán</p></main></div></section>`;
   return stage === 'transfer' || stage === 'card' ? body : `<div class="checkout-modal">${body}</div>`;
@@ -2091,7 +2112,7 @@ export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' 
     <button class="btn btn-primary finance-land-pay" data-action="pay-rent" ${s.rentDue <= 0 || s.money < s.rentDue || s.phase === 'open' ? 'disabled' : ''}>Thanh toán tiền mặt bằng · ${money(s.rentDue)}</button>
     <p class="finance-footnote">Công nợ mặt bằng được cộng dồn và chỉ thanh toán khi bạn chủ động bấm trả.</p>
   </section>`;
-  const cashContent = `<section class="finance-tab-card finance-cash-box"><div class="finance-section-title"><div><span class="eyebrow">DÒNG TIỀN TẠI QUẦY</span><h3>Két tiền mặt</h3></div><span class="finance-rate">${money(cashTotal)}</span></div><p>Tiền mặt dùng để trả tiền thừa. Nộp vào tài khoản để chi tiêu hoặc rút từng mệnh giá về két trước khi mở cửa.</p><div class="cash-denomination-list">${CASH_DENOMINATIONS.map(value => `<span><b>${money(value)}</b><small>× ${s.cashDrawer[String(value)] ?? 0}</small></span>`).join('')}</div><div class="finance-tab-actions"><button class="btn btn-primary" data-action="cash-deposit" ${s.phase === 'open' || cashTotal < 1000 ? 'disabled' : ''}>Nộp vào tài khoản</button><button class="btn btn-secondary" data-action="cash-withdraw" ${s.phase === 'open' || s.money < 31000 ? 'disabled' : ''}>Rút về két</button></div><small class="finance-footnote">Mỗi giao dịch thu phí 30.000₫. Chỉ có thể chuyển tiền trước hoặc sau giờ mở cửa.</small></section>`;
+  const cashContent = `<section class="finance-tab-card finance-cash-box"><div class="finance-section-title"><div><span class="eyebrow">DÒNG TIỀN TẠI QUẦY</span><h3>Két tiền mặt</h3></div><span class="finance-rate">${money(cashTotal)}</span></div><p>Tiền mặt dùng để trả tiền thừa. Nộp vào tài khoản để chi tiêu hoặc rút từng mệnh giá về két trước khi mở cửa.</p><div class="cash-denomination-list">${CASH_DENOMINATIONS.map(value => `<span><b>${money(value)}</b><small>× ${s.cashDrawer[String(value)] ?? 0}</small></span>`).join('')}</div><div class="finance-tab-actions"><button class="btn btn-primary" data-action="cash-deposit" ${s.phase === 'open' || cashTotal < 1000 ? 'disabled' : ''}>Nộp vào tài khoản</button><button class="btn btn-secondary" data-action="cash-withdraw" ${s.phase === 'open' || s.money < 31000 ? 'disabled' : ''}>Đổi tiền mặt</button></div><small class="finance-footnote">Mỗi giao dịch thu phí 30.000₫. Chỉ có thể chuyển tiền trước hoặc sau giờ mở cửa.</small></section>`;
   return `<div class="finance-modal finance-tabs-modal">
     <header class="finance-game-header"><span class="import-balance finance-header-balance" data-animated-balance="finance">${icon('importMoney')} ${money(s.money)}</span><h2>Tài chính</h2><button class="staff-modal-close" data-action="close-modal" aria-label="Đóng tài chính">${icon('close')}</button></header>
     <nav class="finance-tabs" aria-label="Các mục tài chính">
@@ -2120,7 +2141,7 @@ export function cashTransferModal(s: GameState, mode: 'deposit' | 'withdraw', se
     <div class="cash-transfer-note-grid">${CASH_DENOMINATIONS.map(value => {
       const selected = selection[String(value)] ?? 0;
       const available = s.cashDrawer[String(value)] ?? 0;
-      return `<article><img src="/assets/ui/cash/${value}.png" alt="Tờ ${money(value)}" draggable="false"><div><strong>${money(value)}</strong><small>${depositing ? `Có ${available} tờ` : `${money(value * selected)}`}</small></div><button data-action="cash-transfer-note-minus" data-id="${value}" ${selected <= 0 ? 'disabled' : ''}>−</button><b>×${selected}</b><button data-action="cash-transfer-note-plus" data-id="${value}" ${depositing && selected >= available ? 'disabled' : ''}>+</button></article>`;
+      return `<article><img src="/assets/ui/cash/display/${value}.webp" alt="Tờ ${money(value)}" draggable="false"><div><strong>${money(value)}</strong><small>${depositing ? `Có ${available} tờ` : `${money(value * selected)}`}</small></div><button data-action="cash-transfer-note-minus" data-id="${value}" ${selected <= 0 ? 'disabled' : ''}>−</button><b>×${selected}</b><button data-action="cash-transfer-note-plus" data-id="${value}" ${depositing && selected >= available ? 'disabled' : ''}>+</button></article>`;
     }).join('')}</div>
     <footer><div><small>${depositing ? 'Tổng tiền đã chọn' : 'Số tiền rút về két'}</small><strong>${money(amount)}</strong></div><button class="btn btn-primary" data-action="cash-transfer-confirm" ${canConfirm ? '' : 'disabled'}>${depositing ? 'Nộp tiền' : 'Rút tiền'} · phí ${money(fee)}</button></footer>
   </div>`;

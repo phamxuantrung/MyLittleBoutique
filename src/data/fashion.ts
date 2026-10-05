@@ -86,6 +86,9 @@ export const expandedProducts: Product[] = [
   item('stage-spark-top', 'Áo Stage Spark', 'tops', 'offshoulder', 'K-pop', 'purple', 195, 419, 5, 'offShoulder', ['concert', 'party'], ['Y2K']),
   item('mint-mellow-cardigan', 'Cardigan Mint Mellow', 'outerwear', 'cardigan', 'Soft Girl', 'green', 150, 329, 4, 'atelierCardigan', ['cafe', 'campus'], ['Coquette']),
   item('mocha-luxe-corset-blouse', 'Áo Corset Mocha Luxe', 'tops', 'corset', 'Luxury', 'brown', 260, 559, 6, 'atelierCorset', ['date', 'party'], ['Coquette']),
+  item('vanilla-line-blouse', 'Vanilla Line Blouse', 'tops', 'blouse', 'Minimal', 'cream', 75, 169, 2, 'shirt', ['campus', 'cafe'], ['Clean Girl']),
+  item('noir-downtown-hoodie', 'Noir Downtown Hoodie', 'tops', 'hoodie', 'Streetwear', 'black', 110, 249, 3, 'hoodie', ['city', 'concert'], ['Grunge']),
+  item('blue-pop-crop', 'Blue Pop Crop', 'tops', 'corset', 'Y2K', 'blue', 80, 179, 2, 'atelierCamisole', ['city', 'concert'], ['K-pop']),
 
   // Bottoms collection supplied in October 2026. Levels follow construction and ornament.
   item('cloud-sky-jeans', 'Jeans Xanh Mây', 'bottoms', 'jeans', 'Casual', 'blue', 72, 159, 1, 'cloudJeans', ['campus', 'city'], ['Soft Girl']),
@@ -98,6 +101,12 @@ export const expandedProducts: Product[] = [
   item('ribbon-campus-skirt', 'Chân Váy Xếp Ly Ribbon Campus', 'bottoms', 'pleated', 'Preppy', 'pink', 92, 209, 2, 'pleatedSkirt', ['campus', 'cafe'], ['Coquette']),
   item('cocoa-edit-skirt', 'Chân Váy Chữ A Cocoa Edit', 'bottoms', 'mini', 'Dark Academia', 'brown', 118, 259, 3, 'skirt', ['campus', 'cafe'], ['Preppy']),
   item('campus-crush-skirt', 'Váy Xếp Ly Campus Crush', 'bottoms', 'pleated', 'K-pop', 'purple', 165, 359, 4, 'pleatedSkirt', ['concert', 'party'], ['Y2K']),
+  item('golden-bloom-skirt', 'Golden Bloom Skirt', 'bottoms', 'bubble', 'Balletcore', 'yellow', 120, 269, 3, 'skirt', ['date', 'party'], ['Coquette']),
+  item('silver-star-mini', 'Silver Star Mini', 'bottoms', 'mini', 'K-pop', 'silver', 145, 319, 4, 'skirt', ['concert', 'party'], ['Y2K']),
+  item('lavender-campus-pleat', 'Lavender Campus Pleat', 'bottoms', 'pleated', 'Preppy', 'purple', 90, 199, 2, 'pleatedSkirt', ['campus', 'cafe'], ['Coquette']),
+  item('ruby-beat-jogger', 'Ruby Beat Jogger', 'bottoms', 'trousers', 'Sporty Chic', 'red', 95, 209, 2, 'pants', ['active', 'city'], ['K-pop']),
+  item('cocoa-daily-pants', 'Cocoa Daily Pants', 'bottoms', 'trousers', 'Casual', 'brown', 85, 189, 2, 'pants', ['campus', 'cafe'], ['Vintage']),
+  item('matcha-trail-cargo', 'Matcha Trail Cargo', 'bottoms', 'cargo', 'Gorpcore', 'green', 145, 319, 3, 'cargoPants', ['active', 'travel'], ['Streetwear']),
 
   // Sunday Atelier capsule — familiar wardrobe staples with exclusive illustrated finishes.
   item('atelier-cardigan', 'Áo Cardigan Strawberry Cream', 'outerwear', 'cardigan', 'Soft Girl', 'pink', 88, 199, 2, 'atelierCardigan', ['cafe', 'campus'], ['Coquette']),

@@ -1,4 +1,4 @@
-export type SfxKind = 'click' | 'itemTap' | 'coin' | 'error' | 'reward' | 'payment' | 'entry' | 'exit' | 'closing' | 'disappointment' | 'equip' | 'levelUp';
+export type SfxKind = 'click' | 'itemTap' | 'clothing' | 'coin' | 'error' | 'reward' | 'payment' | 'entry' | 'exit' | 'closing' | 'disappointment' | 'equip' | 'levelUp';
 
 const AUDIO_ROOT = `${import.meta.env.BASE_URL}assets/audio/`;
 const BACKGROUND_VOLUME_SCALE = .42;
@@ -22,6 +22,7 @@ export const MUSIC_TRACKS = [
 const SFX_URLS: Record<SfxKind, string> = {
   click: `${AUDIO_ROOT}click.mp3`,
   itemTap: `${AUDIO_ROOT}item-tap.mp3`,
+  clothing: `${AUDIO_ROOT}clothing-rustle.mp3`,
   coin: `${AUDIO_ROOT}coin.mp3`,
   error: `${AUDIO_ROOT}error.mp3`,
   reward: `${AUDIO_ROOT}reward.mp3`,
@@ -42,6 +43,7 @@ export const GAME_AUDIO_URLS = Object.freeze([
 const SFX_VOLUME: Record<SfxKind, number> = {
   click: .62,
   itemTap: .72,
+  clothing: .8,
   coin: .76,
   error: .76,
   reward: .86,
@@ -57,6 +59,7 @@ const SFX_VOLUME: Record<SfxKind, number> = {
 const SFX_RATE_VARIATION: Partial<Record<SfxKind, number>> = {
   click: .035,
   itemTap: .025,
+  clothing: .015,
   coin: .025,
   equip: .025,
 };

@@ -26,10 +26,36 @@ export function campaignModal(s: GameState, forceGuide = false) {
     { prestige: 18, label: 'Nhà mốt danh tiếng' },
     { prestige: 30, label: 'Biểu tượng toàn cầu' },
   ].find(milestone => milestone.prestige > s.industryReputation);
-  const matchingStock = (campaign: { style?: string; category?: string; kind: string }) => products.reduce((sum, product) => {
-    const matches = campaign.style ? product.style === campaign.style : campaign.category ? product.category === campaign.category : true;
-    return matches ? sum + (s.inventory[product.id] ?? 0) : sum;
-  }, 0);
+  type CampaignBrief = { style?: Product['style']; category?: Product['category']; kind: string };
+  const matchesCampaign = (campaign: CampaignBrief, product: Product) => campaign.style
+    ? product.style === campaign.style
+    : campaign.category
+      ? product.category === campaign.category
+      : true;
+  const matchingStock = (campaign: CampaignBrief) => products.reduce((sum, product) => matchesCampaign(campaign, product)
+    ? sum + (s.inventory[product.id] ?? 0)
+    : sum, 0);
+  const matchingProductGuide = (campaign: CampaignBrief, expanded = false) => {
+    if (!campaign.style && !campaign.category) return `<div class="campaign-brief-all">${icon('check')} <span><b>Mọi sản phẩm đều đúng brief</b><small>Mỗi món bán thành công tại shop hoặc online đều được tính.</small></span></div>`;
+    const requirement = campaign.style
+      ? `phong cách ${styleNames[campaign.style] ?? campaign.style}`
+      : `phân loại ${categoryNames[campaign.category!] ?? campaign.category}`;
+    const eligible = products
+      .filter(product => matchesCampaign(campaign, product))
+      .sort((a, b) => {
+        const ownedDifference = (s.inventory[b.id] ?? 0) - (s.inventory[a.id] ?? 0);
+        return ownedDifference || a.level - b.level || a.name.localeCompare(b.name, 'vi');
+      });
+    return `<details class="campaign-brief-products" ${expanded ? 'open' : ''}>
+      <summary><span>${icon('hanger')} <b>Xem các mẫu được tính</b><small>${eligible.length} mẫu · ${escapeHtml(requirement)}</small></span>${icon('arrow')}</summary>
+      <p>Chỉ món có nhãn <b>${escapeHtml(requirement)}</b> mới tăng số lượng và doanh thu brief.</p>
+      <div class="campaign-brief-product-list">${eligible.map(product => {
+        const quantity = s.inventory[product.id] ?? 0;
+        const availability = quantity > 0 ? `Trong kho ×${quantity}` : product.level > s.level ? `Mở ở cấp ${product.level}` : 'Có thể nhập';
+        return `<article class="${quantity > 0 ? 'is-owned' : ''}">${productImage(product, 'campaign-brief-product-art')}<span><b>${escapeHtml(product.name)}</b><small>${escapeHtml(categoryNames[product.category] ?? product.category)} · ${escapeHtml(styleNames[product.style] ?? product.style)}</small></span><em>${availability}</em></article>`;
+      }).join('')}</div>
+    </details>`;
+  };
   const heading = `<header class="app-modal-header campaign-heading">
     <span class="app-header-chip">${icon('hudStudio')} STUDIO</span>
     <div class="campaign-heading-main">
@@ -78,6 +104,7 @@ export function campaignModal(s: GameState, forceGuide = false) {
       <div class="campaign-scroll"><section class="campaign-active campaign-${active.status}">
         <div class="campaign-active-top"><div><span class="campaign-client">${escapeHtml(active.client)}</span><h3>${escapeHtml(active.name)}</h3><p>${escapeHtml(active.description)}</p></div><span class="campaign-deadline">${icon('clock')} ${active.status === 'ready' ? 'Đã hoàn thành' : active.status === 'failed' ? 'Đã hết hạn' : `Hạn ${gameDate(active.deadlineDay)} · còn ${daysLeft} ngày`}</span></div>
         <div class="campaign-focus">${icon(active.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}<b>${progress}% hoàn tất</b></div>
+        ${matchingProductGuide(active, true)}
         <div class="campaign-progress-track"><span style="width:${progress}%"></span></div>
         <div class="campaign-goals">
           <div class="${active.units >= active.targetUnits ? 'done' : ''}"><span>${icon('bag')} Sản phẩm đúng brief</span><strong>${Math.min(active.units, active.targetUnits)} / ${active.targetUnits}</strong><i><b style="width:${unitsProgress}%"></b></i></div>
@@ -105,7 +132,7 @@ export function campaignModal(s: GameState, forceGuide = false) {
       const difficulty = index === 0 ? 'Dễ bắt đầu' : index === 1 ? 'Tăng trưởng' : 'Thử thách';
       const dailyUnits = Math.ceil(offer.targetUnits / offer.durationDays);
       const dailyRevenue = Math.ceil(offer.targetRevenue / offer.durationDays / 10000) * 10000;
-      return `<article class="campaign-offer campaign-offer-${index + 1}"><div class="campaign-offer-number">0${index + 1}</div><div class="campaign-offer-badges"><span>${offer.kind === 'editorial' ? 'EDITORIAL' : offer.kind === 'category' ? 'PRODUCT LAUNCH' : 'OMNICHANNEL'}</span><b>${difficulty}</b></div><span class="campaign-client">${escapeHtml(offer.client)}</span><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.description)}</p><div class="campaign-offer-focus">${icon(offer.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}</div><div class="campaign-offer-readiness"><span>${icon('box')} Hàng phù hợp đang có</span><strong>${stockReady} món</strong><i class="${stockReady >= dailyUnits ? 'is-ready' : ''}">${stockReady >= dailyUnits ? 'Đủ nhịp ngày đầu' : `Nên chuẩn bị thêm ${Math.max(0, dailyUnits - stockReady)} món`}</i></div><ul><li><b>${offer.targetUnits}</b> sản phẩm đúng brief</li><li><b>${money(offer.targetRevenue)}</b> doanh thu</li>${offer.targetOnline ? `<li><b>${offer.targetOnline}</b> đơn online</li>` : ''}<li><b>${offer.durationDays} ngày</b> · khoảng ${dailyUnits} món và ${money(dailyRevenue)}/ngày</li></ul><div class="campaign-offer-reward"><small>GÓI THƯỞNG</small><strong>${money(offer.rewardMoney)} · ${offer.rewardXp} XP</strong><span>+${offer.rewardFollowers} follower · +${offer.prestigeReward} danh tiếng</span></div><button class="btn btn-primary" data-action="campaign-start" data-id="${offer.id}" ${s.phase === 'open' ? 'disabled' : ''}>Nhận brief ${icon('arrow')}</button></article>`;
+      return `<article class="campaign-offer campaign-offer-${index + 1}"><div class="campaign-offer-number">0${index + 1}</div><div class="campaign-offer-badges"><span>${offer.kind === 'editorial' ? 'EDITORIAL' : offer.kind === 'category' ? 'PRODUCT LAUNCH' : 'OMNICHANNEL'}</span><b>${difficulty}</b></div><span class="campaign-client">${escapeHtml(offer.client)}</span><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.description)}</p><div class="campaign-offer-focus">${icon(offer.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}</div>${matchingProductGuide(offer)}<div class="campaign-offer-readiness"><span>${icon('box')} Hàng phù hợp đang có</span><strong>${stockReady} món</strong><i class="${stockReady >= dailyUnits ? 'is-ready' : ''}">${stockReady >= dailyUnits ? 'Đủ nhịp ngày đầu' : `Nên chuẩn bị thêm ${Math.max(0, dailyUnits - stockReady)} món`}</i></div><ul><li><b>${offer.targetUnits}</b> sản phẩm đúng brief</li><li><b>${money(offer.targetRevenue)}</b> doanh thu</li>${offer.targetOnline ? `<li><b>${offer.targetOnline}</b> đơn online</li>` : ''}<li><b>${offer.durationDays} ngày</b> · khoảng ${dailyUnits} món và ${money(dailyRevenue)}/ngày</li></ul><div class="campaign-offer-reward"><small>GÓI THƯỞNG</small><strong>${money(offer.rewardMoney)} · ${offer.rewardXp} XP</strong><span>+${offer.rewardFollowers} follower · +${offer.prestigeReward} danh tiếng</span></div><button class="btn btn-primary" data-action="campaign-start" data-id="${offer.id}" ${s.phase === 'open' ? 'disabled' : ''}>Nhận brief ${icon('arrow')}</button></article>`;
     }).join('')}</div>${s.phase === 'open' ? '<p class="campaign-open-note">Hãy đóng cửa sau ngày bán để nhận một brief mới.</p>' : ''}</div></div>`;
 }
 export function questPanel(s: GameState) {

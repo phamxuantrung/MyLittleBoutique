@@ -30,7 +30,8 @@ type Modal = 'none' | 'profile' | 'serve' | 'checkout' | 'display' | 'fixture-in
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'atelier-recipe-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
 const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
-const EQUIP_ACTIONS = new Set(['select-product', 'display-add', 'livestream-pool-select', 'livestream-round-select', 'move-done']);
+const CLOTHING_ACTIONS = new Set(['select-product']);
+const EQUIP_ACTIONS = new Set(['display-add', 'livestream-pool-select', 'livestream-round-select', 'move-done']);
 const REWARD_ACTIONS = new Set(['claim', 'campaign-claim']);
 const SHOW_DEBUG_BUTTON = false;
 const saleClockLabel = (remainingSeconds: number, totalSeconds: number) => {
@@ -870,12 +871,13 @@ export class GameUI {
       const isImportPayment = this.tab === 'import' && IMPORT_BALANCE_ACTIONS.has(action);
       const isFinancePayment = this.modal === 'finance' && FINANCE_BALANCE_ACTIONS.has(action);
       const isMoneyPurchase = MONEY_PURCHASE_ACTIONS.has(action) || isFinancePayment;
+      const isClothingAction = CLOTHING_ACTIONS.has(action);
       const isEquipAction = EQUIP_ACTIONS.has(action);
       const isRewardAction = REWARD_ACTIONS.has(action);
       const levelBefore = this.store.state.level;
       const moneyBefore = this.store.state.money;
-      if (!isMoneyPurchase && !isEquipAction && !isRewardAction && action !== 'upgrade' && action !== 'close-shop-confirm') this.audio.play('click');
-      this.suppressSuccessToastAudio = isMoneyPurchase || isEquipAction || isRewardAction || action === 'serve' || action === 'upgrade' || action === 'close-shop-confirm' || action === 'online-list' || action === 'place-stored';
+      if (!isMoneyPurchase && !isClothingAction && !isEquipAction && !isRewardAction && action !== 'upgrade' && action !== 'close-shop-confirm') this.audio.play('click');
+      this.suppressSuccessToastAudio = isMoneyPurchase || isClothingAction || isEquipAction || isRewardAction || action === 'serve' || action === 'upgrade' || action === 'close-shop-confirm' || action === 'online-list' || action === 'place-stored';
       this.suppressTransactionSuccessToast = isImportPayment || isFinancePayment;
       try {
         this.action(action, target.dataset.id ?? '', target);
@@ -892,6 +894,8 @@ export class GameUI {
         this.audio.play('coin');
         if (isImportPayment) this.animateMoneyDeduction('import', deducted);
         if (isFinancePayment) this.animateMoneyDeduction('finance', deducted);
+      } else if (isClothingAction) {
+        this.audio.play('clothing');
       } else if (isEquipAction) {
         this.audio.play('equip');
       } else if (isRewardAction) {

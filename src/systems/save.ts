@@ -4,11 +4,13 @@ import { advicePatience, canPlace, DAY_DURATION, dayDuration, displayCapacity, d
 import { generateDayCustomers, lookupCustomer, registerCustomer } from './customerGen';
 import { atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProducts } from '../data/atelier';
 import { EMPLOYEE_APPEARANCE_COUNT } from '../art/employeeAssets';
+import { initialCashDrawer, normalizeCashDrawer } from './cash';
 
 export const SAVE_KEY = 'little-boutique.save.v1';
 const MOVABLE_DECOR_MIGRATION = 'system:wall-decor-v5';
 const CAMPAIGN_LEVEL3_MIGRATION = 'system:campaign-level3-preview-v1';
 const MUSIC_DEFAULT_OFF_MIGRATION = 'system:music-default-off-v2';
+const MUSIC_BACKGROUND_DEFAULT_ON_MIGRATION = 'system:music-background-default-on-v3';
 const MUSIC_PLAYER_STARTER_MIGRATION = 'system:music-player-starter-v1';
 // A fully expanded 16x16 shop can legally contain far more than the old
 // 30-item load limit, especially when rugs and wall decorations are included.
@@ -95,7 +97,7 @@ const movableDecorStarters: PlacedFurniture[] = [
 export const emptyStats = (): DayStats => ({ revenue: 0, spent: 0, costOfGoods: 0, sold: 0, served: 0, happy: 0, trendSales: 0, followers: 0, rent: 0, loanInterest: 0, tips: 0, staffWages: 0, walkouts: 0, soldProducts: {} });
 export function initialState(): GameState {
   return {
-    version: 1, money: 500000, xp: 0, level: 1, reputation: 4.5, reviews: 0, followers: 0,
+    version: 1, money: 500000, cashDrawer: initialCashDrawer(), shortChangeViolations: 0, shortChangeFraudFines: 0, xp: 0, level: 1, reputation: 4.5, reviews: 0, followers: 0,
     shopReviewTotal: 0, shopReviewCount: 0,
     day: 1, phase: 'preparation', customerIndex: 0, patience: 0,
     currentCustomerId: null, customerMode: null, activeVisits: [], currentVisitId: null, nextArrivalIn: 0, lastCustomerId: null, landLevel: 0, customerLoyalty: {}, loan: null, rentDue: 0, loanOverdueDays: 0, rentOverdueDays: 0, gameOverReason: null,
@@ -116,7 +118,7 @@ export function initialState(): GameState {
       { uid: 'starter-counter', id: 'counter', x: 4, y: 3, rotation: 0 },
       { ...musicPlayerStarter },
       ...movableDecorStarters.map(item => ({ ...item })),
-    ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, nextDramaDay: 1, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: false, musicVolume: 0.55, musicTrack: 'boutique-bloom', tutorialDone: false,
+    ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, nextDramaDay: 1, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_BACKGROUND_DEFAULT_ON_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: true, musicVolume: 0.55, effectsVolume: 0.85, musicTrack: 'better-for-you-1', tutorialDone: false,
     employees: [], staffApplicants: [], recruitmentPost: null, staffLeaveRequests: [],
     shopName: 'My Little Boutique', hasNamedShop: false,
   };
@@ -142,7 +144,11 @@ export function parseSave(raw: string | null): GameState {
     const s = JSON.parse(raw);
     if (!s || s.version !== 1 || typeof s.inventory !== 'object' || !s.inventory) return fresh;
     migrateLegacyProducts(s);
-    const state: GameState = { ...fresh, money: finite(s.money, fresh.money), xp: Math.floor(finite(s.xp, 0)), level: Math.max(1, Math.floor(finite(s.level, 1, levels.length))), reputation: finite(s.reputation, 4.5, 5), reviews: Math.floor(finite(s.reviews, 0)), followers: Math.floor(finite(s.followers, 0)), day: Math.max(1, Math.floor(finite(s.day, 1, 99999))), dayTimer: finite(s.dayTimer, DAY_DURATION, DAY_DURATION), dailyLuck: typeof s.dailyLuck === 'string' ? s.dailyLuck : 'Nắng ấm nhẹ nhàng', inventory: {}, prices: {}, stats: emptyStats(), posts: [], claimed: [], storedFurniture: [], customerLoyalty: {}, shopName: typeof s.shopName === 'string' && s.shopName.trim() ? s.shopName.trim().slice(0, 30) : 'My Little Boutique', hasNamedShop: s.hasNamedShop === true };
+    const savedFraudFines = Math.floor(finite(s.shortChangeFraudFines, 0, 9999));
+    const savedMoney = savedFraudFines > 0 && typeof s.money === 'number' && Number.isFinite(s.money)
+      ? Math.max(-999999999, Math.min(1e12, s.money))
+      : finite(s.money, fresh.money);
+    const state: GameState = { ...fresh, money: savedMoney, shortChangeViolations: Math.floor(finite(s.shortChangeViolations, 0, 999999)), shortChangeFraudFines: savedFraudFines, xp: Math.floor(finite(s.xp, 0)), level: Math.max(1, Math.floor(finite(s.level, 1, levels.length))), reputation: finite(s.reputation, 4.5, 5), reviews: Math.floor(finite(s.reviews, 0)), followers: Math.floor(finite(s.followers, 0)), day: Math.max(1, Math.floor(finite(s.day, 1, 99999))), dayTimer: finite(s.dayTimer, DAY_DURATION, DAY_DURATION), dailyLuck: typeof s.dailyLuck === 'string' ? s.dailyLuck : 'Nắng ấm nhẹ nhàng', inventory: {}, prices: {}, stats: emptyStats(), posts: [], claimed: [], storedFurniture: [], customerLoyalty: {}, shopName: typeof s.shopName === 'string' && s.shopName.trim() ? s.shopName.trim().slice(0, 30) : 'My Little Boutique', hasNamedShop: s.hasNamedShop === true };
     state.landLevel = Math.min(landExpansion.length - 1, Math.floor(finite(s.landLevel, 0, landExpansion.length - 1)));
     state.dayTimer = finite(s.dayTimer, dayDuration(state), dayDuration(state));
     state.rentDue = Math.round(finite(s.rentDue, 0, 999999999));
@@ -324,6 +330,7 @@ export function parseSave(raw: string | null): GameState {
       }
     }
     state.phase = ['preparation', 'open', 'closed'].includes(s.phase) ? s.phase : 'preparation';
+    state.cashDrawer = normalizeCashDrawer(s.cashDrawer);
     state.customerIndex = Math.floor(finite(s.customerIndex, 0));
     const visitor = customers.find((c, index) => c.id === s.currentCustomerId && (c.minLevel ?? (index < 5 ? 1 : 3)) <= state.level) ?? (typeof s.currentCustomerId === 'string' ? lookupCustomer(s.currentCustomerId) : undefined);
     state.currentCustomerId = state.phase === 'open' && visitor ? visitor.id : null;
@@ -346,6 +353,24 @@ export function parseSave(raw: string | null): GameState {
           ...(rawVisit.staffAttempted === true ? { staffAttempted: true } : {}),
           ...(typeof rawVisit.assignedStaffUid === 'string' ? { assignedStaffUid: rawVisit.assignedStaffUid.slice(0, 100) } : {}),
           ...(typeof rawVisit.staffResolveIn === 'number' ? { staffResolveIn: Math.max(0, Math.floor(finite(rawVisit.staffResolveIn, 0, 30))) } : {}),
+          ...(rawVisit.stage === 'checkout' ? { stage: 'checkout' as const } : {}),
+          ...(Array.isArray(rawVisit.cartProductIds) ? { cartProductIds: rawVisit.cartProductIds.filter((id: unknown): id is string => typeof id === 'string' && products.some(product => product.id === id)).slice(0, 5) } : {}),
+          ...(typeof rawVisit.cartTotal === 'number' ? { cartTotal: Math.max(0, Math.floor(finite(rawVisit.cartTotal, 0))) } : {}),
+          ...(typeof rawVisit.cartScore === 'number' ? { cartScore: Math.max(0, Math.min(100, Math.floor(finite(rawVisit.cartScore, 0)))) } : {}),
+          ...(typeof rawVisit.cartSpeech === 'string' ? { cartSpeech: rawVisit.cartSpeech.slice(0, 240) } : {}),
+          ...(rawVisit.cashTender && typeof rawVisit.cashTender === 'object' ? { cashTender: normalizeCashDrawer(rawVisit.cashTender) } : {}),
+          ...(typeof rawVisit.paymentFriction === 'number' ? { paymentFriction: Math.max(0, Math.min(3, Math.floor(finite(rawVisit.paymentFriction, 0)))) } : {}),
+          ...(['cash', 'transfer', 'card'].includes(rawVisit.checkoutPaymentMethod) ? { checkoutPaymentMethod: rawVisit.checkoutPaymentMethod as 'cash' | 'transfer' | 'card' } : {}),
+          ...(typeof rawVisit.cartAssistingStaffUid === 'string' ? { cartAssistingStaffUid: rawVisit.cartAssistingStaffUid.slice(0, 100) } : {}),
+          ...(rawVisit.cartAutomatedByStaff === true ? { cartAutomatedByStaff: true } : {}),
+          ...(rawVisit.cartViral === true ? { cartViral: true } : {}),
+          ...(typeof rawVisit.cartFollowers === 'number' ? { cartFollowers: Math.max(0, Math.floor(finite(rawVisit.cartFollowers, 0))) } : {}),
+          ...(typeof rawVisit.cartXpEarned === 'number' ? { cartXpEarned: Math.max(0, Math.floor(finite(rawVisit.cartXpEarned, 0))) } : {}),
+          ...(typeof rawVisit.cartTip === 'number' ? { cartTip: Math.max(0, Math.floor(finite(rawVisit.cartTip, 0))) } : {}),
+          ...(typeof rawVisit.cartReviewStars === 'number' ? { cartReviewStars: Math.max(1, Math.min(5, Math.floor(finite(rawVisit.cartReviewStars, 3)))) } : {}),
+          ...(typeof rawVisit.cartPatienceRatio === 'number' ? { cartPatienceRatio: Math.max(0, Math.min(1, finite(rawVisit.cartPatienceRatio, .5))) } : {}),
+          ...(typeof rawVisit.cashierStaffUid === 'string' ? { cashierStaffUid: rawVisit.cashierStaffUid.slice(0, 100) } : {}),
+          ...(typeof rawVisit.cashierResolveIn === 'number' ? { cashierResolveIn: Math.max(0, Math.floor(finite(rawVisit.cashierResolveIn, 0, 30))) } : {}),
         } satisfies CustomerVisit);
         seen.add(rawVisit.uid);
       }
@@ -564,8 +589,13 @@ export function parseSave(raw: string | null): GameState {
       state.music = false;
       state.claimed.push(MUSIC_DEFAULT_OFF_MIGRATION);
     }
+    if (!state.claimed.includes(MUSIC_BACKGROUND_DEFAULT_ON_MIGRATION)) {
+      state.music = true;
+      state.claimed.push(MUSIC_BACKGROUND_DEFAULT_ON_MIGRATION);
+    }
     state.musicVolume = finite(s.musicVolume, 0.55, 1);
-    state.musicTrack = ['boutique-bloom', 'better-for-you-1', 'die-for-you-remix', 'daffodil-live'].includes(s.musicTrack) ? s.musicTrack : fresh.musicTrack;
+    state.effectsVolume = finite(s.effectsVolume, 0.85, 1);
+    state.musicTrack = ['better-for-you-1', 'die-for-you-remix', 'daffodil-live'].includes(s.musicTrack) ? s.musicTrack : fresh.musicTrack;
     state.tutorialDone = s.tutorialDone === true;
     state.onlineRating = finite(s.onlineRating, 5, 5);
     state.onlineReviews = Math.floor(finite(s.onlineReviews, 0, 999999));

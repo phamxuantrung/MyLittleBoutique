@@ -130,6 +130,18 @@ export function staffStockProfile(employee: Pick<StaffMember, 'reliability' | 's
   };
 }
 
+export function staffCashierProfile(employee: Pick<StaffMember, 'reliability' | 'service' | 'skillLevel'>) {
+  const skillLevel = Math.max(1, employee.skillLevel ?? 1);
+  const checkoutPriority = employee.reliability * 1.7 + employee.service * .55 + skillLevel * 3;
+  const shortChangeChance = Math.min(.05, Math.max(.001,
+    (100 - employee.reliability) * .00035 + (100 - employee.service) * .00012 - (skillLevel - 1) * .0025));
+  return {
+    checkoutPriority,
+    checkoutSeconds: Math.max(2, 8 - Math.floor(checkoutPriority / 55)),
+    shortChangeChance,
+  };
+}
+
 export function staffAdviceBonus(state: GameState, employeeUid?: string) {
   const staff = activeEmployees(state).filter(employee => (employee.assignment ?? 'service') === 'service');
   const selected = employeeUid ? staff.find(employee => employee.uid === employeeUid) : undefined;
@@ -197,8 +209,13 @@ export function evaluateCustomerSelfPick(state: GameState, customer: Customer): 
   total: number;
   speech: string;
 } {
+  const reserved = state.activeVisits.reduce<Record<string, number>>((counts, visit) => {
+    if (visit.stage !== 'checkout') return counts;
+    for (const id of visit.cartProductIds ?? []) counts[id] = (counts[id] ?? 0) + 1;
+    return counts;
+  }, {});
   const available = Object.entries(displayedInventory(state))
-    .filter(([_, qty]) => qty > 0)
+    .filter(([id, qty]) => qty - (reserved[id] ?? 0) > 0)
     .map(([id]) => products.find(p => p.id === id))
     .filter((p): p is Product => !!p);
 
@@ -212,60 +229,51 @@ export function evaluateCustomerSelfPick(state: GameState, customer: Customer): 
     };
   }
 
-  // Chấm điểm từng món trong kho xem món nào hợp gu khách nhất
-  let bestItem: Product | undefined;
-  let bestScore = -1;
-
-  for (const item of available) {
-    const price = sellPrice(state, item);
-    if (price > customer.budget) continue; // Vượt túi tiền thì bỏ qua
-    const score = matchScore(state, customer, [item]);
-    if (score > bestScore) {
-      bestScore = score;
-      bestItem = item;
+  const affordable = available.filter(item => sellPrice(state, item) <= customer.budget);
+  const loyalty = loyaltyTierIndex(loyaltyTier(state.customerLoyalty[customer.id]));
+  const targetRatio = Math.min(.95, .7 + loyalty * .045 + (customer.personality === 'VIP' ? .08 : 0));
+  type Basket = { items: Product[]; total: number };
+  let beam: Basket[] = [{ items: [], total: 0 }];
+  const ranked = [...affordable].sort((a, b) => matchScore(state, customer, [b]) - matchScore(state, customer, [a])).slice(0, 28);
+  for (const product of ranked) {
+    const expanded = [...beam];
+    for (const basket of beam) {
+      if (basket.items.length >= MAX_OUTFIT_ITEMS) continue;
+      const items = [...basket.items, product];
+      const total = basket.total + sellPrice(state, product);
+      if (total <= customer.budget && validOutfit(items.map(item => item.id))) expanded.push({ items, total });
     }
+    const unique = new Map(expanded.map(basket => [basket.items.map(item => item.id).sort().join('|'), basket]));
+    beam = [...unique.values()].sort((a, b) => {
+      const rank = (basket: Basket) => {
+        if (!basket.items.length) return -1000;
+        const ratio = basket.total / Math.max(1, customer.budget);
+        const budgetFit = 1 - Math.min(1, Math.abs(targetRatio - ratio) / .5);
+        const trends = basket.items.filter(item => isTrending(state, item)).length;
+        const preferredKinds = new Set(basket.items.map(item => item.category)).size;
+        return matchScore(state, customer, basket.items) * 2.5 + budgetFit * 38 + trends * 7 + preferredKinds * 4;
+      };
+      return rank(b) - rank(a);
+    }).slice(0, 160);
   }
-
   const thresh = threshold(customer);
-  if (bestItem && bestScore >= thresh - 4) {
-    const items = [bestItem];
-    let total = sellPrice(state, bestItem);
-
-    // Nếu còn dư nhiều tiền trong ngân sách, thử nhặt thêm 1 phụ kiện hoặc túi xách hợp gu
-    const remainingBudget = customer.budget - total;
-    if (remainingBudget >= 40000) {
-      const extraAcc = available.find(p =>
-        (p.category === 'accessories' || p.category === 'bags') &&
-        p.id !== bestItem!.id &&
-        validOutfit([bestItem!.id, p.id]) &&
-        matchScore(state, customer, [bestItem!, p]) >= thresh - 4 &&
-        sellPrice(state, p) <= remainingBudget &&
-        (productStyles(p).some((st: Style) => customer.styles.includes(st)) || customer.colors.includes(p.colorName))
-      );
-      if (extraAcc) {
-        items.push(extraAcc);
-        total += sellPrice(state, extraAcc);
-      }
-    }
-
-    let speech = 'Xinh quá, mình chốt mua bộ này nhé!';
-    if (bestScore >= 85) speech = 'Chốt luôn em này, đúng gu xinh xỉu!';
-    else if (isTrending(state, bestItem)) speech = 'Món này đang hot trend nè, lấy cho mình nha!';
-    else if (customer.colors.includes(bestItem.colorName)) speech = `Tone màu ${bestItem.colorName} này tôn da mình thật, mình lấy nhé!`;
-
-    return {
-      success: true,
-      items,
-      score: matchScore(state, customer, items),
-      total,
-      speech,
-    };
+  const options = beam.filter(basket => basket.items.length >= 1 && matchScore(state, customer, basket.items) >= thresh - 5);
+  const selected = options[0];
+  const bestScore = selected ? matchScore(state, customer, selected.items) : Math.max(0, ...affordable.map(item => matchScore(state, customer, [item])));
+  if (selected) {
+    const trendCount = selected.items.filter(item => isTrending(state, item)).length;
+    const speech = bestScore >= 85
+      ? `Mình chốt set ${selected.items.length} món này, đúng gu quá!`
+      : trendCount
+        ? `Set ${selected.items.length} món này vừa hợp gu vừa bắt trend, mình lấy nhé!`
+        : `Mình đã chọn được ${selected.items.length} món trong ngân sách rồi, thanh toán giúp mình nha!`;
+    return { success: true, items: selected.items, score: bestScore, total: selected.total, speech };
   }
 
   // Khách không tìm được món đồ ưng ý
-  const affordable = available.some(p => sellPrice(state, p) <= customer.budget);
+  const hasAffordable = affordable.length > 0;
   let speech = 'Chưa tìm được đồ hợp gu, hẹn shop lần sau nhé!';
-  if (!affordable) {
+  if (!hasAffordable) {
     speech = 'Đắt quá, toàn vượt ngân sách của mình thôi...';
   } else {
     speech = 'Mấy mẫu này hơi khác phong cách mình đang tìm rồi...';

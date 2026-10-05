@@ -112,14 +112,14 @@ if (preloadResult.failures.length) console.warn('Một số tài nguyên không 
 updateBootLoader(.9, 'Đang dựng cửa hàng…');
 
 const store = new GameStore();
-const audio = new AudioSystem(() => {
-  if (store.state.music) store.settings('music', false);
-});
+let ui!: GameUI;
+const audio = new AudioSystem(() => ui?.refreshMusicPlayerPlayback());
 audio.enabled = store.state.sound;
 audio.setMusicVolume(store.state.musicVolume);
+audio.setEffectsVolume(store.state.effectsVolume);
 audio.setMusicTrack(store.state.musicTrack);
 if (store.state.music) audio.music(true);
-const ui = new GameUI(store, audio);
+ui = new GameUI(store, audio);
 const recoveredFurniture = recoveredFurnitureCount(store.state);
 if (recoveredFurniture) {
   // Persist the repaired layout immediately so the notice appears only once.
@@ -128,7 +128,13 @@ if (recoveredFurniture) {
     store.toast(`Đã chuyển ${recoveredFurniture} món nội thất không còn vừa vị trí cũ vào Kho nội thất.`);
   }, 350);
 }
-const scene = new ShopScene(store, () => { audio.play('click'); ui.openServe(); }, uid => ui.selectFurniture(uid), orderId => ui.openOnlineOrder(orderId), () => ui.openMusicPlayer());
+const scene = new ShopScene(
+  store,
+  () => { audio.play('click'); ui.openServe(); },
+  (uid, tapped) => { if (tapped) audio.play('itemTap'); ui.selectFurniture(uid); },
+  orderId => ui.openOnlineOrder(orderId),
+  () => { audio.play('itemTap'); ui.openMusicPlayer(false); },
+);
 const phaserProgress = (event: Event) => {
   const ratio = Number((event as CustomEvent<number>).detail) || 0;
   updateBootLoader(.9 + ratio * .09, 'Đang sắp xếp cửa hàng…');
@@ -190,4 +196,4 @@ document.addEventListener('pointerdown', () => {
   void audio.unlock().then(() => { if (store.state.music) audio.music(true); });
 }, { once: true });
 
-if (import.meta.hot) import.meta.hot.dispose(() => { audio.music(false); game?.destroy(true); });
+if (import.meta.hot) import.meta.hot.dispose(() => { audio.stopMusic(); game?.destroy(true); });

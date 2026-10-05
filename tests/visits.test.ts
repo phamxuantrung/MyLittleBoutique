@@ -77,15 +77,39 @@ describe('timed shop and random visits', () => {
     for (let n = 0; n < remaining; n++) store.tick();
     expect(store.state.phase).toBe('closed'); expect(store.state.dayTimer).toBe(0);
   });
-  it('automatically checks out browsing customers and refuses manual advice', () => {
+  it('sends browsing customers with a basket to the POS and refuses manual advice', () => {
     const store = make(() => .5); store.openShop(); arrive(store);
     store.state.customerMode = 'browse'; store.state.patience = 1;
     const money = store.state.money;
     expect(store.serve(['ribbon-kiss-tee'])).toBeUndefined();
-    store.tick(); expect(store.state.stats.happy).toBe(1);
+    store.tick();
+    const checkout = store.state.activeVisits[0];
+    expect(checkout.stage).toBe('checkout');
+    expect(checkout.cartProductIds?.length).toBeGreaterThanOrEqual(1);
+    expect(checkout.cartProductIds?.length).toBeLessThanOrEqual(5);
+    expect(checkout.patience).toBeGreaterThanOrEqual(30);
+    expect(store.state.stats.happy).toBe(0);
+    expect(store.completeSelfCheckout(checkout.uid, 'transfer').ok).toBe(true);
+    expect(store.state.stats.happy).toBe(1);
     expect(store.state.money).toBeGreaterThan(money);
     expect(activeCustomer(store.state)).toBeUndefined();
     const sold = store.state.stats.sold; store.tick(); expect(store.state.stats.sold).toBe(sold);
+  });
+  it('sends a successful consultation to the same POS before recording the sale', () => {
+    const store = make(() => .34); store.openShop(); arrive(store);
+    const visit = store.state.activeVisits[0];
+    expect(visit.mode).toBe('advice');
+    const money = store.state.money;
+    const result = store.serve(['ribbon-kiss-tee', 'ribbon']);
+    expect(result?.success).toBe(true);
+    expect(visit.stage).toBe('checkout');
+    expect(visit.checkoutPaymentMethod).toBeDefined();
+    expect(store.state.money).toBe(money);
+    expect(store.state.stats.sold).toBe(0);
+    visit.checkoutPaymentMethod = 'transfer';
+    expect(store.completeSelfCheckout(visit.uid, 'transfer').ok).toBe(true);
+    expect(store.state.stats.sold).toBe(2);
+    expect(store.state.money).toBeGreaterThan(money);
   });
   it('closes early before counting a browsing walkout when every shelf is empty', () => {
     const store = make(() => .5); store.openShop(); arrive(store);

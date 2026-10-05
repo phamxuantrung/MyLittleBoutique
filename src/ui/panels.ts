@@ -3,13 +3,15 @@ import { courierImage } from '../art/courierAssets';
 import { shopReviewStats } from '../systems/reviews';
 import { categories, customers, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
-import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffAdviceProfile, staffCapacity, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
-import type { Customer, Furniture, GameState, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
+import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffAdviceProfile, staffCapacity, staffCashierProfile, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
+import type { CashDrawer, Customer, CustomerVisit, Furniture, GameState, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
 import { avatarImage, compact, escapeHtml, furnitureImage, money, productImage, staffImage } from './format';
 import { icon } from './icons';
 import { CAMPAIGN_GUIDE_SEEN, campaignOffers, campaignRank, categoryNames, styleNames } from '../systems/campaigns';
 import { gameDate } from '../systems/calendar';
 import { EMPLOYEE_APPEARANCE_COUNT } from '../art/employeeAssets';
+import { CASH_DENOMINATIONS, cashDrawerTotal, customerTender, drawerAmount } from '../systems/cash';
+import { lookupCustomer } from '../systems/customerGen';
 export { stockPanel, inventoryPanel, importPanel, supplierSelectionPanel } from './catalogPanel';
 
 export function campaignModal(s: GameState, forceGuide = false) {
@@ -18,6 +20,16 @@ export function campaignModal(s: GameState, forceGuide = false) {
   const season = String(s.campaignSeason).padStart(2, '0');
   const campaignLocked = s.level < 3;
   const showingGuide = forceGuide || !s.claimed.includes(CAMPAIGN_GUIDE_SEEN);
+  const nextRank = [
+    { prestige: 3, label: 'Tên tuổi mới' },
+    { prestige: 9, label: 'Đối tác được săn đón' },
+    { prestige: 18, label: 'Nhà mốt danh tiếng' },
+    { prestige: 30, label: 'Biểu tượng toàn cầu' },
+  ].find(milestone => milestone.prestige > s.industryReputation);
+  const matchingStock = (campaign: { style?: string; category?: string; kind: string }) => products.reduce((sum, product) => {
+    const matches = campaign.style ? product.style === campaign.style : campaign.category ? product.category === campaign.category : true;
+    return matches ? sum + (s.inventory[product.id] ?? 0) : sum;
+  }, 0);
   const heading = `<header class="app-modal-header campaign-heading">
     <span class="app-header-chip">${icon('hudStudio')} STUDIO</span>
     <div class="campaign-heading-main">
@@ -29,16 +41,16 @@ export function campaignModal(s: GameState, forceGuide = false) {
     </div>
     <div class="campaign-heading-actions">${campaignLocked ? '' : `<button class="campaign-help-button ${showingGuide ? 'is-back' : ''}" data-action="${showingGuide ? 'campaign-guide-done' : 'campaign-guide'}" aria-label="${showingGuide ? 'Quay lại Studio' : 'Xem cách chơi'}">${icon(showingGuide ? 'arrow' : 'help')} ${showingGuide ? 'Quay lại Studio' : 'Cách chơi'}</button>`}<button class="staff-modal-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div>
   </header>`;
-  if (campaignLocked) return `<div class="campaign-shell">${heading}<section class="campaign-locked">
+  if (campaignLocked) return `<div class="campaign-shell">${heading}<div class="campaign-scroll"><section class="campaign-locked">
     <span class="campaign-locked-emblem">${icon('hudStudio')}<b>${icon('lock')}</b></span>
     <small>BRAND COLLABORATION</small>
     <h3>Studio đang chờ bạn</h3>
     <p>Đưa Boutique lên cấp 3 để nhận brief từ tạp chí, thương hiệu và mở những chiến dịch thời trang đầu tiên.</p>
     <ol class="campaign-unlock-path"><li class="is-done"><b>${icon('check')}</b><span>Cấp 1<small>Khởi đầu</small></span></li><li class="${s.level >= 2 ? 'is-done' : 'is-next'}"><b>${s.level >= 2 ? icon('check') : '02'}</b><span>Cấp 2<small>Phát triển</small></span></li><li class="is-locked"><b>${icon('lock')}</b><span>Cấp 3<small>Mở Studio</small></span></li></ol>
     <button class="btn btn-primary campaign-upgrade-link" data-action="upgrade-open">${icon('trophy')} Xem nâng cấp Boutique ${icon('arrow')}</button>
-  </section></div>`;
+  </section></div></div>`;
   if (showingGuide) return `<div class="campaign-shell">${heading}
-    <section class="campaign-guide">
+    <div class="campaign-scroll"><section class="campaign-guide">
       <div class="campaign-guide-intro"><div><h3>Xây tên tuổi qua từng chiến dịch</h3><p>Hợp đồng kéo dài qua nhiều ngày bán. Bạn cần lên kế hoạch nhập hàng, trưng bày và chọn kênh bán phù hợp.</p></div></div>
       <ol class="campaign-guide-steps">
         <li><b>01</b><div><strong>Chọn một brief</strong><p>Khi shop đang đóng, chọn 1 trong 3 hợp đồng. Brief khó hơn cho phần thưởng và Danh tiếng ngành cao hơn.</p></div></li>
@@ -47,36 +59,54 @@ export function campaignModal(s: GameState, forceGuide = false) {
         <li><b>04</b><div><strong>Hoàn tất đủ mọi mục tiêu</strong><p>Brief đa kênh còn yêu cầu giao đơn online. Hoàn thành trước hạn rồi quay lại Studio để nhận tiền, XP, follower và Danh tiếng ngành.</p></div></li>
       </ol>
       <div class="campaign-guide-tips"><span>Ngày hết hạn vẫn được tính trọn vẹn.</span><span>Cấp 6–7 mở Fashion Week khó hơn.</span><span>Danh tiếng càng cao, hợp đồng càng lớn.</span></div>
-    </section></div>`;
+    </section></div></div>`;
   if (active) {
     const daysLeft = Math.max(0, active.deadlineDay - s.day + 1);
     const ratios = [active.units / active.targetUnits, active.revenue / active.targetRevenue, active.targetOnline ? active.onlineOrders / active.targetOnline : 1];
     const progress = Math.max(0, Math.min(100, Math.round(Math.min(...ratios) * 100)));
     const focus = active.style ? `Phong cách ${styleNames[active.style]}` : active.category ? `Phân loại ${categoryNames[active.category]}` : 'Boutique & kênh online';
+    const unitsLeft = Math.max(0, active.targetUnits - active.units);
+    const revenueLeft = Math.max(0, active.targetRevenue - active.revenue);
+    const onlineLeft = Math.max(0, active.targetOnline - active.onlineOrders);
+    const stockReady = matchingStock(active);
+    const dailyUnits = daysLeft ? Math.ceil(unitsLeft / daysLeft) : unitsLeft;
+    const dailyRevenue = daysLeft ? Math.ceil(revenueLeft / daysLeft / 10000) * 10000 : revenueLeft;
+    const unitsProgress = Math.min(100, Math.round(active.units / active.targetUnits * 100));
+    const revenueProgress = Math.min(100, Math.round(active.revenue / active.targetRevenue * 100));
+    const onlineProgress = active.targetOnline ? Math.min(100, Math.round(active.onlineOrders / active.targetOnline * 100)) : 100;
     return `<div class="campaign-shell">${heading}
-      <section class="campaign-active campaign-${active.status}">
+      <div class="campaign-scroll"><section class="campaign-active campaign-${active.status}">
         <div class="campaign-active-top"><div><span class="campaign-client">${escapeHtml(active.client)}</span><h3>${escapeHtml(active.name)}</h3><p>${escapeHtml(active.description)}</p></div><span class="campaign-deadline">${icon('clock')} ${active.status === 'ready' ? 'Đã hoàn thành' : active.status === 'failed' ? 'Đã hết hạn' : `Hạn ${gameDate(active.deadlineDay)} · còn ${daysLeft} ngày`}</span></div>
-        <div class="campaign-focus">${icon(active.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}</div>
+        <div class="campaign-focus">${icon(active.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}<b>${progress}% hoàn tất</b></div>
         <div class="campaign-progress-track"><span style="width:${progress}%"></span></div>
         <div class="campaign-goals">
-          <div class="${active.units >= active.targetUnits ? 'done' : ''}"><span>${icon('bag')} Sản phẩm đúng brief</span><strong>${Math.min(active.units, active.targetUnits)} / ${active.targetUnits}</strong></div>
-          <div class="${active.revenue >= active.targetRevenue ? 'done' : ''}"><span>${icon('coin')} Doanh thu chiến dịch</span><strong>${money(active.revenue)} / ${money(active.targetRevenue)}</strong></div>
-          ${active.targetOnline ? `<div class="${active.onlineOrders >= active.targetOnline ? 'done' : ''}"><span>${icon('globe')} Đơn online đã giao</span><strong>${Math.min(active.onlineOrders, active.targetOnline)} / ${active.targetOnline}</strong></div>` : ''}
+          <div class="${active.units >= active.targetUnits ? 'done' : ''}"><span>${icon('bag')} Sản phẩm đúng brief</span><strong>${Math.min(active.units, active.targetUnits)} / ${active.targetUnits}</strong><i><b style="width:${unitsProgress}%"></b></i></div>
+          <div class="${active.revenue >= active.targetRevenue ? 'done' : ''}"><span>${icon('coin')} Doanh thu chiến dịch</span><strong>${money(active.revenue)} / ${money(active.targetRevenue)}</strong><i><b style="width:${revenueProgress}%"></b></i></div>
+          ${active.targetOnline ? `<div class="${active.onlineOrders >= active.targetOnline ? 'done' : ''}"><span>${icon('globe')} Đơn online đã giao</span><strong>${Math.min(active.onlineOrders, active.targetOnline)} / ${active.targetOnline}</strong><i><b style="width:${onlineProgress}%"></b></i></div>` : ''}
         </div>
+        ${active.status === 'active' ? `<div class="campaign-active-insight"><span>${icon('sparkle')}</span><div><small>KẾ HOẠCH GỢI Ý HÔM NAY</small><strong>${unitsLeft ? `Bán khoảng ${dailyUnits} món đúng brief` : 'Mục tiêu số lượng đã đủ'}${revenueLeft ? ` · thêm ${money(dailyRevenue)} doanh thu` : ''}${onlineLeft ? ` · giao ${onlineLeft} đơn online` : ''}</strong><p>Kho hiện có <b>${stockReady} sản phẩm phù hợp</b>. ${stockReady < dailyUnits ? 'Nên nhập hoặc trưng thêm hàng trước khi mở cửa.' : 'Lượng hàng hiện tại đủ cho nhịp mục tiêu hôm nay.'}</p></div></div>` : ''}
         <div class="campaign-reward"><span>Phần thưởng hợp đồng</span><strong>${money(active.rewardMoney)} · +${active.rewardXp} XP · +${active.rewardFollowers} follower · +${active.prestigeReward} danh tiếng</strong></div>
         <div class="campaign-actions">${active.status === 'ready'
           ? `<button class="btn btn-primary" data-action="campaign-claim">${icon('gift')} Nhận thưởng chiến dịch</button>`
           : active.status === 'failed'
             ? `<button class="btn btn-primary" data-action="campaign-abandon">Khép lại và nhận brief mới ${icon('arrow')}</button>`
             : `<button class="btn btn-secondary" data-action="campaign-abandon">Rút khỏi chiến dịch</button>`}</div>
-      </section></div>`;
+      </section></div></div>`;
   }
-  if (s.day < s.campaignAvailableDay) return `<div class="campaign-shell">${heading}<div class="campaign-waiting">${icon('clock')}<h3>Brief mới đang được chuẩn bị</h3><p>Đối tác tiếp theo sẽ liên hệ vào ${gameDate(s.campaignAvailableDay)}.</p></div></div>`;
+  if (s.day < s.campaignAvailableDay) return `<div class="campaign-shell">${heading}<div class="campaign-scroll"><div class="campaign-waiting">${icon('clock')}<h3>Brief mới đang được chuẩn bị</h3><p>Đối tác tiếp theo sẽ liên hệ vào ${gameDate(s.campaignAvailableDay)}.</p></div></div></div>`;
   const offers = campaignOffers(s);
-  return `<div class="campaign-shell">${heading}<div class="campaign-offers">${offers.map((offer, index) => {
+  return `<div class="campaign-shell">${heading}<div class="campaign-scroll"><section class="campaign-studio-overview">
+    <div><span>${icon('hudStudio')}</span><p><small>HỒ SƠ STUDIO</small><strong>${escapeHtml(rank)}</strong><em>${s.completedCampaigns.length} chiến dịch đã hoàn thành</em></p></div>
+    <dl><div><dt>Danh tiếng ngành</dt><dd>${s.industryReputation}</dd></div><div><dt>Mốc tiếp theo</dt><dd>${nextRank ? `${nextRank.prestige - s.industryReputation} điểm · ${escapeHtml(nextRank.label)}` : 'Đã đạt hạng cao nhất'}</dd></div><div><dt>Mùa hợp tác</dt><dd>${season}</dd></div></dl>
+    <p>Chọn brief phù hợp với lượng hàng và kênh bán hiện có. Brief khó hơn cần nhịp bán cao hơn nhưng giúp Studio thăng hạng nhanh hơn.</p>
+  </section><div class="campaign-offers">${offers.map((offer, index) => {
       const focus = offer.style ? styleNames[offer.style] : offer.category ? categoryNames[offer.category] : 'Đa kênh';
-      return `<article class="campaign-offer campaign-offer-${index + 1}"><div class="campaign-offer-number">0${index + 1}</div><span class="campaign-client">${escapeHtml(offer.client)}</span><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.description)}</p><div class="campaign-offer-focus">${icon(offer.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}</div><ul><li>${offer.targetUnits} sản phẩm đúng brief</li><li>${money(offer.targetRevenue)} doanh thu</li>${offer.targetOnline ? `<li>${offer.targetOnline} đơn online</li>` : ''}<li>${offer.durationDays} ngày thực hiện</li></ul><div class="campaign-offer-reward"><small>THƯỞNG</small><strong>${money(offer.rewardMoney)} · ${offer.rewardXp} XP</strong><span>+${offer.prestigeReward} danh tiếng ngành</span></div><button class="btn btn-primary" data-action="campaign-start" data-id="${offer.id}" ${s.phase === 'open' ? 'disabled' : ''}>Nhận brief ${icon('arrow')}</button></article>`;
-    }).join('')}</div>${s.phase === 'open' ? '<p class="campaign-open-note">Hãy đóng cửa sau ngày bán để nhận một brief mới.</p>' : ''}</div>`;
+      const stockReady = matchingStock(offer);
+      const difficulty = index === 0 ? 'Dễ bắt đầu' : index === 1 ? 'Tăng trưởng' : 'Thử thách';
+      const dailyUnits = Math.ceil(offer.targetUnits / offer.durationDays);
+      const dailyRevenue = Math.ceil(offer.targetRevenue / offer.durationDays / 10000) * 10000;
+      return `<article class="campaign-offer campaign-offer-${index + 1}"><div class="campaign-offer-number">0${index + 1}</div><div class="campaign-offer-badges"><span>${offer.kind === 'editorial' ? 'EDITORIAL' : offer.kind === 'category' ? 'PRODUCT LAUNCH' : 'OMNICHANNEL'}</span><b>${difficulty}</b></div><span class="campaign-client">${escapeHtml(offer.client)}</span><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.description)}</p><div class="campaign-offer-focus">${icon(offer.kind === 'omnichannel' ? 'globe' : 'trend')} ${focus}</div><div class="campaign-offer-readiness"><span>${icon('box')} Hàng phù hợp đang có</span><strong>${stockReady} món</strong><i class="${stockReady >= dailyUnits ? 'is-ready' : ''}">${stockReady >= dailyUnits ? 'Đủ nhịp ngày đầu' : `Nên chuẩn bị thêm ${Math.max(0, dailyUnits - stockReady)} món`}</i></div><ul><li><b>${offer.targetUnits}</b> sản phẩm đúng brief</li><li><b>${money(offer.targetRevenue)}</b> doanh thu</li>${offer.targetOnline ? `<li><b>${offer.targetOnline}</b> đơn online</li>` : ''}<li><b>${offer.durationDays} ngày</b> · khoảng ${dailyUnits} món và ${money(dailyRevenue)}/ngày</li></ul><div class="campaign-offer-reward"><small>GÓI THƯỞNG</small><strong>${money(offer.rewardMoney)} · ${offer.rewardXp} XP</strong><span>+${offer.rewardFollowers} follower · +${offer.prestigeReward} danh tiếng</span></div><button class="btn btn-primary" data-action="campaign-start" data-id="${offer.id}" ${s.phase === 'open' ? 'disabled' : ''}>Nhận brief ${icon('arrow')}</button></article>`;
+    }).join('')}</div>${s.phase === 'open' ? '<p class="campaign-open-note">Hãy đóng cửa sau ngày bán để nhận một brief mới.</p>' : ''}</div></div>`;
 }
 export function questPanel(s: GameState) {
   const quests = [
@@ -571,12 +601,15 @@ export function staffManagementModal(s: GameState, detailUid = '') {
     const experience = detailEmployee.experience ?? 0;
     const experienceTarget = 35 + skillLevel * 15;
     const adviceProfile = staffAdviceProfile(detailEmployee);
+    const cashierProfile = staffCashierProfile(detailEmployee);
     const stockProfile = staffStockProfile(detailEmployee);
     const assignmentDetail = assignment === 'service'
-      ? `<div class="employee-role-effect is-service"><strong>${icon('users')} Hiệu quả tư vấn</strong><span>Phối tối đa <b>${adviceProfile.maxItems} món</b></span><span>Nhắm <b>${Math.round(adviceProfile.targetBudgetRatio * 100)}% ngân sách</b></span><span>+<b>${adviceProfile.matchBonus}</b> điểm chốt</span><span><b>${Math.round(adviceProfile.assistChance * 100)}%</b> nhận khách</span></div>`
+      ? `<div class="employee-role-effect is-service"><header>${icon('users')}<span><small>HIỆU QUẢ CÔNG VIỆC</small><strong>Tư vấn khách hàng</strong></span></header><div class="employee-role-metrics"><span><small>Phối trang phục</small><b>${adviceProfile.maxItems}</b><em>món tối đa</em></span><span><small>Mục tiêu ngân sách</small><b>${Math.round(adviceProfile.targetBudgetRatio * 100)}%</b><em>ngân sách khách</em></span><span><small>Hỗ trợ chốt đơn</small><b>+${adviceProfile.matchBonus}</b><em>điểm phù hợp</em></span><span><small>Khả năng nhận khách</small><b>${Math.round(adviceProfile.assistChance * 100)}%</b><em>mỗi lượt khách</em></span></div></div>`
       : assignment === 'stock'
-        ? `<div class="employee-role-effect is-stock"><strong>${icon('box')} Hiệu quả kho</strong><span>Tốn <b>${stockProfile.packingEnergyPerOrder} năng lượng/đơn</b></span><span>Rút <b>${stockProfile.deliveryDaysSaved} ngày</b> giao lô gần nhất</span><span>Ưu tiên đóng gói <b>${Math.round(stockProfile.packingPriority)}</b></span></div>`
-        : '';
+        ? `<div class="employee-role-effect is-stock"><header>${icon('box')}<span><small>HIỆU QUẢ CÔNG VIỆC</small><strong>Quản lý kho hàng</strong></span></header><div class="employee-role-metrics"><span><small>Năng lượng</small><b>${stockProfile.packingEnergyPerOrder}</b><em>mỗi đơn</em></span><span><small>Tốc độ giao lô</small><b>−${stockProfile.deliveryDaysSaved}</b><em>ngày chờ</em></span><span><small>Ưu tiên đóng gói</small><b>${Math.round(stockProfile.packingPriority)}</b><em>điểm ưu tiên</em></span></div></div>`
+        : assignment === 'cashier'
+          ? `<div class="employee-role-effect is-cashier"><header>${icon('coin')}<span><small>HIỆU QUẢ CÔNG VIỆC</small><strong>Thu ngân tại quầy</strong></span></header><div class="employee-role-metrics"><span><small>Khách phục vụ</small><b>Tự xem</b><em>tự động nhận</em></span><span><small>Thời gian xử lý</small><b>${cashierProfile.checkoutSeconds}s</b><em>mỗi giao dịch</em></span><span><small>Rủi ro trả thiếu</small><b>${(cashierProfile.shortChangeChance * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</b><em>tối đa 5%</em></span><span><small>Ưu tiên quầy</small><b>${Math.round(cashierProfile.checkoutPriority)}</b><em>điểm ưu tiên</em></span></div></div>`
+          : '';
     const status = onLeave ? `Nghỉ phép đến ${gameDate(detailEmployee.leaveUntilDay!)}` : assignment === 'off' ? 'Nghỉ chờ xếp ca' : 'Đang trong ca';
     const detailHeader = `<header class="staff-modal-header employee-profile-header"><strong>${working.length}/${capacity}</strong><h2>${escapeHtml(detailEmployee.name)} <em>Cấp ${skillLevel}</em></h2><button class="staff-modal-close staff-modal-back" data-action="staff-detail-close" aria-label="Quay lại danh sách nhân viên" title="Quay lại">${icon('arrow')}</button></header>`;
     return `<div class="staff-modal staff-detail-mode">
@@ -587,7 +620,7 @@ export function staffManagementModal(s: GameState, detailUid = '') {
           <div class="employee-detail-hero-copy"><span class="employee-detail-role">${escapeHtml(detailEmployee.role)}</span><strong>${status}</strong><p>${escapeHtml(detailEmployee.bio)}</p></div>
         </div>
         <div class="employee-detail-content">
-          <div class="employee-detail-stat-grid">
+          ${assignment === 'off' ? `<div class="employee-detail-stat-grid is-full">
             <span>${icon('heart')}<small>Tinh thần</small><b>${detailEmployee.morale}</b></span>
             <span>${icon('sun')}<small>Năng lượng</small><b>${energy}</b></span>
             <span>${icon('coin')}<small>Lương/ca</small><b>${money(detailEmployee.salary)}</b></span>
@@ -596,12 +629,15 @@ export function staffManagementModal(s: GameState, detailUid = '') {
             <span>${icon('heart')}<small>Duyên dáng</small><b>${detailEmployee.charm}</b></span>
             <span>${icon('shield')}<small>Ổn định</small><b>${detailEmployee.reliability}</b></span>
             <span>${icon('star')}<small>Kinh nghiệm</small><b>${experience}/${experienceTarget}</b></span>
-          </div>
+          </div>` : `<div class="employee-detail-stat-grid">
+            <span class="is-morale">${icon('heart')}<small>Tinh thần</small><b>${detailEmployee.morale}<em>/100</em></b><i><u style="--staff-vital:${Math.max(0, Math.min(100, detailEmployee.morale))}%"></u></i></span>
+            <span class="is-energy">${icon('sun')}<small>Năng lượng</small><b>${energy}<em>/100</em></b><i><u style="--staff-vital:${Math.max(0, Math.min(100, energy))}%"></u></i></span>
+          </div>`}
           ${assignmentDetail}
           <div class="employee-shift-control employee-detail-shift">
             <strong class="employee-detail-label">Phân công ca làm</strong>
             <div class="shift-options" role="group" aria-label="Xếp ca cho ${escapeHtml(detailEmployee.name)}">${(Object.keys(assignmentLabels) as StaffAssignment[]).map(value => `<button data-action="staff-assignment" data-id="${detailEmployee.uid}" data-value="${value}" class="${value === assignment ? 'is-active' : ''}" ${onLeave || s.phase === 'open' ? 'disabled' : ''}>${assignmentLabels[value]}</button>`).join('')}</div>
-            <small>Tư vấn phối set 2–5 món theo gu và ngân sách · Kho tự đóng đơn, tiết kiệm năng lượng và thúc lô nhập gần nhất · Thu ngân giữ đánh giá · Nghỉ để hồi năng lượng.</small>
+            <small><b>Tư vấn:</b> có thể tự nhận khách và phối trang phục theo gu, ngân sách. <b>Kho hàng:</b> tự đóng gói đơn online và rút ngắn thời gian giao lô nhập. <b>Thu ngân:</b> tự thanh toán cho khách tự xem tại quầy. <b>Nghỉ hồi sức:</b> tạm ngừng làm việc để phục hồi năng lượng.</small>
           </div>
           <footer class="employee-detail-footer"><div class="employee-record employee-detail-record"><span>${icon('bag')} <b>${detailEmployee.sales}</b> đơn hỗ trợ</span><span>${icon('star')} <b>${money(detailEmployee.tipsEarned)}</b> tip</span><span>${icon('sun')} Gia nhập ${gameDate(detailEmployee.hiredDay)}</span></div><button class="employee-fire employee-detail-fire" data-action="staff-fire" data-id="${detailEmployee.uid}">${icon('close')} Cho nghỉ việc</button></footer>
         </div>
@@ -1285,7 +1321,6 @@ export function onlineChannelModal(s: GameState) {
     </div>
   </div>`;
 }
-
 export function onlineStockModal(s: GameState) {
   const reservedFor = (productId: string) => onlineReservedFor(s, productId);
   const warehouse = products.map(product => ({
@@ -1969,7 +2004,34 @@ export function summaryModal(s: GameState) {
   `;
 }
 
-export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' = 'loan') {
+export type CheckoutStage = 'cash' | 'transfer' | 'card';
+export function checkoutModal(s: GameState, visit: CustomerVisit, stage: CheckoutStage, change: CashDrawer = {}) {
+  const customer = customers.find(item => item.id === visit.customerId) ?? lookupCustomer(visit.customerId);
+  const cartIds = visit.cartProductIds ?? [];
+  const total = visit.cartTotal ?? 0;
+  const tender = visit.cashTender ?? customerTender(total);
+  const tenderTotal = drawerAmount(tender);
+  const changeDue = tenderTotal - total;
+  const selectedChange = drawerAmount(change);
+  const tenderNoteStacks = CASH_DENOMINATIONS.flatMap(value => {
+    const count = tender[String(value)] ?? 0;
+    if (count <= 0) return [];
+    const visibleNotes = Math.min(count, 4);
+    return `<span class="cash-tender-stack" aria-label="${count} tờ ${money(value)}">${Array.from({ length: visibleNotes }, (_, index) => `<i style="--tender-note-y:${index * 2}px;--tender-note-x:${index * 3}px"><img src="/assets/ui/cash/${value}.png" alt="" draggable="false"></i>`).join('')}${count > 1 ? `<b>×${count}</b>` : ''}</span>`;
+  }).join('');
+  const selectedNoteStacks = CASH_DENOMINATIONS.flatMap(value => {
+    const count = change[String(value)] ?? 0;
+    if (count <= 0) return [];
+    const visibleNotes = Math.min(count, 4);
+    return `<button class="cash-note-stack" data-action="checkout-change-note-remove" data-id="${value}" aria-label="Trả lại một tờ ${money(value)}"><span class="cash-note-stack-visual">${Array.from({ length: visibleNotes }, (_, index) => `<i style="--note-offset:${index * 4}px;--note-offset-x:${index * 5}px"><img src="/assets/ui/cash/${value}.png" alt="" draggable="false">${index === visibleNotes - 1 ? `<small class="cash-selected-count">×${count}</small>` : ''}</i>`).join('')}</span></button>`;
+  }).join('');
+  const body = stage === 'cash' ? `<section class="checkout-cash"><div class="cash-transaction-summary"><span class="cash-tender-summary"><small>Khách đưa · ${money(tenderTotal)}</small><span>${tenderNoteStacks}</span></span><span class="cash-total-card cash-order-total"><i>${icon('bag')}</i><span><small>Tiền đơn hàng</small><strong>${money(total)}</strong></span></span><span class="cash-total-card is-change"><i>${icon('coin')}</i><span><small>Cần trả lại</small><strong>${money(changeDue)}</strong></span></span></div><div class="cash-layout"><aside class="cash-selection-preview"><div class="cash-customer-row"><p><small>Khách hàng</small><strong>${escapeHtml(customer?.name ?? 'Khách hàng')}</strong></p></div><header><strong>Tiền đã chọn</strong><small>${money(selectedChange)} / ${money(changeDue)}</small></header><div class="cash-selected-notes">${selectedNoteStacks || `<div class="cash-notes-empty"><b>₫</b><span>Chọn tiền từ khay bên phải</span></div>`}</div></aside><div class="cash-workspace"><header class="cash-drawer-header"><h3>Khay đựng tiền</h3><span>Trong két: ${money(cashDrawerTotal(s.cashDrawer))}</span></header><div class="cash-drawer-grid">${CASH_DENOMINATIONS.map(value => { const available = (s.cashDrawer[String(value)] ?? 0) + (tender[String(value)] ?? 0); return `<button data-action="checkout-change-note" data-id="${value}" aria-label="Chọn tờ ${money(value)}, hiện có ${available} tờ" ${available <= (change[String(value)] ?? 0) ? 'disabled' : ''}><img src="/assets/ui/cash/${value}.png" alt="" draggable="false"><small class="cash-note-count">×${available}</small></button>`; }).join('')}</div><footer><button class="btn btn-secondary checkout-change-method" data-action="checkout-fallback">Bảo khách đổi phương thức thanh toán</button><button class="btn btn-primary" data-action="checkout-cash-complete">Trả tiền & hoàn tất</button></footer></div></div></section>`
+    : stage === 'transfer' ? `<section class="checkout-transfer"><div class="transfer-panel"><aside class="transfer-qr-card"><div class="transfer-shop"><span>${icon('shop')}</span><p><small>THANH TOÁN CHO</small><strong>${escapeHtml(s.shopName || 'My Little Boutique')}</strong></p></div><div class="transfer-qr-frame"><img class="transfer-qr-image" src="/assets/ui/qr-payment-pastel.png" alt="Mã QR thanh toán" draggable="false"></div><small class="transfer-qr-hint">Mở ứng dụng ngân hàng và quét mã</small></aside><main class="transfer-details"><span class="transfer-eyebrow">${icon('coin')} CHUYỂN KHOẢN QR</span><h2>Chờ khách thanh toán</h2><p class="transfer-customer">Đơn của <strong>${escapeHtml(customer?.name ?? 'Khách hàng')}</strong></p><article class="transfer-amount"><small>SỐ TIỀN CẦN CHUYỂN</small><strong>${money(total)}</strong><span>Đã điền sẵn số tiền</span></article><p class="transfer-wait"><small>Chờ khách chuyển khoản</small><strong id="checkout-transfer-countdown">…</strong></p></main></div></section>`
+    : `<section class="checkout-card"><div class="card-payment-panel"><aside class="card-drag-side"><span class="card-payment-tag">THẺ CỦA KHÁCH</span><h2>Kéo thẻ vào máy POS</h2><p>Giữ và kéo thẻ sang vùng máy thanh toán.</p><div class="card-drag-home"><img class="checkout-bank-card" data-checkout-bank-card src="/assets/ui/visa-card-pastel.png" alt="Thẻ VISA của ${escapeHtml(customer?.name ?? 'khách hàng')}" draggable="false"></div><small>${escapeHtml(customer?.name ?? 'Khách hàng')} · VISA</small></aside><main class="pos-terminal-zone" data-card-drop-zone><span class="pos-terminal-tag">${icon('coin')} MÁY THANH TOÁN</span><div class="pos-terminal"><div class="pos-screen"><small>SỐ TIỀN THANH TOÁN</small><strong>${money(total)}</strong><span id="checkout-card-status">Sẵn sàng nhận thẻ</span></div><div class="pos-contactless"><i></i><i></i><i></i></div><div class="pos-keypad">${Array.from({ length: 9 }, (_, index) => `<i>${index + 1}</i>`).join('')}<i>•</i><i>0</i><i>✓</i></div><div class="pos-card-slot"><span></span></div></div><p class="card-drop-hint">Thả thẻ vào máy để thanh toán</p></main></div></section>`;
+  return stage === 'transfer' || stage === 'card' ? body : `<div class="checkout-modal">${body}</div>`;
+}
+
+export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' | 'cash' = 'loan') {
   const borrowed = s.loan?.principal ?? 0;
   const balance = s.loan?.balance ?? 0;
   const remaining = Math.max(0, LOAN_MAX - borrowed);
@@ -1977,6 +2039,7 @@ export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' 
   const canBorrow = s.phase !== 'open' && remaining > 0;
   const installment = s.loan?.paymentDue ?? 0;
   const rentPerDay = dailyRent(s);
+  const cashTotal = cashDrawerTotal(s.cashDrawer);
   const payrollEmployees = s.employees.filter(employee => (employee.unpaidWages ?? 0) > 0);
   const payrollDue = payrollEmployees.reduce((sum, employee) => sum + (employee.unpaidWages ?? 0), 0);
   const payrollContent = `<section class="finance-tab-card finance-payroll-box">
@@ -1997,18 +2060,42 @@ export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' 
   </section>`;
   const landContent = `<section class="finance-tab-card finance-land-box ${s.rentOverdueDays >= 6 ? 'is-danger' : ''}">
     <div class="finance-land-hero">${icon('shop')}<div><span class="eyebrow">MẶT BẰNG BOUTIQUE</span><h3>${money(rentPerDay)}/ngày</h3><p>Tiền thuê được cộng vào công nợ sau mỗi ngày bán.</p></div></div>
-    <div class="finance-tab-summary"><span>Đang nợ <b>${money(s.rentDue)}</b></span><span>Quá hạn <b>${s.rentOverdueDays}/7 ngày</b></span><span>Tiền mặt <b>${money(s.money)}</b></span></div>
+    <div class="finance-tab-summary"><span>Đang nợ <b>${money(s.rentDue)}</b></span><span>Quá hạn <b>${s.rentOverdueDays}/7 ngày</b></span><span>Tài khoản <b>${money(s.money)}</b></span></div>
     <button class="btn btn-primary finance-land-pay" data-action="pay-rent" ${s.rentDue <= 0 || s.money < s.rentDue || s.phase === 'open' ? 'disabled' : ''}>Thanh toán tiền mặt bằng · ${money(s.rentDue)}</button>
     <p class="finance-footnote">Công nợ mặt bằng được cộng dồn và chỉ thanh toán khi bạn chủ động bấm trả.</p>
   </section>`;
+  const cashContent = `<section class="finance-tab-card finance-cash-box"><div class="finance-section-title"><div><span class="eyebrow">DÒNG TIỀN TẠI QUẦY</span><h3>Két tiền mặt</h3></div><span class="finance-rate">${money(cashTotal)}</span></div><p>Tiền mặt dùng để trả tiền thừa. Nộp vào tài khoản để chi tiêu hoặc rút từng mệnh giá về két trước khi mở cửa.</p><div class="cash-denomination-list">${CASH_DENOMINATIONS.map(value => `<span><b>${money(value)}</b><small>× ${s.cashDrawer[String(value)] ?? 0}</small></span>`).join('')}</div><div class="finance-tab-actions"><button class="btn btn-primary" data-action="cash-deposit" ${s.phase === 'open' || cashTotal < 1000 ? 'disabled' : ''}>Nộp vào tài khoản</button><button class="btn btn-secondary" data-action="cash-withdraw" ${s.phase === 'open' || s.money < 31000 ? 'disabled' : ''}>Rút về két</button></div><small class="finance-footnote">Mỗi giao dịch thu phí 30.000₫. Chỉ có thể chuyển tiền trước hoặc sau giờ mở cửa.</small></section>`;
   return `<div class="finance-modal finance-tabs-modal">
     <header class="finance-game-header"><span class="import-balance finance-header-balance" data-animated-balance="finance">${icon('importMoney')} ${money(s.money)}</span><h2>Tài chính</h2><button class="staff-modal-close" data-action="close-modal" aria-label="Đóng tài chính">${icon('close')}</button></header>
     <nav class="finance-tabs" aria-label="Các mục tài chính">
-      <button class="${section === 'loan' ? 'is-active' : ''}" data-action="finance-section" data-id="loan">${icon('coins')}<span>Vay vốn</span>${installment > 0 ? '<b>!</b>' : ''}</button>
+      <button class="${section === 'cash' ? 'is-active' : ''}" data-action="finance-section" data-id="cash">${icon('coin')}<span>Tiền mặt</span></button>
+      <button class="${section === 'loan' ? 'is-active' : ''}" data-action="finance-section" data-id="loan">${icon('bank')}<span>Vay vốn</span>${installment > 0 ? '<b>!</b>' : ''}</button>
       <button class="${section === 'payroll' ? 'is-active' : ''}" data-action="finance-section" data-id="payroll">${icon('users')}<span>Lương</span>${payrollDue > 0 ? `<b>${payrollEmployees.length}</b>` : ''}</button>
       <button class="${section === 'land' ? 'is-active' : ''}" data-action="finance-section" data-id="land">${icon('shop')}<span>Mặt bằng</span>${s.rentDue > 0 ? '<b>!</b>' : ''}</button>
     </nav>
-    <div class="finance-tab-content">${section === 'payroll' ? payrollContent : section === 'land' ? landContent : loanContent}</div>
+    <div class="finance-tab-content">${section === 'payroll' ? payrollContent : section === 'land' ? landContent : section === 'cash' ? cashContent : loanContent}</div>
+  </div>`;
+}
+
+export function cashTransferModal(s: GameState, mode: 'deposit' | 'withdraw', selection: CashDrawer) {
+  const depositing = mode === 'deposit';
+  const amount = drawerAmount(selection);
+  const fee = 30000;
+  const result = depositing ? amount - fee : amount + fee;
+  const canConfirm = amount > 0
+    && s.phase !== 'open'
+    && (depositing
+      ? CASH_DENOMINATIONS.every(value => (selection[String(value)] ?? 0) <= (s.cashDrawer[String(value)] ?? 0)) && s.money + amount >= fee
+      : s.money >= result);
+  return `<div class="cash-transfer-modal">
+    <header class="cash-transfer-header"><button data-action="cash-transfer-back" aria-label="Quay lại tài chính">${icon('arrow')}</button><div><span class="eyebrow">${depositing ? 'NỘP TIỀN MẶT' : 'RÚT TIỀN MẶT'}</span><h2>${depositing ? 'Chọn tiền trong két để nộp' : 'Chọn số tờ muốn rút về két'}</h2></div><span class="cash-transfer-header-spacer" aria-hidden="true"></span></header>
+    <div class="cash-transfer-balance"><span>${depositing ? 'Trong két' : 'Trong tài khoản'}<b>${money(depositing ? cashDrawerTotal(s.cashDrawer) : s.money)}</b></span><span>Phí giao dịch<b>${money(fee)}</b></span><span>${depositing ? 'Tài khoản nhận' : 'Tài khoản bị trừ'}<b>${money(Math.max(0, result))}</b></span></div>
+    <div class="cash-transfer-note-grid">${CASH_DENOMINATIONS.map(value => {
+      const selected = selection[String(value)] ?? 0;
+      const available = s.cashDrawer[String(value)] ?? 0;
+      return `<article><img src="/assets/ui/cash/${value}.png" alt="Tờ ${money(value)}" draggable="false"><div><strong>${money(value)}</strong><small>${depositing ? `Có ${available} tờ` : `${money(value * selected)}`}</small></div><button data-action="cash-transfer-note-minus" data-id="${value}" ${selected <= 0 ? 'disabled' : ''}>−</button><b>×${selected}</b><button data-action="cash-transfer-note-plus" data-id="${value}" ${depositing && selected >= available ? 'disabled' : ''}>+</button></article>`;
+    }).join('')}</div>
+    <footer><div><small>${depositing ? 'Tổng tiền đã chọn' : 'Số tiền rút về két'}</small><strong>${money(amount)}</strong></div><button class="btn btn-primary" data-action="cash-transfer-confirm" ${canConfirm ? '' : 'disabled'}>${depositing ? 'Nộp tiền' : 'Rút tiền'} · phí ${money(fee)}</button></footer>
   </div>`;
 }
 
@@ -2034,6 +2121,16 @@ export function financialGameOverModal(s: GameState) {
       <p class="financial-deadline-note">Hãy cân đối dòng tiền và thanh toán trong tab Tài chính trước khi công nợ vượt quá 7 ngày ở lượt chơi tiếp theo.</p>
       <button class="btn btn-primary" data-action="reset">${icon('sparkle')} Bắt đầu boutique mới</button>
     </div>`;
+}
+
+export function shortChangeFineModal(amount: number, reputationLoss: number, violations: number) {
+  return `<section class="short-change-fine-modal">
+    <header><span>${icon('shield')}</span><div><small>THÔNG BÁO XỬ PHẠT</small><h2>Shop bị xử phạt vì trả thiếu tiền</h2></div></header>
+    <p>Cơ quan chức năng xác định shop đã cố ý trả thiếu tiền thừa cho khách quá 3 lần.</p>
+    <div class="short-change-fine-summary"><span>Số lần vi phạm<b>${violations} lần</b></span><span>Tiền phạt<b>−${money(amount)}</b></span><span>Uy tín shop<b>−${reputationLoss.toLocaleString('vi-VN')}</b></span></div>
+    <aside>${icon('warning')} Mọi lần trả thiếu đều được ghi nhận. Cứ thêm 4 lần vi phạm, shop sẽ tiếp tục bị xử phạt.</aside>
+    <button class="btn btn-primary" data-action="close-modal">Đã hiểu</button>
+  </section>`;
 }
 
 export function debtWarningModal(s: GameState, staff: StaffFinancialNotice = { payrollAtRisk: [], departures: [] }) {

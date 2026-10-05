@@ -227,7 +227,26 @@ export interface CustomerVisit {
   staffAttempted?: boolean;
   assignedStaffUid?: string;
   staffResolveIn?: number;
+  stage?: 'shopping' | 'checkout';
+  cartProductIds?: string[];
+  cartTotal?: number;
+  cartScore?: number;
+  cartSpeech?: string;
+  cashTender?: CashDrawer;
+  paymentFriction?: number;
+  checkoutPaymentMethod?: 'cash' | 'transfer' | 'card';
+  cartAssistingStaffUid?: string;
+  cartAutomatedByStaff?: boolean;
+  cartViral?: boolean;
+  cartFollowers?: number;
+  cartXpEarned?: number;
+  cartTip?: number;
+  cartReviewStars?: number;
+  cartPatienceRatio?: number;
+  cashierStaffUid?: string;
+  cashierResolveIn?: number;
 }
+export type CashDrawer = Record<string, number>;
 export type LoyaltyTier = 'Khách mới' | 'Khách quen' | 'Thân thiết' | 'VIP';
 export interface CustomerLoyalty {
   visits: number;
@@ -264,6 +283,8 @@ export interface ActiveBrandCampaign extends BrandCampaign {
 }
 export interface GameState {
   version: 1; money: number; xp: number; level: number; reputation: number; reviews: number; followers: number;
+  cashDrawer: CashDrawer;
+  shortChangeViolations: number; shortChangeFraudFines: number;
   shopReviewTotal: number; shopReviewCount: number;
   day: number; phase: 'preparation' | 'open' | 'closed'; customerIndex: number; patience: number;
   dayTimer: number; dailyLuck?: string;
@@ -281,7 +302,7 @@ export interface GameState {
   onlineListings: string[]; onlineOrders: OnlineOrder[]; onlineNextOrderIn: number; onlineChannelEnabled: boolean;
   regularOnlineOrders: RegularOnlineOrder[]; regularOnlineNextOrderIn: number; onlinePackingLevel: number; lastLivestreamDay: number;
   onlineRating: number; onlineReviews: number; onlineSales: number;
-  stats: DayStats; posts: SocialPost[]; dramas: SocialDrama[]; dramaHeat: number; dramaTrust: number; nextDramaDay: number; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; musicTrack: string; tutorialDone: boolean;
+  stats: DayStats; posts: SocialPost[]; dramas: SocialDrama[]; dramaHeat: number; dramaTrust: number; nextDramaDay: number; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; effectsVolume: number; musicTrack: string; tutorialDone: boolean;
   employees: StaffMember[]; staffApplicants: StaffCandidate[]; recruitmentPost: RecruitmentPost | null; staffLeaveRequests: StaffLeaveRequest[];
   campaignSeason: number; industryReputation: number; activeCampaign: ActiveBrandCampaign | null; campaignAvailableDay: number;
   completedCampaigns: string[];
@@ -292,5 +313,5 @@ export interface GameState {
   tailoringJobs: TailoringJob[]; atelierDraft: CustomProduct | null;
   shopName: string; hasNamedShop?: boolean;
 }
-export interface SaleResult { success: boolean; score: number; reason: string; total: number; followers: number; viral: boolean; customer: Customer; products: Product[]; isSelfPick?: boolean; isStaffAssisted?: boolean; visitUid?: string; xpEarned?: number; tip?: number; staffName?: string; loyaltyPoints?: number; loyaltyTier?: LoyaltyTier; loyaltyReward?: string; reviewStars?: number; }
-export type GameEvent = { type: 'change' } | { type: 'toast'; message: string; tone?: 'success' | 'error' } | { type: 'sale'; result: SaleResult } | { type: 'customer'; reason?: 'arrival' | 'focus' } | { type: 'summary' } | { type: 'debt-warning'; staff?: StaffFinancialNotice } | { type: 'game-over' } | { type: 'orders-arrived'; items: ArrivedOrderSummary[] };
+export interface SaleResult { success: boolean; score: number; reason: string; total: number; followers: number; viral: boolean; customer: Customer; products: Product[]; isSelfPick?: boolean; isStaffAssisted?: boolean; checkoutTimedOut?: boolean; checkoutPaymentRefused?: boolean; visitUid?: string; xpEarned?: number; tip?: number; staffName?: string; loyaltyPoints?: number; loyaltyTier?: LoyaltyTier; loyaltyReward?: string; reviewStars?: number; shortChangeFine?: { amount: number; reputationLoss: number; violations: number }; }
+export type GameEvent = { type: 'change' } | { type: 'toast'; message: string; tone?: 'success' | 'error' } | { type: 'sale'; result: SaleResult } | { type: 'customer'; reason?: 'arrival' | 'focus' | 'checkout-advice' | 'exit' } | { type: 'summary' } | { type: 'debt-warning'; staff?: StaffFinancialNotice } | { type: 'game-over' } | { type: 'orders-arrived'; items: ArrivedOrderSummary[] };

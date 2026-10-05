@@ -218,7 +218,7 @@ export class ShopScene extends Phaser.Scene {
   private edit = false;
   private departing = false;
   private focusCallback: () => void;
-  private selectCallback: (uid?: string) => void;
+  private selectCallback: (uid?: string, tapped?: boolean) => void;
   private unsubscribe?: () => void;
   private resizeObserver?: ResizeObserver;
   private dragGhost?: Phaser.GameObjects.Graphics;
@@ -250,6 +250,7 @@ export class ShopScene extends Phaser.Scene {
   private furnitureDragPointerId = -1;
   private furnitureDragUid?: string;
   private selectionClearBlockedUntil = 0;
+  private furnitureTapTweens = new Map<string, Phaser.Tweens.Tween>();
   private currentTab = 'shop';
   private readonly coarsePointer = typeof window !== 'undefined'
     && (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
@@ -384,7 +385,7 @@ export class ShopScene extends Phaser.Scene {
   private staffWorkLabels = new Map<string, Phaser.GameObjects.Text>();
   private onlineShippers = new Map<string, Phaser.GameObjects.Container>();
 
-  constructor(store: GameStore, focus: () => void, select: (uid?: string) => void, private onlineOrderCallback: (orderId: string) => void = () => { }, private musicPlayerCallback: () => void = () => { }) {
+  constructor(store: GameStore, focus: () => void, select: (uid?: string, tapped?: boolean) => void, private onlineOrderCallback: (orderId: string) => void = () => { }, private musicPlayerCallback: () => void = () => { }) {
     super('ShopScene'); this.store = store; this.focusCallback = focus; this.selectCallback = select;
   }
   setTab(tab: string) {
@@ -1327,7 +1328,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private syncSelectionPulse() {
-    const uid = this.edit && !this.isDraggingPiece ? this.selected : undefined;
+    const uid = !this.isDraggingPiece ? this.selected : undefined;
     const image = uid ? this.pieces.get(uid) : undefined;
     if (!uid || !image) {
       this.stopSelectionPulse();
@@ -1339,18 +1340,39 @@ export class ShopScene extends Phaser.Scene {
     this.selectionPulseImage = image;
     this.selectionPulseTween = this.tweens.add({
       targets: image,
-      alpha: { from: 1, to: .62 },
-      duration: 480,
+      alpha: { from: 1, to: .55 },
+      duration: 380,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
   }
 
+  private animateFurnitureTap(uid: string, image: Phaser.GameObjects.Image) {
+    this.furnitureTapTweens.get(uid)?.stop();
+    const restingX = image.x;
+    const tween = this.tweens.add({
+      targets: image,
+      x: restingX + 3,
+      duration: 42,
+      yoyo: true,
+      repeat: 2,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        image.setX(restingX);
+        if (this.furnitureTapTweens.get(uid) === tween) this.furnitureTapTweens.delete(uid);
+      },
+      onStop: () => image.setX(restingX),
+    });
+    this.furnitureTapTweens.set(uid, tween);
+  }
+
   private refreshFurniture() {
     this.selectionArrows?.clear();
     for (const [uid, img] of this.pieces) if (!this.store.state.layout.some(p => p.uid === uid)) {
       if (this.selectionPulseUid === uid) this.stopSelectionPulse();
+      this.furnitureTapTweens.get(uid)?.stop();
+      this.furnitureTapTweens.delete(uid);
       img.destroy(); this.pieces.delete(uid);
       this.furnitureSlotBubbles.get(uid)?.container.destroy();
       this.furnitureSlotBubbles.delete(uid);
@@ -1396,6 +1418,7 @@ export class ShopScene extends Phaser.Scene {
           useHandCursor: true,
         });
         img.setData('uid', p.uid); this.input.setDraggable(img); this.pieces.set(p.uid, img);
+        const tappedImage = img;
         let downX = 0, downY = 0, downTime = 0;
         let tapHandled = false;
         let editTapPointerId = -1;
@@ -1473,13 +1496,15 @@ export class ShopScene extends Phaser.Scene {
           }
           if (dist < this.tapTolerance(pointer) && elapsed < (this.coarsePointer ? 700 : 500) && !this.hasPanned) {
             if (p.id === 'vinyl-player') {
+              this.animateFurnitureTap(p.uid, tappedImage);
               this.musicPlayerCallback();
               return;
             }
             const nextSelected = this.selected === p.uid ? undefined : p.uid;
             this.selected = nextSelected;
-            this.selectCallback(nextSelected);
+            this.selectCallback(nextSelected, nextSelected !== undefined);
             this.refreshFurniture();
+            if (nextSelected) this.animateFurnitureTap(p.uid, tappedImage);
           }
         };
         img.on('pointerup', finishFurnitureTap);
@@ -1946,6 +1971,13 @@ export class ShopScene extends Phaser.Scene {
     const world = toWorld(Phaser.Math.Clamp(free.x, .35, size - .35), Phaser.Math.Clamp(free.y, .35, size - .35));
     return { x: world.x, y: world.y + 7 };
   }
+  private checkoutCustomerTarget(queueIndex = 0) {
+    const counter = this.store.state.layout.find(item => item.id === 'counter');
+    if (!counter) return { x: 430 - queueIndex * 34, y: 432 + queueIndex * 20 };
+    const anchor = furnitureAnchor(counter);
+    const direction = counter.rotation === 1 ? { x: -72, y: 18 } : { x: 76, y: 22 };
+    return { x: anchor.x + direction.x - queueIndex * 30, y: anchor.y + direction.y + queueIndex * 22 };
+  }
   private spacedCustomerTarget(target: { x: number; y: number }, uid: string) {
     const occupied: { x: number; y: number }[] = [];
     if (this.avatar && this.primaryVisitUid !== uid && !this.departing) occupied.push({
@@ -2063,27 +2095,29 @@ export class ShopScene extends Phaser.Scene {
     if (this.store.state.phase !== 'open') return;
     const dots = '.'.repeat(1 + Math.floor(this.time.now / 420) % 3);
     const focused = activeVisit(this.store.state);
-    if (focused?.mode === 'advice' && this.speechBubbleContainer?.visible && this.speechBubbleText) {
+    if ((focused?.mode === 'advice' || focused?.stage === 'checkout') && this.speechBubbleContainer?.visible && this.speechBubbleText) {
       const employee = focused.assignedStaffUid
         ? this.store.state.employees.find(candidate => candidate.uid === focused.assignedStaffUid)
         : undefined;
-      const nextText = employee
+      const nextText = focused.stage === 'checkout'
+        ? `Chờ thanh toán · ${focused.patience}s\nChạm để mở POS`
+        : employee
         ? `Đang được hỗ trợ${dots}\nSắp hoàn tất`
         : `Chờ tư vấn${dots} ${focused.patience}s\nChạm để hỗ trợ`;
       if (this.speechBubbleText.text !== nextText) this.speechBubbleText.setText(nextText);
-      this.speechBubbleText.setColor(!employee && focused.patience <= 10 ? '#d7194a' : '#7952a6');
+      this.speechBubbleText.setColor(focused.patience <= 10 ? '#d7194a' : focused.stage === 'checkout' ? '#a85b00' : '#7952a6');
     }
     for (const [uid, entry] of this.secondaryCustomers) {
       const visit = this.store.state.activeVisits.find(candidate => candidate.uid === uid);
-      if (visit?.mode !== 'advice') continue;
+      if (!visit || (visit.mode !== 'advice' && visit.stage !== 'checkout')) continue;
       const label = entry.chat.list[1] as Phaser.GameObjects.Text | undefined;
       if (!label) continue;
       const employee = visit.assignedStaffUid
         ? this.store.state.employees.find(candidate => candidate.uid === visit.assignedStaffUid)
         : undefined;
-      const nextText = employee ? `Được hỗ trợ${dots}` : `Chờ tư vấn${dots} ${visit.patience}s`;
+      const nextText = visit.stage === 'checkout' ? `Thanh toán · ${visit.patience}s` : employee ? `Được hỗ trợ${dots}` : `Chờ tư vấn${dots} ${visit.patience}s`;
       if (label.text !== nextText) label.setText(nextText);
-      label.setColor(!employee && visit.patience <= 10 ? '#d7194a' : '#7952a6');
+      label.setColor(visit.patience <= 10 ? '#d7194a' : visit.stage === 'checkout' ? '#a85b00' : '#7952a6');
     }
   }
 
@@ -2116,34 +2150,34 @@ export class ShopScene extends Phaser.Scene {
     waiting.forEach((visit, index) => {
       const customer = this.customerForId(visit.customerId);
       if (!customer) return;
-      const desiredTarget = visit.mode === 'browse' ? this.shoppingTarget(customer, visit.uid) : positions[index % positions.length];
+      const desiredTarget = visit.stage === 'checkout' ? this.checkoutCustomerTarget(index) : visit.mode === 'browse' ? this.shoppingTarget(customer, visit.uid) : positions[index % positions.length];
       const target = this.spacedCustomerTarget(desiredTarget, visit.uid);
       const entrance = this.customerEntrance(index + 1);
       let entry = this.secondaryCustomers.get(visit.uid);
       if (!entry) {
         const sprite = this.add.image(0, 0, this.getCustomerTextureKey(customer, false, visit.uid)).setScale(SECONDARY_CUSTOMER_SCALE).setOrigin(.5, 1);
         const bubble = this.add.graphics();
-        const bubbleWidth = visit.mode === 'advice' ? 82 : 76;
-        const bubbleFill = visit.mode === 'advice' ? 0xfff8dd : 0xffffff;
+        const bubbleWidth = visit.mode === 'advice' || visit.stage === 'checkout' ? 82 : 76;
+        const bubbleFill = visit.stage === 'checkout' ? 0xfff0bd : visit.mode === 'advice' ? 0xfff8dd : 0xffffff;
         bubble.fillStyle(bubbleFill, .56).fillRoundedRect(-bubbleWidth / 2, -132, bubbleWidth, 27, 7);
         this.strokeDashedBubble(bubble, -bubbleWidth / 2, -132, bubbleWidth, 27, 7, 0x493746, 6);
         bubble.fillStyle(bubbleFill, .56).fillTriangle(-6, -106, 6, -106, 0, -97);
         bubble.lineStyle(1.6, 0x493746, .9);
         this.drawDashedLine(bubble, -6, -106, 0, -97, 3, 2);
         this.drawDashedLine(bubble, 0, -97, 6, -106, 3, 2);
-        const label = this.add.text(visit.mode === 'advice' ? 3 : 0, -118.5, visit.mode === 'advice' ? `Chờ tư vấn... ${visit.patience}s` : `${customer.name} · xem đồ`, {
-          fontFamily: 'Paytone One, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: visit.mode === 'advice' && visit.patience <= 10 ? '#d7194a' : visit.mode === 'advice' ? '#7952a6' : '#4675a1', stroke: '#fffdfb', strokeThickness: 2, align: 'center', wordWrap: { width: bubbleWidth - 12 },
+        const label = this.add.text(visit.mode === 'advice' ? 3 : 0, -118.5, visit.stage === 'checkout' ? `Thanh toán · ${visit.patience}s` : visit.mode === 'advice' ? `Chờ tư vấn... ${visit.patience}s` : `${customer.name} · xem đồ`, {
+          fontFamily: 'Paytone One, Arial, sans-serif', fontSize: '7px', fontStyle: 'bold', color: visit.patience <= 10 ? '#d7194a' : visit.stage === 'checkout' ? '#a85b00' : visit.mode === 'advice' ? '#7952a6' : '#4675a1', stroke: '#fffdfb', strokeThickness: 2, align: 'center', wordWrap: { width: bubbleWidth - 12 },
         }).setOrigin(.5).setResolution(2);
         const chat = this.add.container(0, 0, [bubble, label]);
         const remembered = this.customerPositions.get(visit.uid);
-        const container = this.add.container(remembered?.x ?? entrance.spawn.x, remembered?.y ?? entrance.spawn.y, [sprite, chat]).setDepth(remembered?.y ?? entrance.spawn.y).setSize(104, 170).setInteractive({ useHandCursor: visit.mode === 'advice' });
+        const container = this.add.container(remembered?.x ?? entrance.spawn.x, remembered?.y ?? entrance.spawn.y, [sprite, chat]).setDepth(remembered?.y ?? entrance.spawn.y).setSize(104, 170).setInteractive({ useHandCursor: visit.mode === 'advice' || visit.stage === 'checkout' });
         container.setData('customerTargetX', remembered?.x ?? target.x).setData('customerTargetY', remembered?.y ?? target.y);
         let downX = 0, downY = 0;
         container.on('pointerdown', (pointer: Phaser.Input.Pointer) => { downX = pointer.x; downY = pointer.y; });
         container.on('pointerup', (pointer: Phaser.Input.Pointer) => {
           if (this.edit || Phaser.Math.Distance.Between(downX, downY, pointer.x, pointer.y) >= 8) return;
           this.store.focusCustomer(visit.uid);
-          if (visit.mode === 'advice') this.focusCallback();
+          if (visit.mode === 'advice' || visit.stage === 'checkout') this.focusCallback();
         });
         entry = { container, chat };
         this.secondaryCustomers.set(visit.uid, entry);
@@ -2325,7 +2359,7 @@ export class ShopScene extends Phaser.Scene {
     if (this.departing) { this.refreshSecondaryCustomers(); this.refreshStaff(); return; }
     const c = activeCustomer(this.store.state);
     const visit = activeVisit(this.store.state);
-    const key = c ? `${this.store.state.day}-${visit?.uid ?? `${this.store.state.customerIndex}-${c.id}`}` : '';
+    const key = c ? `${this.store.state.day}-${visit?.uid ?? `${this.store.state.customerIndex}-${c.id}`}-${visit?.stage ?? 'shopping'}` : '';
     if (key === this.customerId) {
       this.refreshSecondaryCustomers();
       this.refreshStaff();
@@ -2358,7 +2392,7 @@ export class ShopScene extends Phaser.Scene {
     this.speechBubbleGfx.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (Phaser.Math.Distance.Between(badgeDownX, badgeDownY, pointer.x, pointer.y) < 8 &&
         Date.now() - badgeDownTime < 350 && !this.hasPanned && !this.edit && !this.departing &&
-        customerNeedsAdvice(this.store.state, c)) this.focusCallback();
+        (customerNeedsAdvice(this.store.state, c) || visit?.stage === 'checkout')) this.focusCallback();
     });
     this.speechBubbleText = this.add.text(0, 0, '', {
       fontFamily: 'Paytone One, Arial, sans-serif',
@@ -2376,7 +2410,7 @@ export class ShopScene extends Phaser.Scene {
     // Phaser adds the container display origin before testing the hit area.
     this.avatar = this.add.container(rememberedPosition?.x ?? entrance.spawn.x, rememberedPosition?.y ?? entrance.spawn.y, [sprite, this.speechBubbleContainer]).setDepth(rememberedPosition?.y ?? entrance.spawn.y).setSize(88, 154).setInteractive(new Phaser.Geom.Rectangle(0, -77, 88, 154), Phaser.Geom.Rectangle.Contains);
     this.avatar.setData('customerTargetX', rememberedPosition?.x ?? entrance.inside.x).setData('customerTargetY', rememberedPosition?.y ?? entrance.inside.y);
-    this.avatar.input!.cursor = customerNeedsAdvice(this.store.state, c) ? 'pointer' : 'default';
+    this.avatar.input!.cursor = customerNeedsAdvice(this.store.state, c) || visit?.stage === 'checkout' ? 'pointer' : 'default';
 
     let avatarDownX = 0, avatarDownY = 0, avatarDownTime = 0;
     this.avatar.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -2386,7 +2420,7 @@ export class ShopScene extends Phaser.Scene {
       const dist = Phaser.Math.Distance.Between(avatarDownX, avatarDownY, pointer.x, pointer.y);
       const elapsed = Date.now() - avatarDownTime;
       if (dist < 8 && elapsed < 350 && !this.hasPanned) {
-        if (!this.edit && !this.departing && customerNeedsAdvice(this.store.state, c)) this.focusCallback();
+        if (!this.edit && !this.departing && (customerNeedsAdvice(this.store.state, c) || visit?.stage === 'checkout')) this.focusCallback();
       }
     });
 
@@ -2420,6 +2454,18 @@ export class ShopScene extends Phaser.Scene {
 
   private handleCustomerBrowsingOrAdvice(c: Customer) {
     if (!this.avatar || this.departing) return;
+    const visit = activeVisit(this.store.state);
+    if (visit?.stage === 'checkout') {
+      this.showSpeechBubble(`Chờ thanh toán · ${visit.patience}s\nChạm để mở POS`, 'advice');
+      const target = this.checkoutCustomerTarget(0);
+      this.tweens.killTweensOf(this.avatar);
+      this.tweens.add({ targets: this.avatar, x: target.x, y: target.y, duration: 700, ease: 'Sine.inOut', onUpdate: () => {
+        if (!this.avatar) return;
+        this.avatar.setDepth(this.avatar.y);
+        this.customerPositions.set(visit.uid, { x: this.avatar.x, y: this.avatar.y });
+      }});
+      return;
+    }
     const needsAdvice = customerNeedsAdvice(this.store.state, c);
 
     if (needsAdvice) {

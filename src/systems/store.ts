@@ -1,6 +1,6 @@
 import { customers, furniture, levels, products } from '../data/catalog';
-import type { CustomProduct, Customer, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, RegularOnlineOrder, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
-import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, evaluateStaffAdvice, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, MAX_PLACED_FURNITURE, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffAdviceProfile, staffCapacity, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
+import type { CashDrawer, CustomProduct, Customer, CustomerVisit, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, RegularOnlineOrder, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
+import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, evaluateStaffAdvice, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, MAX_PLACED_FURNITURE, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffAdviceProfile, staffCapacity, staffCashierProfile, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
 import { recordPublicShopReview, shopReviewStats } from './reviews';
@@ -9,6 +9,7 @@ import { createVipAppointment, crisisComplete, RETURN_EXCHANGE_SHIPPING_FEE, sup
 import { gameDate } from './calendar';
 import { ATELIER_PURCHASE_COST, ATELIER_RECIPE_CARD_COST, ATELIER_UNLOCK_LEVEL, atelierMaterials, atelierRecipeCost, atelierRecipes, clearRegisteredCustomProducts, registerCustomProduct, unregisterCustomProduct } from '../data/atelier';
 import { EMPLOYEE_APPEARANCE_COUNT } from '../art/employeeAssets';
+import { addNotes, canRemoveNotes, cashDrawerTotal, CASH_DENOMINATIONS, customerTender, drawerAmount, makeChange, normalizeCashDrawer } from './cash';
 
 const STAFF_NAMES = [
   'Mai An', 'Thảo Nhi', 'Gia Hân', 'Bảo Trân', 'Minh Châu', 'Khánh Linh', 'Yến Vy', 'Hà My', 'Ngọc Lam', 'Tú Anh',
@@ -29,6 +30,7 @@ export class GameStore {
   constructor(state?: GameState, save = new SaveSystem(), private random: () => number = Math.random) {
     this.save = save;
     this.state = state ?? save.load();
+    this.state.cashDrawer = normalizeCashDrawer(this.state.cashDrawer);
     // Hot-reloaded sessions and callers may still hold a pre-Boutique Buzz state.
     // Normalize it here so opening the social panel can never crash on old data.
     if (!Array.isArray(this.state.dramas)) this.state.dramas = [];
@@ -342,6 +344,10 @@ export class GameStore {
     this.commit();
     if (autoPacked?.count) this.toast(`${autoPacked.employee.name} đã tự động đóng gói ${autoPacked.count} đơn thường.`);
     return true;
+  }
+  private checkoutReservedQuantity(productId: string, exceptVisitUid = '') {
+    return this.state.activeVisits.reduce((total, visit) => total + (visit.uid !== exceptVisitUid && visit.stage === 'checkout'
+      ? (visit.cartProductIds ?? []).filter(id => id === productId).length : 0), 0);
   }
 
   resolveReturn(id: string, decision: 'refund' | 'exchange' | 'deny') {
@@ -1050,13 +1056,13 @@ export class GameStore {
     this.dayCustomersKey = -1;
     this.ensureDayCustomers();
     this.commit();
-    this.emit({ type: 'customer' });
+    this.emit({ type: 'customer', reason: 'focus' });
     this.toast(`Mở cửa ${gameDate(this.state.day)}! ${event.name}: ${event.description}`);
     if (autoPacked?.count) this.toast(`${autoPacked.employee.name} đã tự động đóng gói ${autoPacked.count} đơn thường.`);
   }
   serve(ids: string[], assistingStaffUid?: string, automatedByStaff = false): SaleResult | undefined {
     const customer = activeCustomer(this.state);
-    if (!customer || !customerNeedsAdvice(this.state, customer) || !validOutfit(ids) || ids.some(id => displayedQuantity(this.state, id) < 1)) return;
+    if (!customer || !customerNeedsAdvice(this.state, customer) || !validOutfit(ids) || ids.some(id => displayedQuantity(this.state, id) - this.checkoutReservedQuantity(id) < 1)) return;
     const items = ids.map(id => products.find(p => p.id === id)!);
     const total = items.reduce((sum, p) => sum + sellPrice(this.state, p), 0);
     const availableStaff = activeEmployees(this.state);
@@ -1092,6 +1098,19 @@ export class GameStore {
       ? Math.max(5000, Math.round(total * (.015 + assistingStaff.charm * .00045) / 1000) * 1000)
       : 0;
     const result: SaleResult = { success, score, total: success ? total : 0, followers, viral, customer, products: items, reason, isSelfPick: false, isStaffAssisted: automatedByStaff, visitUid: this.state.currentVisitId ?? undefined, xpEarned, tip, staffName: assistingStaff?.name, reviewStars };
+    if (success && visit) {
+      this.beginCheckout(visit, items, total, score, reason, {
+        assistingStaffUid: assistingStaff?.uid,
+        automatedByStaff,
+        viral,
+        followers,
+        xpEarned,
+        tip,
+        reviewStars,
+        patienceRatio,
+      });
+      return result;
+    }
     const s = this.state;
     s.stats.served++;
     if (success) {
@@ -1132,13 +1151,153 @@ export class GameStore {
     result.loyaltyReward = loyalty.reward;
     this.advanceCustomer(); this.commit(); this.emit({ type: 'sale', result }); return result;
   }
-  customerSelfPickSale(items: Product[], total: number, score: number, speech: string): SaleResult | undefined {
+  private checkoutMethod() {
+    const roll = this.random();
+    return roll < .42 ? 'cash' as const : roll < .72 ? 'transfer' as const : 'card' as const;
+  }
+
+  private beginCheckout(visit: CustomerVisit, items: Product[], total: number, score: number, speech: string, advice?: {
+    assistingStaffUid?: string;
+    automatedByStaff: boolean;
+    viral: boolean;
+    followers: number;
+    xpEarned: number;
+    tip: number;
+    reviewStars: number;
+    patienceRatio: number;
+  }) {
     const customer = activeCustomer(this.state);
-    if (!customer || this.state.customerMode !== 'browse' || !validOutfit(items.map(p => p.id)) || items.some(p => displayedQuantity(this.state, p.id) < 1)) return;
-    const viral = score >= 88 && customer.personality === 'Influencer';
-    const followers = viral ? 132 : Math.round(score / 12);
-    const xpEarned = saleXp(items.length, viral, false);
-    const reviewStars = this.inStoreReviewStars(score, total, customer, true, .75, false, true);
+    if (!customer || visit.stage === 'checkout') return false;
+    const heldByOthers = this.state.activeVisits.reduce<Record<string, number>>((counts, other) => {
+      if (other.uid === visit.uid || other.stage !== 'checkout') return counts;
+      for (const id of other.cartProductIds ?? []) counts[id] = (counts[id] ?? 0) + 1;
+      return counts;
+    }, {});
+    if (items.some(item => displayedQuantity(this.state, item.id) - (heldByOthers[item.id] ?? 0) < 1)) return false;
+    const wait = 30 + Math.min(20, Math.max(0, this.state.level - 1) * 2) + loyaltyPatienceBonus(this.state, customer.id);
+    visit.stage = 'checkout';
+    visit.cartProductIds = items.map(item => item.id);
+    visit.cartTotal = total;
+    visit.cartScore = score;
+    visit.cartSpeech = speech;
+    visit.checkoutPaymentMethod = this.checkoutMethod();
+    visit.cashTender = visit.checkoutPaymentMethod === 'cash' ? customerTender(total, this.random) : undefined;
+    visit.paymentFriction = 0;
+    visit.maxPatience = wait;
+    visit.patience = wait;
+    if (advice) {
+      visit.cartAssistingStaffUid = advice.assistingStaffUid;
+      visit.cartAutomatedByStaff = advice.automatedByStaff;
+      visit.cartViral = advice.viral;
+      visit.cartFollowers = advice.followers;
+      visit.cartXpEarned = advice.xpEarned;
+      visit.cartTip = advice.tip;
+      visit.cartReviewStars = advice.reviewStars;
+      visit.cartPatienceRatio = advice.patienceRatio;
+    }
+    this.syncFocusedVisit();
+    this.commit();
+    this.emit({ type: 'customer', reason: visit.mode === 'advice' ? 'checkout-advice' : 'focus' });
+    this.toast(`${customer.name} đã chốt ${items.length} món và chọn ${visit.checkoutPaymentMethod === 'cash' ? 'tiền mặt' : visit.checkoutPaymentMethod === 'transfer' ? 'chuyển khoản' : 'thẻ'}.`);
+    return true;
+  }
+
+  private beginSelfCheckout(items: Product[], total: number, score: number, speech: string) {
+    const visit = activeVisit(this.state);
+    const customer = activeCustomer(this.state);
+    if (!visit || !customer || visit.mode !== 'browse' || visit.stage === 'checkout') return false;
+    return this.beginCheckout(visit, items, total, score, speech);
+  }
+
+  markCheckoutPaymentFriction(visitUid: string) {
+    const visit = this.state.activeVisits.find(item => item.uid === visitUid && item.stage === 'checkout');
+    if (!visit) return false;
+    visit.paymentFriction = Math.min(3, (visit.paymentFriction ?? 0) + 1);
+    this.commit();
+    return true;
+  }
+
+  checkoutPaymentMethod(visitUid: string) {
+    const visit = this.state.activeVisits.find(item => item.uid === visitUid && item.stage === 'checkout');
+    if (!visit) return;
+    if (!visit.checkoutPaymentMethod) {
+      visit.checkoutPaymentMethod = this.checkoutMethod();
+      this.commit();
+    }
+    return visit.checkoutPaymentMethod;
+  }
+
+  requestCheckoutPaymentChange(visitUid: string): { accepted: boolean; method?: 'transfer' | 'card' } {
+    const visit = this.state.activeVisits.find(item => item.uid === visitUid && item.stage === 'checkout');
+    if (!visit || visit.checkoutPaymentMethod !== 'cash' || !this.focusVisit(visitUid)) return { accepted: false };
+    visit.paymentFriction = Math.min(3, (visit.paymentFriction ?? 0) + 1);
+    if (this.random() < .35) {
+      this.checkoutPaymentRefusalWalkout();
+      return { accepted: false };
+    }
+    const method = this.random() < .5 ? 'transfer' as const : 'card' as const;
+    visit.checkoutPaymentMethod = method;
+    visit.cashTender = undefined;
+    this.commit();
+    this.emit({ type: 'customer', reason: 'focus' });
+    return { accepted: true, method };
+  }
+
+  checkoutTender(visitUid: string) {
+    const visit = this.state.activeVisits.find(item => item.uid === visitUid && item.stage === 'checkout');
+    if (!visit) return;
+    if (!visit.cashTender) {
+      visit.cashTender = customerTender(visit.cartTotal ?? 0, this.random);
+      this.commit();
+    }
+    return visit.cashTender;
+  }
+
+  completeSelfCheckout(visitUid: string, method: 'cash' | 'transfer' | 'card', selectedChange?: CashDrawer) {
+    const visit = this.state.activeVisits.find(item => item.uid === visitUid && item.stage === 'checkout');
+    if (!visit || !this.focusVisit(visitUid)) return { ok: false, message: 'Khách này không còn ở quầy.' };
+    if (visit.checkoutPaymentMethod && visit.checkoutPaymentMethod !== method) return { ok: false, message: 'Khách đã chọn phương thức thanh toán khác.' };
+    const items = (visit.cartProductIds ?? []).map(id => products.find(product => product.id === id)).filter((item): item is Product => !!item);
+    if (!items.length || items.length !== visit.cartProductIds?.length || items.some(item => displayedQuantity(this.state, item.id) < 1)) {
+      return { ok: false, message: 'Một món trong giỏ không còn trên kệ.' };
+    }
+    let tender: CashDrawer | undefined;
+    let cashChangeShortfall = 0;
+    if (method === 'cash') {
+      tender = visit.cashTender ?? customerTender(visit.cartTotal ?? 0);
+      visit.cashTender = tender;
+      const due = drawerAmount(tender) - (visit.cartTotal ?? 0);
+      const actualChange = selectedChange ?? {};
+      cashChangeShortfall = Math.max(0, due - drawerAmount(actualChange));
+      const available = { ...this.state.cashDrawer };
+      addNotes(available, tender);
+      if (!canRemoveNotes(available, actualChange)) return { ok: false, message: 'Két không đủ đúng loại tiền đã chọn.' };
+      addNotes(this.state.cashDrawer, tender);
+      addNotes(this.state.cashDrawer, actualChange, -1);
+    }
+    const result = this.customerSelfPickSale(items, visit.cartTotal ?? 0, visit.cartScore ?? matchScore(this.state, activeCustomer(this.state)!, items), visit.cartSpeech ?? 'Thanh toán thành công!', method, visit.paymentFriction ?? 0, cashChangeShortfall);
+    return result ? { ok: true, result } : { ok: false, message: 'Không thể hoàn tất đơn này.' };
+  }
+
+  customerSelfPickSale(items: Product[], total: number, score: number, speech: string, payment: 'cash' | 'transfer' | 'card' = 'transfer', paymentFriction = 0, cashChangeShortfall = 0): SaleResult | undefined {
+    const customer = activeCustomer(this.state);
+    const visit = activeVisit(this.state);
+    if (!customer || !visit || visit.stage !== 'checkout' || !validOutfit(items.map(p => p.id)) || items.some(p => displayedQuantity(this.state, p.id) < 1)) return;
+    const advised = visit.mode === 'advice';
+    const assistingStaff = visit.cartAssistingStaffUid ? activeEmployees(this.state).find(employee => employee.uid === visit.cartAssistingStaffUid) : undefined;
+    const cashierStaff = visit.cashierStaffUid ? activeEmployees(this.state).find(employee => employee.uid === visit.cashierStaffUid) : undefined;
+    const viral = visit.cartViral ?? (score >= 88 && customer.personality === 'Influencer');
+    const followers = visit.cartFollowers ?? (viral ? 132 : Math.round(score / 12));
+    const xpEarned = visit.cartXpEarned ?? saleXp(items.length, viral, !!assistingStaff);
+    const tip = visit.cartTip ?? 0;
+    const baseReviewStars = visit.cartReviewStars ?? this.inStoreReviewStars(score, total, customer, true, visit.cartPatienceRatio ?? .75, !!assistingStaff, !advised);
+    const frictionPenalty = paymentFriction && this.random() < .55 ? 1 : 0;
+    const shortChangePenalty = cashChangeShortfall > 0
+      ? 1 + Number(cashChangeShortfall >= Math.max(20000, total * .15))
+      : 0;
+    const reviewStars = cashChangeShortfall > 0
+      ? Math.min(3, Math.max(1, baseReviewStars - frictionPenalty - shortChangePenalty))
+      : Math.max(1, baseReviewStars - frictionPenalty);
     const result: SaleResult = {
       success: true,
       score,
@@ -1148,29 +1307,55 @@ export class GameStore {
       customer,
       products: items,
       reason: speech,
-      isSelfPick: true,
+      isSelfPick: !advised,
+      isStaffAssisted: visit.cartAutomatedByStaff || !!cashierStaff,
       visitUid: this.state.currentVisitId ?? undefined,
       xpEarned,
+      tip,
+      staffName: assistingStaff?.name ?? cashierStaff?.name,
       reviewStars,
     };
     const s = this.state;
     s.stats.served++;
     for (const p of items) { s.inventory[p.id]--; this.consumeDisplayedItem(p.id); s.stats.soldProducts ??= {}; s.stats.soldProducts[p.id] = (s.stats.soldProducts[p.id] ?? 0) + 1; }
-    s.money += total; s.xp += xpEarned; s.stats.revenue += total;
+    if (payment !== 'cash') s.money += total;
+    s.money += tip;
+    s.xp += xpEarned; s.stats.revenue += total + tip; s.stats.tips += tip;
     s.stats.costOfGoods += items.reduce((sum, p) => sum + p.buyPrice, 0);
     s.stats.sold += items.length; s.stats.happy++;
     s.stats.trendSales += items.filter(p => isTrending(s, p)).length;
     s.followers += followers; s.stats.followers += followers;
+    if (assistingStaff) { assistingStaff.sales++; assistingStaff.shiftSales = (assistingStaff.shiftSales ?? 0) + 1; assistingStaff.tipsEarned += tip; assistingStaff.morale = Math.min(100, assistingStaff.morale + 1); }
+    if (cashierStaff && cashierStaff.uid !== assistingStaff?.uid) { cashierStaff.sales++; cashierStaff.shiftSales = (cashierStaff.shiftSales ?? 0) + 1; cashierStaff.energy = Math.max(0, (cashierStaff.energy ?? 100) - 2); cashierStaff.morale = Math.min(100, cashierStaff.morale + 1); }
     this.applyShopReview(reviewStars);
+    if (cashChangeShortfall > 0) {
+      s.shortChangeViolations = (s.shortChangeViolations ?? 0) + 1;
+      const requiredFines = Math.floor(s.shortChangeViolations / 4);
+      if (requiredFines > (s.shortChangeFraudFines ?? 0)) {
+        const fine = 10000000;
+        const reputationLoss = 1;
+        s.shortChangeFraudFines = requiredFines;
+        s.money -= fine;
+        s.stats.spent += fine;
+        s.reputation = Math.max(1, s.reputation - reputationLoss);
+        result.shortChangeFine = { amount: fine, reputationLoss, violations: s.shortChangeViolations };
+      }
+    }
     this.progressCampaign(items, total, false);
     this.recordAdvancedSale(items, total, customer.name);
     if (this.shouldPublishCustomerReview(reviewStars, viral)) {
-      const reviewText = reviewStars === 5
+      const reviewText = cashChangeShortfall > 0
+        ? `Shop trả thiếu ${cashChangeShortfall.toLocaleString('vi-VN')}₫ tiền thừa. Mình không hài lòng với khâu thanh toán.`
+        : advised && viral
+          ? 'Outfit được tư vấn đúng gu mình và thanh toán rất thuận tiện. Mình sẽ giới thiệu boutique này cho mọi người!'
+        : advised
+          ? `${items.map(item => item.name).join(' + ')} được phối rất hợp gu. Mình hài lòng với phần tư vấn và thanh toán.`
+        : reviewStars === 5
         ? `${items.map(item => item.name).join(' + ')} ở boutique xinh xỉu! Vừa ghé đã chốt đơn liền tay. #BoutiqueLover`
         : reviewStars === 4
           ? 'Mình tự chọn được món khá hợp gu, giá ổn và không gian shop rất dễ thương.'
           : 'Có món phù hợp nhưng lựa chọn vẫn chưa thật sự đa dạng. Trải nghiệm nhìn chung ổn.';
-      this.publishCustomerReview(customer, reviewStars, reviewText, viral ? 1850 : Math.round(score / 4) + 10, viral, 'self');
+      this.publishCustomerReview(customer, reviewStars, reviewText, viral ? 1850 : Math.round(score / 4) + 10, viral, advised ? undefined : 'self');
     }
     const loyalty = this.recordCustomerRelationship(customer, true, score, items.length);
     result.loyaltyPoints = loyalty.points;
@@ -1211,6 +1396,94 @@ export class GameStore {
     this.commit();
     this.emit({ type: 'sale', result });
   }
+  private checkoutWalkout() {
+    const customer = activeCustomer(this.state);
+    const visit = activeVisit(this.state);
+    if (!customer || !visit) return;
+    this.state.stats.served++;
+    this.state.stats.walkouts = (this.state.stats.walkouts ?? 0) + 1;
+    const annoyed = this.random() < .7;
+    const reviewStars = this.applyShopReview(annoyed ? 1 : 2, annoyed ? .9 : .55);
+    if (annoyed && this.shouldPublishCustomerReview(reviewStars)) {
+      this.publishCustomerReview(customer, reviewStars, 'Mình đã chọn xong đồ nhưng phải chờ thanh toán quá lâu nên đành bỏ về. Shop cần cải thiện quầy thu ngân.', 3, false, 'checkout-wait');
+    }
+    const result: SaleResult = {
+      success: false, score: visit.cartScore ?? 30, total: 0, followers: 0, viral: false,
+      customer, products: [], reason: 'Khách chờ thanh toán quá lâu và đã bỏ về.', isSelfPick: true,
+      checkoutTimedOut: true, visitUid: visit.uid, xpEarned: 0, reviewStars,
+    };
+    this.recordCustomerRelationship(customer, false);
+    this.advanceCustomer();
+    this.commit();
+    this.emit({ type: 'sale', result });
+  }
+
+  private checkoutPaymentRefusalWalkout() {
+    const customer = activeCustomer(this.state);
+    const visit = activeVisit(this.state);
+    if (!customer || !visit) return;
+    this.state.stats.served++;
+    this.state.stats.walkouts = (this.state.stats.walkouts ?? 0) + 1;
+    const reviewStars = this.applyShopReview(2, .5);
+    const result: SaleResult = {
+      success: false, score: visit.cartScore ?? 30, total: 0, followers: 0, viral: false,
+      customer, products: [], reason: 'Khách không muốn đổi phương thức thanh toán và đã rời shop.',
+      isSelfPick: visit.mode === 'browse', checkoutPaymentRefused: true, visitUid: visit.uid, xpEarned: 0, reviewStars,
+    };
+    this.recordCustomerRelationship(customer, false);
+    this.advanceCustomer();
+    this.commit();
+    this.emit({ type: 'sale', result });
+  }
+
+  depositCash(amount: number) {
+    if (this.state.phase === 'open') return false;
+    const rounded = Math.floor(amount / 1000) * 1000;
+    const notes = makeChange(this.state.cashDrawer, rounded);
+    if (rounded <= 0 || !notes) return false;
+    addNotes(this.state.cashDrawer, notes, -1);
+    this.state.money += rounded;
+    this.commit();
+    this.toast(`Đã nộp ${rounded.toLocaleString('vi-VN')}₫ tiền mặt vào tài khoản.`);
+    return true;
+  }
+
+  withdrawCash(amount: number) {
+    if (this.state.phase === 'open') return false;
+    const rounded = Math.floor(amount / 1000) * 1000;
+    if (rounded <= 0 || this.state.money < rounded) return false;
+    const unlimited = Object.fromEntries(Object.keys(this.state.cashDrawer).map(key => [key, 999])) as CashDrawer;
+    const notes = makeChange(unlimited, rounded);
+    if (!notes) return false;
+    this.state.money -= rounded;
+    addNotes(this.state.cashDrawer, notes);
+    this.commit();
+    this.toast(`Đã rút ${rounded.toLocaleString('vi-VN')}₫ về két.`);
+    return true;
+  }
+
+  transferCashNotes(mode: 'deposit' | 'withdraw', requested: CashDrawer, fee = 30000) {
+    if (this.state.phase === 'open') return false;
+    const notes = normalizeCashDrawer(requested);
+    const amount = drawerAmount(notes);
+    if (amount <= 0 || fee < 0) return false;
+    if (mode === 'deposit') {
+      if (!canRemoveNotes(this.state.cashDrawer, notes) || this.state.money + amount < fee) return false;
+      addNotes(this.state.cashDrawer, notes, -1);
+      this.state.money += amount - fee;
+      this.commit();
+      this.toast(`Đã nộp ${amount.toLocaleString('vi-VN')}₫ vào tài khoản · phí ${fee.toLocaleString('vi-VN')}₫.`);
+      return true;
+    }
+    if (this.state.money < amount + fee) return false;
+    this.state.money -= amount + fee;
+    addNotes(this.state.cashDrawer, notes);
+    this.commit();
+    this.toast(`Đã rút ${amount.toLocaleString('vi-VN')}₫ về két · phí ${fee.toLocaleString('vi-VN')}₫.`);
+    return true;
+  }
+
+  cashBalance() { return cashDrawerTotal(this.state.cashDrawer); }
   skipCustomer() {
     const customer = activeCustomer(this.state);
     if (!customer) return;
@@ -1223,7 +1496,7 @@ export class GameStore {
     this.recordCustomerRelationship(customer, false);
     this.advanceCustomer();
     this.commit();
-    this.emit({ type: 'customer' });
+    this.emit({ type: 'customer', reason: 'exit' });
     this.toast('Khách đã rời shop. Hẹn một lần hợp gu hơn!', 'error');
   }
   private advanceCustomer() {
@@ -1267,11 +1540,11 @@ export class GameStore {
     if (!this.state.currentVisitId) this.state.currentVisitId = uid;
     this.syncFocusedVisit();
     this.commit();
-    this.emit({ type: 'customer' });
+    this.emit({ type: 'customer', reason: 'arrival' });
     if (needsAdvice) this.toast(`${customer.name} cần tư vấn! Chạm vào khách hoặc khung chat để phối đồ.`);
     return true;
   }
-  tick(overtimeAdviceVisitId = '') {
+  tick(overtimeAdviceVisitId = '', pausedPatienceVisitId = '') {
     if (this.state.phase !== 'open') return;
     if (!this.hasDisplayedStock()) {
       this.closeDay('sold-out');
@@ -1315,8 +1588,11 @@ export class GameStore {
       }
     }
 
-    for (const visit of this.state.activeVisits) visit.patience = Math.max(0, visit.patience - 1);
+    for (const visit of this.state.activeVisits) {
+      if (visit.uid !== pausedPatienceVisitId) visit.patience = Math.max(0, visit.patience - 1);
+    }
     this.syncFocusedVisit();
+    if (this.processCashierCheckout(pausedPatienceVisitId)) return;
     if (this.processStaffAssistance()) return;
     const expired = this.state.activeVisits.filter(visit => visit.patience <= 0).map(visit => visit.uid);
     for (const uid of expired) {
@@ -1325,9 +1601,10 @@ export class GameStore {
       const customer = activeCustomer(this.state);
       if (!customer) continue;
       if (visit.mode === 'advice') this.skipCustomer();
+      else if (visit.stage === 'checkout') this.checkoutWalkout();
       else {
         const pick = evaluateCustomerSelfPick(this.state, customer);
-        if (pick.success) this.customerSelfPickSale(pick.items, pick.total, pick.score, pick.speech);
+        if (pick.success) this.beginSelfCheckout(pick.items, pick.total, pick.score, pick.speech);
         else this.customerSelfWalkout(pick.speech);
       }
     }
@@ -1758,13 +2035,80 @@ export class GameStore {
     return true;
   }
 
+  private processCashierCheckout(playerCheckoutVisitId = '') {
+    const cashiers = activeEmployees(this.state)
+      .filter(employee => (employee.assignment ?? 'service') === 'cashier')
+      .sort((a, b) => staffCashierProfile(b).checkoutPriority - staffCashierProfile(a).checkoutPriority);
+    if (!cashiers.length) return false;
+
+    const cashierUids = new Set(cashiers.map(employee => employee.uid));
+    let changed = false;
+    for (const visit of this.state.activeVisits) {
+      if (visit.cashierStaffUid && !cashierUids.has(visit.cashierStaffUid)) {
+        delete visit.cashierStaffUid;
+        delete visit.cashierResolveIn;
+        changed = true;
+      }
+    }
+
+    const busy = new Set(this.state.activeVisits.map(visit => visit.cashierStaffUid).filter((uid): uid is string => !!uid));
+    const checkoutVisits = [...this.state.activeVisits]
+      .filter(visit => visit.mode === 'browse' && visit.stage === 'checkout' && visit.uid !== playerCheckoutVisitId)
+      .sort((a, b) => a.patience - b.patience);
+
+    for (const visit of checkoutVisits) {
+      let cashier = visit.cashierStaffUid ? cashiers.find(employee => employee.uid === visit.cashierStaffUid) : undefined;
+      if (!cashier) {
+        cashier = cashiers.find(employee => !busy.has(employee.uid));
+        if (!cashier) continue;
+        visit.cashierStaffUid = cashier.uid;
+        visit.cashierResolveIn = staffCashierProfile(cashier).checkoutSeconds;
+        busy.add(cashier.uid);
+        changed = true;
+        this.toast(`${cashier.name} đã nhận thanh toán cho khách tự xem.`);
+        continue;
+      }
+
+      visit.cashierResolveIn = Math.max(0, (visit.cashierResolveIn ?? staffCashierProfile(cashier).checkoutSeconds) - 1);
+      changed = true;
+      if (visit.cashierResolveIn > 0) continue;
+
+      let method = visit.checkoutPaymentMethod ?? this.checkoutMethod();
+      visit.checkoutPaymentMethod = method;
+      let change: CashDrawer | undefined;
+      if (method === 'cash') {
+        const tender = visit.cashTender ?? customerTender(visit.cartTotal ?? 0, this.random);
+        visit.cashTender = tender;
+        const available = { ...this.state.cashDrawer };
+        addNotes(available, tender);
+        change = makeChange(available, Math.max(0, drawerAmount(tender) - (visit.cartTotal ?? 0)));
+        if (!change) {
+          method = this.random() < .5 ? 'transfer' : 'card';
+          visit.checkoutPaymentMethod = method;
+          visit.cashTender = undefined;
+        } else if (drawerAmount(change) > 0 && this.random() < staffCashierProfile(cashier).shortChangeChance) {
+          const omittedValue = [...CASH_DENOMINATIONS].reverse().find(value => (change?.[String(value)] ?? 0) > 0);
+          if (omittedValue) change[String(omittedValue)] = Math.max(0, (change[String(omittedValue)] ?? 0) - 1);
+        }
+      }
+
+      const result = this.completeSelfCheckout(visit.uid, method, change);
+      if (result.ok) return true;
+      delete visit.cashierStaffUid;
+      delete visit.cashierResolveIn;
+      changed = true;
+    }
+    if (changed) this.commit();
+    return false;
+  }
+
   private processStaffAssistance() {
     const staff = activeEmployees(this.state).filter(employee => (employee.assignment ?? 'service') === 'service').sort((a, b) => (b.service + b.persuasion + b.reliability * .5) - (a.service + a.persuasion + a.reliability * .5));
     if (!staff.length) return false;
     const assigned = new Set(this.state.activeVisits.map(visit => visit.assignedStaffUid).filter((uid): uid is string => !!uid));
     let changed = false;
     for (const visit of [...this.state.activeVisits]) {
-      if (visit.mode !== 'advice') continue;
+      if (visit.mode !== 'advice' || visit.stage === 'checkout') continue;
       if (visit.assignedStaffUid) {
         visit.staffResolveIn = Math.max(0, (visit.staffResolveIn ?? 1) - 1);
         if (!visit.staffResolveIn) return this.completeStaffAdvice(visit.uid, visit.assignedStaffUid) || changed;
@@ -2349,6 +2693,10 @@ export class GameStore {
   settings(key: 'sound' | 'music' | 'tutorialDone', value: boolean) { this.state[key] = value; this.commit(); }
   setMusicVolume(value: number) {
     this.state.musicVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.55));
+    this.commit();
+  }
+  setEffectsVolume(value: number) {
+    this.state.effectsVolume = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.85));
     this.commit();
   }
   setMusicTrack(track: string) {

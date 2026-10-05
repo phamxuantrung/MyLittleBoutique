@@ -15,6 +15,9 @@ export interface GamePreloadProgress {
 
 const imageUrls = Object.freeze([...new Set([
   '/assets/characters/main-character.svg',
+  '/assets/ui/qr-payment-pastel.png',
+  '/assets/ui/visa-card-pastel.png',
+  ...[1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000].map(value => `/assets/ui/cash/${value}.png`),
   ...allFurnitureArtwork,
   ...allCustomerArtwork,
   ...allEmployeeArtwork,

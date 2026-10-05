@@ -118,6 +118,8 @@ audio.enabled = store.state.sound;
 audio.setMusicVolume(store.state.musicVolume);
 audio.setEffectsVolume(store.state.effectsVolume);
 audio.setMusicTrack(store.state.musicTrack);
+updateBootLoader(.91, 'Đang giải mã hiệu ứng âm thanh…');
+await audio.prepare();
 if (store.state.music) audio.music(true);
 ui = new GameUI(store, audio);
 const recoveredFurniture = recoveredFurnitureCount(store.state);

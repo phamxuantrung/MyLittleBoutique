@@ -89,6 +89,11 @@ export class AudioSystem {
     });
   }
 
+  /** Hoàn tất giải mã toàn bộ hiệu ứng trước khi màn hình game được mở. */
+  async prepare() {
+    await Promise.all((Object.keys(SFX_URLS) as SfxKind[]).map(kind => this.loadEffectBuffer(kind)));
+  }
+
   private context() {
     if (this.effectContext) return this.effectContext;
     try {

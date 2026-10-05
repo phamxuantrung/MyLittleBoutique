@@ -5,6 +5,7 @@ import { allEmployeeArtwork } from '../art/employeeAssets';
 import { allFurnitureArtwork } from '../art/furnitureAssets';
 import { allProductArtwork } from '../art/productAssets';
 import { GAME_AUDIO_URLS } from './audio';
+import { CASH_DENOMINATIONS } from './cash';
 
 export interface GamePreloadProgress {
   completed: number;
@@ -17,7 +18,7 @@ const imageUrls = Object.freeze([...new Set([
   '/assets/characters/main-character.svg',
   '/assets/ui/qr-payment-pastel.png',
   '/assets/ui/visa-card-pastel.png',
-  ...[1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000].map(value => `/assets/ui/cash/${value}.png`),
+  ...CASH_DENOMINATIONS.map(value => `/assets/ui/cash/${value}.png`),
   ...allFurnitureArtwork,
   ...allCustomerArtwork,
   ...allEmployeeArtwork,

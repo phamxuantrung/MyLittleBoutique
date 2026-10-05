@@ -259,6 +259,7 @@ export class GameUI {
     setInterval(() => {
       const modalPausesSale = !['none', 'serve', 'checkout', 'online-order', 'regular-pickup', 'campaign'].includes(this.modal);
       const paused = document.hidden || this.moveMode || this.tab !== 'shop' || modalPausesSale;
+      if (this.isSaleSpeedLocked()) this.resetSaleSpeed();
       if (!paused && this.store.state.phase === 'open') {
         this.repairSaleInteraction();
         this.saleTickProgress += this.saleSpeed / 4;
@@ -268,6 +269,7 @@ export class GameUI {
             this.modal === 'serve' ? this.serveVisitId : '',
             this.modal === 'checkout' ? this.checkoutVisitId : '',
           );
+          if (this.isSaleSpeedLocked()) this.resetSaleSpeed();
         }
       }
       this.updatePatience();
@@ -2063,6 +2065,10 @@ export class GameUI {
         break;
       case 'sale-speed': {
         if (this.store.state.phase !== 'open') return;
+        if (this.isSaleSpeedLocked()) {
+          this.resetSaleSpeed();
+          return;
+        }
         this.saleSpeed = this.saleSpeed === 1 ? 2 : this.saleSpeed === 2 ? 4 : 1;
         this.scene?.setSaleSpeed(this.saleSpeed);
         this.render();
@@ -2550,6 +2556,8 @@ export class GameUI {
     document.querySelector('.level-capsule')?.setAttribute('aria-label', `Cấp boutique ${s.level}`);
 
     const timerVal = s.dayTimer ?? DAY_DURATION;
+    const saleSpeedLocked = isOpen && timerVal <= 10;
+    if (saleSpeedLocked) this.resetSaleSpeed();
     const shiftDuration = dayDuration(s);
     const saleControls = document.querySelector<HTMLElement>('#sale-controls')!;
     if (!isOpen) {
@@ -2559,7 +2567,7 @@ export class GameUI {
             <span class="sale-btn-icon">${icon('shop')}</span>
             <span class="sale-btn-text">Đóng cửa</span>
           </button>
-          <button class="sale-speed-button" data-action="sale-speed" aria-label="Tốc độ bán hàng ${this.saleSpeed}x" title="Đổi tốc độ: 1x → 2x → 4x → 1x" data-speed="${this.saleSpeed}">
+          <button class="sale-speed-button" data-action="sale-speed" aria-label="Tốc độ bán hàng ${this.saleSpeed}x" title="${saleSpeedLocked ? '10 giây cuối luôn chạy ở tốc độ 1x' : 'Đổi tốc độ: 1x → 2x → 4x → 1x'}" data-speed="${this.saleSpeed}" ${saleSpeedLocked ? 'disabled' : ''}>
             <span class="speed-icon-wrap">${icon('arrow')}</span>
             <strong class="speed-val">${this.saleSpeed}x</strong>
           </button>`;
@@ -2567,7 +2575,10 @@ export class GameUI {
     const speedButton = saleControls.querySelector<HTMLButtonElement>('[data-action="sale-speed"]');
     if (speedButton) {
       speedButton.dataset.speed = String(this.saleSpeed);
-      speedButton.setAttribute('aria-label', `Tốc độ bán hàng ${this.saleSpeed}x`);
+      speedButton.disabled = saleSpeedLocked;
+      speedButton.classList.toggle('is-locked', saleSpeedLocked);
+      speedButton.title = saleSpeedLocked ? '10 giây cuối luôn chạy ở tốc độ 1x' : 'Đổi tốc độ: 1x → 2x → 4x → 1x';
+      speedButton.setAttribute('aria-label', saleSpeedLocked ? 'Tốc độ khóa ở 1x trong 10 giây cuối' : `Tốc độ bán hàng ${this.saleSpeed}x`);
       const speedValue = speedButton.querySelector<HTMLElement>('.speed-val');
       if (speedValue) speedValue.textContent = `${this.saleSpeed}x`;
     }
@@ -3044,6 +3055,10 @@ export class GameUI {
     speedButton.setAttribute('aria-label', 'Tốc độ bán hàng 1x');
     const speedValue = speedButton.querySelector<HTMLElement>('.speed-val');
     if (speedValue) speedValue.textContent = '1x';
+  }
+  private isSaleSpeedLocked() {
+    return this.store.state.phase === 'open'
+      && Math.max(0, this.store.state.dayTimer - this.saleTickProgress) <= 10;
   }
   openServe() {
     const customer = activeCustomer(this.store.state);

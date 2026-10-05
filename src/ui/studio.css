@@ -400,6 +400,21 @@
 }
 .game-stage.is-sale-open .sale-speed-button:hover .speed-icon-wrap { transform: none; }
 
+.game-stage.is-sale-open .sale-speed-button:disabled,
+.game-stage.is-sale-open .sale-speed-button.is-locked {
+  cursor: not-allowed;
+  border-color: #d8cbd4;
+  color: #9b8493;
+  background: linear-gradient(180deg, #fffafd, #eee7ec);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.86), 0 2px 0 #bfaeb9, 0 4px 8px rgba(79,52,69,.14);
+  opacity: .82;
+}
+
+.game-stage.is-sale-open .sale-speed-button:disabled .speed-icon-wrap,
+.game-stage.is-sale-open .sale-speed-button.is-locked .speed-icon-wrap {
+  opacity: .58;
+}
+
 .sale-interaction-bar {
   position: fixed;
   z-index: 71;

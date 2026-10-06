@@ -1196,9 +1196,16 @@ export class GameStore {
       visit.cartReviewStars = advice.reviewStars;
       visit.cartPatienceRatio = advice.patienceRatio;
     }
+    // The consultation is finished. Keep the adviser on the cart for sales
+    // credit, but release the live assignment so they can help another guest.
+    delete visit.assignedStaffUid;
+    delete visit.staffResolveIn;
     this.syncFocusedVisit();
     this.commit();
-    this.emit({ type: 'customer', reason: visit.mode === 'advice' ? 'checkout-advice' : 'focus' });
+    // A staff-assisted guest must wait at checkout until the player taps the
+    // payment card or an assigned cashier handles the queue.
+    const shouldOpenPlayerCheckout = visit.mode === 'advice' && !advice?.automatedByStaff;
+    this.emit({ type: 'customer', reason: shouldOpenPlayerCheckout ? 'checkout-advice' : 'focus' });
     this.toast(`${customer.name} đã chốt ${items.length} món và chọn ${visit.checkoutPaymentMethod === 'cash' ? 'tiền mặt' : visit.checkoutPaymentMethod === 'transfer' ? 'chuyển khoản' : 'thẻ'}.`);
     return true;
   }
@@ -1607,8 +1614,8 @@ export class GameStore {
       if (!visit || !this.focusVisit(uid)) continue;
       const customer = activeCustomer(this.state);
       if (!customer) continue;
-      if (visit.mode === 'advice') this.skipCustomer();
-      else if (visit.stage === 'checkout') this.checkoutWalkout();
+      if (visit.stage === 'checkout') this.checkoutWalkout();
+      else if (visit.mode === 'advice') this.skipCustomer();
       else {
         const pick = evaluateCustomerSelfPick(this.state, customer);
         if (pick.success) this.beginSelfCheckout(pick.items, pick.total, pick.score, pick.speech);
@@ -2062,7 +2069,7 @@ export class GameStore {
 
     const busy = new Set(this.state.activeVisits.map(visit => visit.cashierStaffUid).filter((uid): uid is string => !!uid));
     const checkoutVisits = [...this.state.activeVisits]
-      .filter(visit => visit.mode === 'browse' && visit.stage === 'checkout' && visit.uid !== playerCheckoutVisitId)
+      .filter(visit => visit.stage === 'checkout' && visit.uid !== playerCheckoutVisitId)
       .sort((a, b) => a.patience - b.patience);
 
     for (const visit of checkoutVisits) {
@@ -2074,7 +2081,7 @@ export class GameStore {
         visit.cashierResolveIn = staffCashierProfile(cashier).checkoutSeconds;
         busy.add(cashier.uid);
         changed = true;
-        this.toast(`${cashier.name} đã nhận thanh toán cho khách tự xem.`);
+        this.toast(`${cashier.name} đã nhận thanh toán cho ${visit.mode === 'advice' ? 'khách vừa được tư vấn' : 'khách tự xem'}.`);
         continue;
       }
 

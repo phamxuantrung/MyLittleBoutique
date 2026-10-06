@@ -1978,6 +1978,26 @@ export class ShopScene extends Phaser.Scene {
     const direction = counter.rotation === 1 ? { x: -72, y: 18 } : { x: 76, y: 22 };
     return { x: anchor.x + direction.x - queueIndex * 30, y: anchor.y + direction.y + queueIndex * 22 };
   }
+  private customerFloorPoint(point: { x: number; y: number }) {
+    return {
+      x: ((point.x - 500) / 56 + (point.y - 225) / 28) / 2,
+      y: ((point.y - 225) / 28 - (point.x - 500) / 56) / 2,
+    };
+  }
+  private customerSpotAvoidsFurniture(point: { x: number; y: number }) {
+    const floor = this.customerFloorPoint(point);
+    const size = landSize(this.store.state);
+    const edgePadding = .38;
+    if (floor.x < edgePadding || floor.y < edgePadding || floor.x > size - edgePadding || floor.y > size - edgePadding) return false;
+
+    const furniturePadding = .34;
+    return !this.store.state.layout.some(item => {
+      if (isWallFurnitureId(item.id) || ['atelier-rug', 'heart-rug', 'checkered-rug'].includes(item.id)) return false;
+      const occupied = furnitureFootprint(item);
+      return floor.x > item.x - furniturePadding && floor.x < item.x + occupied.width + furniturePadding
+        && floor.y > item.y - furniturePadding && floor.y < item.y + occupied.height + furniturePadding;
+    });
+  }
   private spacedCustomerTarget(target: { x: number; y: number }, uid: string) {
     const occupied: { x: number; y: number }[] = [];
     if (this.avatar && this.primaryVisitUid !== uid && !this.departing) occupied.push({
@@ -1991,21 +2011,26 @@ export class ShopScene extends Phaser.Scene {
       });
     }
     for (const staff of this.staffAvatars.values()) occupied.push({ x: staff.x, y: staff.y });
-    const offsets = [
-      { x: 0, y: 0 },
-      { x: 56, y: 28 }, { x: -56, y: 28 },
-      { x: 56, y: -28 }, { x: -56, y: -28 },
-      { x: 112, y: 0 }, { x: -112, y: 0 },
-      { x: 0, y: 56 }, { x: 0, y: -56 },
-    ];
     const isClear = (point: { x: number; y: number }) => occupied.every(other => {
       const dx = (point.x - other.x) / 76;
       const dy = (point.y - other.y) / 48;
       return dx * dx + dy * dy >= 1;
-    });
-    const option = offsets.map(offset => ({ x: target.x + offset.x, y: target.y + offset.y }))
-      .find(point => point.x >= 170 && point.x <= 830 && point.y >= 270 && point.y <= 535 && isClear(point));
-    return option ?? target;
+    }) && this.customerSpotAvoidsFurniture(point);
+
+    // Search outwards on the same isometric floor grid as the furniture. This
+    // keeps a customer's feet outside fixture footprints even when the nearest
+    // display, advice spot or checkout queue position is blocked.
+    const offsets: { x: number; y: number; distance: number }[] = [{ x: 0, y: 0, distance: 0 }];
+    for (let gridY = -3; gridY <= 3; gridY += .5) for (let gridX = -3; gridX <= 3; gridX += .5) {
+      if (gridX === 0 && gridY === 0) continue;
+      const distance = Math.abs(gridX) + Math.abs(gridY);
+      offsets.push({ x: (gridX - gridY) * 56, y: (gridX + gridY) * 28, distance });
+    }
+    offsets.sort((a, b) => a.distance - b.distance || Math.abs(a.y) - Math.abs(b.y) || a.x - b.x);
+    const option = offsets
+      .map(offset => ({ x: target.x + offset.x, y: target.y + offset.y }))
+      .find(isClear);
+    return option ?? this.customerEntrance().inside;
   }
   private reflowCustomerChats() {
     type ChatEntry = { chat: Phaser.GameObjects.Container; baseX: number; baseY: number };
@@ -2095,7 +2120,9 @@ export class ShopScene extends Phaser.Scene {
     if (this.store.state.phase !== 'open') return;
     const dots = '.'.repeat(1 + Math.floor(this.time.now / 420) % 3);
     const focused = activeVisit(this.store.state);
-    if ((focused?.mode === 'advice' || focused?.stage === 'checkout') && this.speechBubbleContainer?.visible && this.speechBubbleText) {
+    if (!this.departing && focused?.uid === this.primaryVisitUid
+      && (focused.mode === 'advice' || focused.stage === 'checkout')
+      && this.speechBubbleContainer?.visible && this.speechBubbleText) {
       const employee = focused.assignedStaffUid
         ? this.store.state.employees.find(candidate => candidate.uid === focused.assignedStaffUid)
         : undefined;
@@ -2194,8 +2221,22 @@ export class ShopScene extends Phaser.Scene {
           });
         }
       } else {
-        entry.container.setDepth(entry.container.y);
-        this.customerPositions.set(visit.uid, { x: entry.container.x, y: entry.container.y });
+        const previousTargetX = entry.container.getData('customerTargetX') ?? entry.container.x;
+        const previousTargetY = entry.container.getData('customerTargetY') ?? entry.container.y;
+        entry.container.setData('customerTargetX', target.x).setData('customerTargetY', target.y);
+        if (Phaser.Math.Distance.Between(previousTargetX, previousTargetY, target.x, target.y) > 4) {
+          this.tweens.killTweensOf(entry.container);
+          this.tweens.add({
+            targets: entry.container, x: target.x, y: target.y, duration: 700, ease: 'Sine.inOut',
+            onUpdate: () => {
+              entry!.container.setDepth(entry!.container.y);
+              this.customerPositions.set(visit.uid, { x: entry!.container.x, y: entry!.container.y });
+            },
+          });
+        } else {
+          entry.container.setDepth(entry.container.y);
+          this.customerPositions.set(visit.uid, { x: entry.container.x, y: entry.container.y });
+        }
       }
     });
   }
@@ -2408,8 +2449,9 @@ export class ShopScene extends Phaser.Scene {
     this.speechBubbleContainer.setVisible(false);
 
     // Phaser adds the container display origin before testing the hit area.
+    const arrivalTarget = this.spacedCustomerTarget(rememberedPosition ?? entrance.inside, visit?.uid ?? c.id);
     this.avatar = this.add.container(rememberedPosition?.x ?? entrance.spawn.x, rememberedPosition?.y ?? entrance.spawn.y, [sprite, this.speechBubbleContainer]).setDepth(rememberedPosition?.y ?? entrance.spawn.y).setSize(88, 154).setInteractive(new Phaser.Geom.Rectangle(0, -77, 88, 154), Phaser.Geom.Rectangle.Contains);
-    this.avatar.setData('customerTargetX', rememberedPosition?.x ?? entrance.inside.x).setData('customerTargetY', rememberedPosition?.y ?? entrance.inside.y);
+    this.avatar.setData('customerTargetX', arrivalTarget.x).setData('customerTargetY', arrivalTarget.y);
     this.avatar.input!.cursor = customerNeedsAdvice(this.store.state, c) || visit?.stage === 'checkout' ? 'pointer' : 'default';
 
     let avatarDownX = 0, avatarDownY = 0, avatarDownTime = 0;
@@ -2435,8 +2477,8 @@ export class ShopScene extends Phaser.Scene {
     } else {
       this.tweens.add({
         targets: this.avatar,
-        x: entrance.inside.x,
-        y: entrance.inside.y,
+        x: arrivalTarget.x,
+        y: arrivalTarget.y,
         duration: 1300,
         ease: 'Sine.inOut',
         onUpdate: () => {
@@ -2457,7 +2499,8 @@ export class ShopScene extends Phaser.Scene {
     const visit = activeVisit(this.store.state);
     if (visit?.stage === 'checkout') {
       this.showSpeechBubble(`Chờ thanh toán · ${visit.patience}s\nChạm để mở POS`, 'advice');
-      const target = this.checkoutCustomerTarget(0);
+      const target = this.spacedCustomerTarget(this.checkoutCustomerTarget(0), visit.uid);
+      this.avatar.setData('customerTargetX', target.x).setData('customerTargetY', target.y);
       this.tweens.killTweensOf(this.avatar);
       this.tweens.add({ targets: this.avatar, x: target.x, y: target.y, duration: 700, ease: 'Sine.inOut', onUpdate: () => {
         if (!this.avatar) return;
@@ -2549,6 +2592,7 @@ export class ShopScene extends Phaser.Scene {
         this.secondaryCustomers.delete(result.visitUid);
         this.customerPositions.delete(result.visitUid);
         const { container } = entry;
+        entry.chat.setVisible(false);
         const sprite = container.list[0] as Phaser.GameObjects.Image;
         sprite.setTexture(this.getCustomerTextureKey(result.customer, result.success, result.visitUid));
         if (result.success) this.burst(container.x, container.y - 70, result.viral);

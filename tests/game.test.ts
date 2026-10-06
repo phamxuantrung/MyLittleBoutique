@@ -539,9 +539,11 @@ describe('employee recruitment and payroll', () => {
     expect(store.state.staffLeaveRequests[0].requestedDay).toBe(store.state.day);
   });
 
-  it('lets a skilled employee automatically take and resolve an advice visit', () => {
+  it('moves a successful staff consultation into the checkout queue', () => {
     const state = initialState();
     stockStarter(state);
+    state.level = 3;
+    state.landLevel = 2;
     state.employees.push({
       id: 'candidate-auto', uid: 'staff-auto', name: 'Mai An', role: 'Fashion assistant', bio: 'Chủ động hỗ trợ khách.', appearance: 0,
       salary: 70000, service: 99, persuasion: 99, charm: 90, reliability: 99, appliedDay: 1,
@@ -555,11 +557,24 @@ describe('employee recruitment and payroll', () => {
     store.state.currentCustomerId = 'lily';
     store.state.customerMode = 'advice';
     store.state.patience = 60;
-    for (let second = 0; second < 7; second++) store.tick();
-    expect(store.state.activeVisits).toHaveLength(0);
-    expect(store.state.stats.served).toBe(1);
-    expect(store.state.employees[0].sales).toBe(1);
-    expect(store.state.employees[0].shiftSales).toBe(1);
+    let forcedCheckoutOpens = 0;
+    store.subscribe(event => {
+      if (event.type === 'customer' && event.reason === 'checkout-advice') forcedCheckoutOpens++;
+    });
+    for (let second = 0; second < 8; second++) store.tick();
+    expect(store.state.activeVisits).toHaveLength(1);
+    expect(store.state.activeVisits[0]).toMatchObject({
+      uid: 'visit-auto',
+      mode: 'advice',
+      stage: 'checkout',
+      cartAutomatedByStaff: true,
+      cartAssistingStaffUid: 'staff-auto',
+    });
+    expect(store.state.activeVisits[0].assignedStaffUid).toBeUndefined();
+    expect(forcedCheckoutOpens).toBe(0);
+    expect(store.state.stats.served).toBe(0);
+    expect(store.state.employees[0].sales).toBe(0);
+    expect(store.state.employees[0].shiftSales).toBe(0);
   });
 
   it('does not credit an employee for an outfit advised manually by the player', () => {

@@ -175,6 +175,28 @@ describe('self-service POS checkout', () => {
     expect(store.state.employees[0].sales).toBe(1);
   });
 
+  it('lets an assigned cashier complete checkout after staff advice', () => {
+    const { store } = checkoutStore();
+    store.state.level = 3;
+    store.state.landLevel = 2;
+    store.state.nextArrivalIn = 999;
+    store.state.activeVisits[0].mode = 'advice';
+    store.state.activeVisits[0].cartAutomatedByStaff = true;
+    store.state.activeVisits[0].cartAssistingStaffUid = 'adviser-uid';
+    store.state.activeVisits[0].checkoutPaymentMethod = 'transfer';
+    store.state.employees.push({
+      id: 'cashier-advice', uid: 'cashier-advice-uid', name: 'Thu ngân An', role: 'Thu ngân', bio: 'Thanh toán tại quầy.', appearance: 0,
+      salary: 100000, service: 90, persuasion: 70, charm: 70, reliability: 99, appliedDay: 1, hiredDay: 1,
+      morale: 90, deniedLeaves: 0, sales: 0, tipsEarned: 0, energy: 100, skillLevel: 2, assignment: 'cashier',
+    });
+
+    for (let second = 0; second < 10 && store.state.activeVisits.some(visit => visit.uid === 'checkout-1'); second++) store.tick();
+
+    expect(store.state.activeVisits.some(visit => visit.uid === 'checkout-1')).toBe(false);
+    expect(store.state.stats.sold).toBe(1);
+    expect(store.state.employees[0].sales).toBe(1);
+  });
+
   it('caps cashier short-change risk at 5% and records a cash mistake', () => {
     expect(staffCashierProfile({ reliability: 0, service: 0, skillLevel: 1 }).shortChangeChance).toBeLessThanOrEqual(.05);
     const base = checkoutStore();

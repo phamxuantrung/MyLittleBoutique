@@ -9,7 +9,7 @@ import { ownerPortrait, productSvg } from '../art/svg';
 import { courierImage } from '../art/courierAssets';
 import { isWallFurnitureId } from '../systems/rules';
 import { avatarImage, compact, compactMoney, escapeHtml, furnitureImage, money, productImage } from './format';
-import { boutiqueProfileModal, campaignModal, cashTransferModal, checkoutModal, type CheckoutStage, debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, livestreamModal, livestreamRequest, nameShopModal, onlineChannelModal, onlineOrderModal, onlineStockModal, questPanel, regularOrderDetailModal, regularPickupModal, serveModal, shortChangeFineModal, socialPanel, staffManagementModal, summaryModal, supplierSelectionPanel, trendPanel, upgradeModal } from './panels';
+import { boutiqueProfileModal, campaignModal, cashTransferModal, checkoutModal, type CheckoutStage, debugPanel, debtWarningModal, decorCatalog, displayFixtureModal, financeModal, financialGameOverModal, importPanel, inventoryPanel, livestreamModal, livestreamRequest, nameShopModal, onlineChannelModal, onlineOrderModal, onlineStockModal, openShopConfirmationModal, questPanel, regularOrderDetailModal, regularPickupModal, serveModal, shortChangeFineModal, socialPanel, staffManagementModal, summaryModal, supplierSelectionPanel, trendPanel, upgradeModal } from './panels';
 import type { ShopScene } from '../scenes/ShopScene';
 import { DISPLAY_GUIDE_SEEN, displayGuideModal, needsDisplayGuide } from './displayGuide';
 import { CAMPAIGN_GUIDE_SEEN } from '../systems/campaigns';
@@ -26,7 +26,7 @@ import type Moveable from 'moveable';
 import { requestDramaReplyEvaluation, requestSocialDrama } from '../systems/drama';
 
 type Tab = 'shop' | 'stock' | 'import' | 'looks' | 'trend' | 'decor' | 'social' | 'atelier';
-type Modal = 'none' | 'profile' | 'serve' | 'checkout' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'cash-transfer' | 'debt-warning' | 'short-change-fine' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-stock' | 'online-order' | 'regular-order-detail' | 'regular-pickup' | 'livestream' | 'debug' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
+type Modal = 'none' | 'profile' | 'serve' | 'checkout' | 'display' | 'fixture-info' | 'store-furniture-confirm' | 'music-player' | 'summary' | 'finance' | 'cash-transfer' | 'debt-warning' | 'short-change-fine' | 'gameover' | 'upgrade' | 'help' | 'settings' | 'reset' | 'quests' | 'campaign' | 'customer-care' | 'crisis-detail' | 'orders-arrived' | 'name-shop' | 'staff' | 'online' | 'online-stock' | 'online-order' | 'regular-order-detail' | 'regular-pickup' | 'livestream' | 'debug' | 'open-shop-confirm' | 'close-shop-confirm' | 'land-expand-confirm' | 'display-upgrade-confirm' | 'tutorial-recap' | 'display-guide' | 'atelier-result' | 'atelier-recipes' | 'atelier-customize' | 'atelier-delete-confirm' | 'import-quantity';
 const MONEY_PURCHASE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm', 'atelier-buy', 'atelier-recipe-buy', 'buy-furniture', 'expand-land-confirmed', 'display-upgrade-confirmed']);
 const IMPORT_BALANCE_ACTIONS = new Set(['buy', 'order-import', 'buy-look', 'order-material', 'import-quantity-confirm']);
 const FINANCE_BALANCE_ACTIONS = new Set(['pay-loan', 'pay-rent', 'pay-staff-wages', 'pay-all-staff-wages']);
@@ -165,7 +165,7 @@ export class GameUI {
   private pendingDayDrama?: Promise<SocialDrama>;
   private preparedDayDrama?: SocialDrama;
   private staffDetailUid = '';
-  private financeSection: 'loan' | 'payroll' | 'land' | 'cash' = 'loan';
+  private financeSection: 'loan' | 'payroll' | 'land' | 'cash' = 'cash';
   private cashTransferMode: 'deposit' | 'withdraw' = 'deposit';
   private cashTransferSelection: CashDrawer = {};
   private checkoutVisitId = '';
@@ -1196,6 +1196,12 @@ export class GameUI {
       }
       case 'open': {
         this.navigate('shop');
+        if (this.store.state.phase !== 'preparation') break;
+        this.openModal('open-shop-confirm', openShopConfirmationModal(this.store.state));
+        break;
+      }
+      case 'open-shop-confirm': {
+        this.closeModal();
         this.store.openShop();
         if (this.store.state.phase === 'open') this.prepareDayDrama();
         // Recover from an interrupted pointer/modal interaction before the sale
@@ -2097,7 +2103,9 @@ export class GameUI {
       case 'finance-open': {
         this.financeSection = this.store.state.employees.some(employee => (employee.unpaidWages ?? 0) > 0)
           ? 'payroll'
-          : this.store.state.rentDue > 0 ? 'land' : 'loan';
+          : this.store.state.rentDue > 0
+            ? 'land'
+            : (this.store.state.loan?.paymentDue ?? 0) > 0 ? 'loan' : 'cash';
         this.openModal('finance', financeModal(this.store.state, this.financeSection));
         break;
       }

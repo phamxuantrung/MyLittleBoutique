@@ -2079,7 +2079,7 @@ export function checkoutModal(s: GameState, visit: CustomerVisit, stage: Checkou
   return stage === 'transfer' || stage === 'card' ? body : `<div class="checkout-modal">${body}</div>`;
 }
 
-export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' | 'cash' = 'loan') {
+export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' | 'cash' = 'cash') {
   const borrowed = s.loan?.principal ?? 0;
   const balance = s.loan?.balance ?? 0;
   const remaining = Math.max(0, LOAN_MAX - borrowed);
@@ -2125,6 +2125,61 @@ export function financeModal(s: GameState, section: 'loan' | 'payroll' | 'land' 
   </div>`;
 }
 
+export function openShopConfirmationModal(s: GameState) {
+  const displayed = displayedInventory(s);
+  const displayedUnits = Object.values(displayed).reduce((sum, quantity) => sum + quantity, 0);
+  const displayedStyles = Object.keys(displayed).length;
+  const drawerNotes = CASH_DENOMINATIONS.reduce((sum, value) => sum + (s.cashDrawer[String(value)] ?? 0), 0);
+  const drawerTotal = cashDrawerTotal(s.cashDrawer);
+  const workingStaff = activeEmployees(s);
+  const advisors = workingStaff.filter(employee => (employee.assignment ?? 'service') === 'service').length;
+  const cashiers = workingStaff.filter(employee => employee.assignment === 'cashier').length;
+  const stockers = workingStaff.filter(employee => employee.assignment === 'stock').length;
+  const event = currentEvent(s);
+  const trend = currentTrend(s);
+  const duration = dayDuration(s);
+  const durationLabel = `${Math.floor(duration / 60)} phút${duration % 60 ? ` ${duration % 60} giây` : ''}`;
+  const ready = displayedUnits > 0;
+  return `<section class="open-shop-confirmation ${ready ? 'is-ready' : 'needs-stock'}">
+    <header>
+      <div class="open-shop-confirm-icon">${icon('shop')}</div>
+      <div><span class="eyebrow">CHUẨN BỊ BÁN HÀNG</span><h2>Sẵn sàng mở cửa ngày ${s.day}?</h2><p>Kiểm tra nhanh mọi thứ trước khi đón vị khách đầu tiên.</p></div>
+      <button class="open-shop-confirm-close" data-action="close-modal" aria-label="Đóng">${icon('close')}</button>
+    </header>
+    <div class="open-shop-content">
+      <section class="open-shop-day-overview">
+        <div class="open-shop-day-mark"><small>NGÀY</small><strong>${String(s.day).padStart(2, '0')}</strong></div>
+        <div class="open-shop-event"><small>SỰ KIỆN HÔM NAY</small><h3>${escapeHtml(event.name)}</h3><p>${escapeHtml(event.description)}</p></div>
+        <div class="open-shop-time"><span>${icon('clock')}</span><small>08:00 → 22:00</small><strong>${durationLabel}</strong></div>
+      </section>
+      <div class="open-shop-readiness-heading"><div><small>TRẠNG THÁI VẬN HÀNH</small><strong>Kiểm tra trước giờ mở cửa</strong></div><span class="${ready ? 'is-ready' : 'needs-action'}">${ready ? `${icon('check')} Sẵn sàng` : '! Cần trưng hàng'}</span></div>
+      <div class="open-shop-readiness-grid">
+        <article class="open-shop-ready-card is-stock ${ready ? 'is-good' : 'is-warning'}">
+          <header><span>${icon('hanger')}</span><small>HÀNG TRƯNG BÀY</small><b>${ready ? icon('check') : '!'}</b></header>
+          <strong>${displayedUnits}<small> món</small></strong><p>${displayedStyles} mẫu để khách lựa chọn</p>
+        </article>
+        <article class="open-shop-ready-card is-cash ${drawerNotes > 0 ? 'is-good' : 'is-neutral'}">
+          <header><span>${icon('coin')}</span><small>TIỀN TRONG KÉT</small><b>${drawerNotes > 0 ? icon('check') : '–'}</b></header>
+          <strong>${money(drawerTotal)}</strong><p>${drawerNotes} tờ tiền mặt</p>
+        </article>
+        <article class="open-shop-ready-card is-staff ${workingStaff.length ? 'is-good' : 'is-neutral'}">
+          <header><span>${icon('users')}</span><small>NHÂN VIÊN</small><b>${workingStaff.length ? icon('check') : '–'}</b></header>
+          <strong>${workingStaff.length}<small> người</small></strong><p>${advisors} tư vấn · ${cashiers} thu ngân · ${stockers} kho</p>
+        </article>
+        <article class="open-shop-ready-card is-online ${s.onlineChannelEnabled ? 'is-good' : 'is-neutral'}">
+          <header><span>${icon('globe')}</span><small>KÊNH ONLINE</small><b>${s.onlineChannelEnabled ? icon('check') : '–'}</b></header>
+          <strong>${s.onlineChannelEnabled ? 'Đang bật' : 'Đang tắt'}</strong><p>${s.onlineChannelEnabled ? 'Sẵn sàng nhận đơn' : 'Chỉ bán tại cửa hàng'}</p>
+        </article>
+      </div>
+      <section class="open-shop-trend-strip"><span>${icon('trend')}</span><div><small>XU HƯỚNG HÔM NAY</small><strong>${escapeHtml(trend.name)}</strong><p>${trend.styles.map(style => escapeHtml(style)).join(' · ')}</p></div><b>+${trend.bonus}%</b></section>
+    </div>
+    <footer>
+      <p>${ready ? `${icon('sparkle')} Mọi thứ đã sẵn sàng. Chúc boutique có một ngày thật rực rỡ!` : `${icon('warning')} Hãy quay lại shop và trưng hàng trước khi bắt đầu ca bán.`}</p>
+      <div><button class="btn btn-secondary" data-action="close-modal">Kiểm tra lại</button><button class="btn btn-primary" data-action="open-shop-confirm" ${ready ? '' : 'disabled'}>${icon('hudOpen')} Mở cửa đón khách</button></div>
+    </footer>
+  </section>`;
+}
+
 export function cashTransferModal(s: GameState, mode: 'deposit' | 'withdraw', selection: CashDrawer) {
   const depositing = mode === 'deposit';
   const amount = drawerAmount(selection);
@@ -2135,15 +2190,37 @@ export function cashTransferModal(s: GameState, mode: 'deposit' | 'withdraw', se
     && (depositing
       ? CASH_DENOMINATIONS.every(value => (selection[String(value)] ?? 0) <= (s.cashDrawer[String(value)] ?? 0)) && s.money + amount >= fee
       : s.money >= result);
+  const selectedNotes = CASH_DENOMINATIONS.filter(value => (selection[String(value)] ?? 0) > 0).map(value => {
+    const count = selection[String(value)] ?? 0;
+    const visibleNotes = Math.min(count, 4);
+    return `<button class="cash-transfer-selected-stack" data-action="cash-transfer-note-minus" data-id="${value}" aria-label="Bỏ một tờ ${money(value)}">
+      <span class="cash-transfer-selected-visual">${Array.from({ length: visibleNotes }, (_, index) => `<i style="--cash-stack-y:${index * 4}px;--cash-stack-x:${index * 5}px"><img src="/assets/ui/cash/display/${value}.webp" alt="" draggable="false"></i>`).join('')}<b>×${count}</b></span>
+    </button>`;
+  }).join('');
   return `<div class="cash-transfer-modal">
     <header class="cash-transfer-header"><button data-action="cash-transfer-back" aria-label="Quay lại tài chính">${icon('arrow')}</button><div><span class="eyebrow">${depositing ? 'NỘP TIỀN MẶT' : 'RÚT TIỀN MẶT'}</span><h2>${depositing ? 'Chọn tiền trong két để nộp' : 'Chọn số tờ muốn rút về két'}</h2></div><span class="cash-transfer-header-spacer" aria-hidden="true"></span></header>
-    <div class="cash-transfer-balance"><span>${depositing ? 'Trong két' : 'Trong tài khoản'}<b>${money(depositing ? cashDrawerTotal(s.cashDrawer) : s.money)}</b></span><span>Phí giao dịch<b>${money(fee)}</b></span><span>${depositing ? 'Tài khoản nhận' : 'Tài khoản bị trừ'}<b>${money(Math.max(0, result))}</b></span></div>
-    <div class="cash-transfer-note-grid">${CASH_DENOMINATIONS.map(value => {
-      const selected = selection[String(value)] ?? 0;
-      const available = s.cashDrawer[String(value)] ?? 0;
-      return `<article><img src="/assets/ui/cash/display/${value}.webp" alt="Tờ ${money(value)}" draggable="false"><div><strong>${money(value)}</strong><small>${depositing ? `Có ${available} tờ` : `${money(value * selected)}`}</small></div><button data-action="cash-transfer-note-minus" data-id="${value}" ${selected <= 0 ? 'disabled' : ''}>−</button><b>×${selected}</b><button data-action="cash-transfer-note-plus" data-id="${value}" ${depositing && selected >= available ? 'disabled' : ''}>+</button></article>`;
-    }).join('')}</div>
-    <footer><div><small>${depositing ? 'Tổng tiền đã chọn' : 'Số tiền rút về két'}</small><strong>${money(amount)}</strong></div><button class="btn btn-primary" data-action="cash-transfer-confirm" ${canConfirm ? '' : 'disabled'}>${depositing ? 'Nộp tiền' : 'Rút tiền'} · phí ${money(fee)}</button></footer>
+    <div class="cash-transfer-workspace">
+      <aside class="cash-transfer-selection">
+        <header><div><span class="eyebrow">ĐÃ CHỌN</span><h3>${depositing ? 'Tiền muốn nộp' : 'Tiền muốn rút'}</h3></div><strong>${money(amount)}</strong></header>
+        <div class="cash-transfer-selected-list">${selectedNotes || `<div class="cash-transfer-selection-empty"><b>₫</b><strong>Chưa chọn tờ tiền</strong><small>Chọn mệnh giá ở khay bên phải</small></div>`}</div>
+        <div class="cash-transfer-selection-action">
+          <div><span>${depositing ? 'Tài khoản sẽ nhận' : 'Tổng trừ tài khoản'}</span><strong>${money(Math.max(0, result))}</strong><small>${money(amount)} ${depositing ? '−' : '+'} phí ${money(fee)}</small></div>
+          <button class="btn btn-primary" data-action="cash-transfer-confirm" ${canConfirm ? '' : 'disabled'}>${depositing ? 'Nộp tiền' : 'Rút tiền'}</button>
+        </div>
+      </aside>
+      <main class="cash-transfer-drawer">
+        <header><div><span class="eyebrow">MỆNH GIÁ</span><h3>${depositing ? 'Chọn tiền đang có trong két' : 'Chọn tiền muốn đổi về két'}</h3></div><small>${depositing ? `${cashDrawerTotal(s.cashDrawer).toLocaleString('vi-VN')}₫ trong két` : `${s.money.toLocaleString('vi-VN')}₫ trong tài khoản`}</small></header>
+        <div class="cash-transfer-note-grid">${CASH_DENOMINATIONS.map(value => {
+          const selected = selection[String(value)] ?? 0;
+          const available = s.cashDrawer[String(value)] ?? 0;
+          const empty = depositing && available <= 0;
+          const maximumReached = depositing && selected >= available;
+          return `<button class="cash-transfer-note ${empty ? 'is-empty' : ''} ${selected > 0 ? 'is-selected' : ''}" data-action="cash-transfer-note-plus" data-id="${value}" aria-label="Thêm một tờ ${money(value)}" ${maximumReached ? 'disabled' : ''}>
+            <span class="cash-transfer-note-image"><img src="/assets/ui/cash/display/${value}.webp" alt="Tờ ${money(value)}" draggable="false">${depositing ? `<b class="cash-transfer-note-current" title="Hiện có trong két">×${available}</b>` : `<b class="cash-transfer-note-result" title="Số tờ trong két sau khi rút">×${available + selected}</b>`}</span>
+          </button>`;
+        }).join('')}</div>
+      </main>
+    </div>
   </div>`;
 }
 

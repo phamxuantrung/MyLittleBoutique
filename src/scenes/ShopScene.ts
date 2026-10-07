@@ -1130,12 +1130,14 @@ export class ShopScene extends Phaser.Scene {
   private createRainWeather(heavy = false) {
     this.ensureWeatherTextures();
     const layer = this.add.container(0, 0);
+    const shopShade = this.add.rectangle(0, 0, 1000, 700, heavy ? 0x18243a : 0x30445f, heavy ? .2 : .11)
+      .setOrigin(0);
     const rainySky = this.add.image(500, 350, WEATHER_RAIN_SKY_TEXTURE)
       .setDisplaySize(1000, 700)
       .setAlpha(heavy ? .82 : .56);
     const horizonVeil = this.add.rectangle(500, 550, 1000, 300, 0xaebdcb, heavy ? .055 : .035)
       .setOrigin(.5);
-    layer.add([rainySky, horizonVeil]);
+    layer.add([shopShade, rainySky, horizonVeil]);
 
     const cloudVeil = this.add.image(260, 32, WEATHER_CLOUD_TEXTURE)
       .setDisplaySize(620, 188)

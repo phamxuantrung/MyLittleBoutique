@@ -302,7 +302,7 @@ export interface GameState {
   onlineListings: string[]; onlineOrders: OnlineOrder[]; onlineNextOrderIn: number; onlineChannelEnabled: boolean;
   regularOnlineOrders: RegularOnlineOrder[]; regularOnlineNextOrderIn: number; onlinePackingLevel: number; lastLivestreamDay: number;
   onlineRating: number; onlineReviews: number; onlineSales: number;
-  stats: DayStats; posts: SocialPost[]; dramas: SocialDrama[]; dramaHeat: number; dramaTrust: number; nextDramaDay: number; claimed: string[]; sound: boolean; music: boolean; musicVolume: number; effectsVolume: number; musicTrack: string; tutorialDone: boolean;
+  stats: DayStats; posts: SocialPost[]; dramas: SocialDrama[]; dramaHeat: number; dramaTrust: number; nextDramaDay: number; claimed: string[]; sound: boolean; weatherSound: boolean; music: boolean; musicVolume: number; effectsVolume: number; musicTrack: string; tutorialDone: boolean;
   employees: StaffMember[]; staffApplicants: StaffCandidate[]; recruitmentPost: RecruitmentPost | null; staffLeaveRequests: StaffLeaveRequest[];
   campaignSeason: number; industryReputation: number; activeCampaign: ActiveBrandCampaign | null; campaignAvailableDay: number;
   completedCampaigns: string[];

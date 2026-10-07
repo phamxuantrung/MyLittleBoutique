@@ -116,6 +116,7 @@ const store = new GameStore();
 let ui!: GameUI;
 const audio = new AudioSystem(() => ui?.refreshMusicPlayerPlayback());
 audio.enabled = store.state.sound;
+audio.setWeatherEnabled(store.state.weatherSound);
 audio.setMusicVolume(store.state.musicVolume);
 audio.setEffectsVolume(store.state.effectsVolume);
 audio.setMusicTrack(store.state.musicTrack);
@@ -161,7 +162,7 @@ game = new Phaser.Game({
   banner: false,
 });
 game.events.on('weather-audio', (kind: 'clear' | 'rain' | 'storm') => audio.setWeatherAmbience(kind));
-game.events.on('weather-thunder', () => audio.play('thunder'));
+game.events.on('weather-thunder', () => audio.playWeatherThunder());
 const settleMobileViewport = () => {
   viewportSettleTimers.forEach(timer => window.clearTimeout(timer));
   viewportSettleTimers = [];

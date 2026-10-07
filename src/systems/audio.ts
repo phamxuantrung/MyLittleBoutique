@@ -90,6 +90,7 @@ export class AudioSystem {
   private weatherTrack?: HTMLAudioElement;
   private weatherTrackSource = '';
   private weatherKind: WeatherAudioKind = 'clear';
+  private weatherEnabled = true;
   private audioEnabled = true;
 
   get enabled() { return this.audioEnabled; }
@@ -200,7 +201,7 @@ export class AudioSystem {
   }
 
   private resumeWeatherAmbience() {
-    if (!this.audioEnabled || this.weatherKind === 'clear') return;
+    if (!this.audioEnabled || !this.weatherEnabled || this.weatherKind === 'clear') return;
     const track = this.ensureWeatherTrack();
     this.applyWeatherVolume();
     void track.play().catch(() => { /* The next user gesture retries playback. */ });
@@ -214,6 +215,16 @@ export class AudioSystem {
       return;
     }
     this.resumeWeatherAmbience();
+  }
+
+  setWeatherEnabled(enabled: boolean) {
+    this.weatherEnabled = enabled;
+    if (!enabled) this.weatherTrack?.pause();
+    else this.resumeWeatherAmbience();
+  }
+
+  playWeatherThunder() {
+    if (this.weatherEnabled) this.play('thunder');
   }
 
   setMusicTrack(trackId: string) {

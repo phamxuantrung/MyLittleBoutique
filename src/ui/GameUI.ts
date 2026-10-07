@@ -2338,6 +2338,7 @@ export class GameUI {
       }
       case 'upgrade': this.store.upgrade(); this.closeModal(); this.scene?.burst(500, 300, true); break;
       case 'sound': this.store.settings('sound', !this.store.state.sound); this.audio.enabled = this.store.state.sound; if (this.modal === 'settings') this.showSettings(); break;
+      case 'weather-sound': this.store.settings('weatherSound', !this.store.state.weatherSound); this.audio.setWeatherEnabled(this.store.state.weatherSound); if (this.modal === 'settings') this.showSettings(); break;
       case 'music': {
         const fromPlayer = this.modal === 'music-player';
         this.store.settings('music', !this.store.state.music);
@@ -2399,7 +2400,7 @@ export class GameUI {
       case 'tutorial-done': this.store.settings('tutorialDone', true); this.closeModal(); break;
       case 'rescue': this.store.rescue(); break;
       case 'reset-confirm': this.openModal('reset', `<div class="modal-heading"><h2>Bắt đầu một boutique mới?</h2><button class="icon-button" data-action="close-modal" aria-label="Đóng">${icon('close')}</button></div><p>Tiền, hàng hóa, ngày chơi và toàn bộ tiến trình hiện tại sẽ bị xóa khỏi trình duyệt này. Thao tác này không thể hoàn tác.</p><div class="reset-actions"><button class="btn btn-secondary" data-action="settings">Giữ boutique của mình</button><button class="btn btn-danger" data-action="reset">Xóa và chơi lại</button></div>`); break;
-      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.setEffectsVolume(this.store.state.effectsVolume); this.audio.setMusicTrack(this.store.state.musicTrack); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.materialQtys = {}; this.expandedImportPurchase = ''; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
+      case 'reset': this.closeModal(); this.store.reset(); this.audio.enabled = true; this.audio.setWeatherEnabled(this.store.state.weatherSound); this.audio.setMusicVolume(this.store.state.musicVolume); this.audio.setEffectsVolume(this.store.state.effectsVolume); this.audio.setMusicTrack(this.store.state.musicTrack); this.audio.music(this.store.state.music); this.productImportQtys = {}; this.lookQtys = {}; this.materialQtys = {}; this.expandedImportPurchase = ''; this.decorCategory = 'all'; this.navigate('shop'); setTimeout(() => this.openNameShop(true), 100); break;
     }
   }
   private scheduleCatalogSearch(inputId: 'catalog-search' | 'import-search', caret: number | null) {
@@ -4397,6 +4398,11 @@ export class GameUI {
             <input id="effects-volume" data-effects-volume type="range" min="0" max="100" step="5" value="${effectsVolume}" aria-label="Âm lượng hiệu ứng">
             <output id="effects-volume-value" data-effects-volume-value for="effects-volume">${effectsVolume}%</output>
           </label>
+          <div class="game-setting-row">
+            <span class="game-setting-icon is-weather">${icon(s.weatherSound ? 'daySun' : 'mute')}</span>
+            <div><strong>Âm thanh thời tiết</strong><small>Tiếng mưa, mưa giông và sấm chớp.</small></div>
+            <button role="switch" aria-checked="${s.weatherSound}" aria-label="Âm thanh thời tiết" data-action="weather-sound" class="game-settings-toggle ${s.weatherSound ? 'is-on' : ''}"><i></i><b>${s.weatherSound ? 'Bật' : 'Tắt'}</b></button>
+          </div>
           <div class="game-setting-row">
             <span class="game-setting-icon is-music">${icon('star')}</span>
             <div><strong>Nhạc nền</strong><small>Giai điệu nhẹ nhàng khi chăm shop.</small></div>

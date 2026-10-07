@@ -118,7 +118,7 @@ export function initialState(): GameState {
       { uid: 'starter-counter', id: 'counter', x: 4, y: 3, rotation: 0 },
       { ...musicPlayerStarter },
       ...movableDecorStarters.map(item => ({ ...item })),
-    ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, nextDramaDay: 1, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_BACKGROUND_DEFAULT_ON_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, music: true, musicVolume: 0.55, effectsVolume: 0.85, musicTrack: 'better-for-you-1', tutorialDone: false,
+    ], stats: emptyStats(), posts: [], dramas: [], dramaHeat: 12, dramaTrust: 70, nextDramaDay: 1, claimed: [MOVABLE_DECOR_MIGRATION, CAMPAIGN_LEVEL3_MIGRATION, MUSIC_DEFAULT_OFF_MIGRATION, MUSIC_BACKGROUND_DEFAULT_ON_MIGRATION, MUSIC_PLAYER_STARTER_MIGRATION], sound: true, weatherSound: true, music: true, musicVolume: 0.55, effectsVolume: 0.85, musicTrack: 'better-for-you-1', tutorialDone: false,
     employees: [], staffApplicants: [], recruitmentPost: null, staffLeaveRequests: [],
     shopName: 'My Little Boutique', hasNamedShop: false,
   };
@@ -588,6 +588,7 @@ export function parseSave(raw: string | null): GameState {
       state.claimed.push(MUSIC_PLAYER_STARTER_MIGRATION);
     }
     state.sound = typeof s.sound === 'boolean' ? s.sound : true;
+    state.weatherSound = typeof s.weatherSound === 'boolean' ? s.weatherSound : true;
     state.music = typeof s.music === 'boolean' ? s.music : false;
     if (!state.claimed.includes(MUSIC_DEFAULT_OFF_MIGRATION)) {
       state.music = false;

@@ -3,7 +3,7 @@ import { courierImage } from '../art/courierAssets';
 import { shopReviewStats } from '../systems/reviews';
 import { categories, customers, furniture, levels, products } from '../data/catalog';
 import { fashionStyles } from '../data/fashion';
-import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffAdviceProfile, staffCapacity, staffCashierProfile, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN } from '../systems/rules';
+import { activeCustomer, activeEmployees, buyPrice, currentEvent, currentTrend, dailyRent, dayDuration, decorAppealScore, displayCapacity, displayedInventory, displayedQuantity, isOutOfTrend, isTrending, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyTier, matchScore, MAX_OUTFIT_ITEMS, nextStaffRequirement, onlineOrderChance, previousTrend, sellPrice, staffAdviceProfile, staffCapacity, staffCashierProfile, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_DEFAULT, STAFF_SALARY_MAX, STAFF_SALARY_MIN, weatherImpact } from '../systems/rules';
 import type { CashDrawer, Customer, CustomerVisit, Furniture, GameState, LivestreamComment, LivestreamRequest, LivestreamRoundResult, LivestreamSessionStats, OnlineOrder, Product, SaleResult, SocialPost, StaffAssignment, StaffFinancialNotice } from '../types';
 import { avatarImage, compact, escapeHtml, furnitureImage, money, productImage, staffImage } from './format';
 import { icon } from './icons';
@@ -203,6 +203,7 @@ export function questPanel(s: GameState) {
 
 export function trendPanel(s: GameState, _section: 'hot' | 'out' = 'hot') {
   const trend = currentTrend(s), event = currentEvent(s);
+  const weather = weatherImpact(s);
   const cooledTrend = previousTrend(s);
   const trendProds = products.filter(p => isTrending(s, p));
   const unlockedTrendProds = trendProds.filter(p => p.level <= s.level);
@@ -217,7 +218,7 @@ export function trendPanel(s: GameState, _section: 'hot' | 'out' = 'hot') {
       : event.extra > 0
         ? `${icon('users')} +${event.extra} khách ghé shop`
         : event.extra < 0
-          ? `${icon('users')} ${event.extra} lượt khách dự kiến`
+          ? `${icon('users')} ${event.extra} lượt khách · Online +${Math.round((weather.onlineDemandMultiplier - 1) * 100)}% · Kiên nhẫn +${weather.patienceBonus}s`
           : `${icon('sun')} Nhịp bán bình thường`;
 
   return `
@@ -525,6 +526,10 @@ export function debugPanel(s: GameState) {
       <span>${icon('decor')} <b>Mặt bằng cấp ${(s.landLevel ?? 0) + 1}</b></span>
       <span>${icon('shop')} <b>${phaseLabel}</b></span>
     </div>
+    <section class="debug-section">
+      <div class="debug-section-title"><span>THỜI TIẾT</span><small>Chuyển lần lượt Nắng → Mưa nhẹ → Mưa giông → Theo ngày</small></div>
+      <button class="debug-customer-button" data-action="debug-action" data-id="weather-cycle">${icon('daySun')} <span><strong>Thử thời tiết tiếp theo</strong><small>Đóng bảng và áp dụng ngay hiệu ứng cùng các tác động vận hành</small></span>${icon('arrow')}</button>
+    </section>
     <section class="debug-section">
       <div class="debug-section-title"><span>KINH TẾ & TIẾN TRÌNH</span><small>Chuẩn bị tài nguyên thử nghiệm</small></div>
       <div class="debug-action-grid">
@@ -2213,10 +2218,11 @@ export function cashTransferModal(s: GameState, mode: 'deposit' | 'withdraw', se
         <div class="cash-transfer-note-grid">${CASH_DENOMINATIONS.map(value => {
           const selected = selection[String(value)] ?? 0;
           const available = s.cashDrawer[String(value)] ?? 0;
-          const empty = depositing && available <= 0;
+          const remaining = Math.max(0, available - selected);
+          const empty = depositing && remaining <= 0;
           const maximumReached = depositing && selected >= available;
           return `<button class="cash-transfer-note ${empty ? 'is-empty' : ''} ${selected > 0 ? 'is-selected' : ''}" data-action="cash-transfer-note-plus" data-id="${value}" aria-label="Thêm một tờ ${money(value)}" ${maximumReached ? 'disabled' : ''}>
-            <span class="cash-transfer-note-image"><img src="/assets/ui/cash/display/${value}.webp" alt="Tờ ${money(value)}" draggable="false">${depositing ? `<b class="cash-transfer-note-current" title="Hiện có trong két">×${available}</b>` : `<b class="cash-transfer-note-result" title="Số tờ trong két sau khi rút">×${available + selected}</b>`}</span>
+            <span class="cash-transfer-note-image"><img src="/assets/ui/cash/display/${value}.webp" alt="Tờ ${money(value)}" draggable="false">${depositing ? `<b class="cash-transfer-note-current" title="Số tờ còn lại trong két">×${remaining}</b>` : `<b class="cash-transfer-note-result" title="Số tờ trong két sau khi rút">×${available + selected}</b>`}</span>
           </button>`;
         }).join('')}</div>
       </main>

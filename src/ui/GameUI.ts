@@ -1935,6 +1935,12 @@ export class GameUI {
         break;
       case 'debug-open': this.openModal('debug', debugPanel(this.store.state)); break;
       case 'debug-action':
+        if (id === 'weather-cycle') {
+          const weatherLabel = this.scene?.cycleDebugWeather();
+          this.closeModal();
+          if (weatherLabel) this.store.toast(`Debug thời tiết: ${weatherLabel}.`);
+          break;
+        }
         if (id === 'customer' || id === 'online-order') this.closeModal();
         if (this.store.debug(id)) {
           if (id === 'online-stock') this.openModal('online-stock', onlineStockModal(this.store.state));

@@ -7,6 +7,37 @@ export const currentEvent = (state: GameState) => {
   if (state.day <= 1 || dailyEvents.length <= 1) return dailyEvents[0];
   return dailyEvents[1 + (state.day - 2) % (dailyEvents.length - 1)];
 };
+export type WeatherKind = 'clear' | 'rain' | 'storm';
+export type WeatherImpact = {
+  kind: WeatherKind;
+  arrivalDelay: number;
+  patienceBonus: number;
+  onlineDemandMultiplier: number;
+  walkDurationMultiplier: number;
+  weatherItemBonus: number;
+  groupChanceMultiplier: number;
+};
+let debugWeatherOverride: WeatherKind | undefined;
+export function setDebugWeatherOverride(kind?: WeatherKind) { debugWeatherOverride = kind; }
+export function weatherImpact(state: GameState): WeatherImpact {
+  const event = currentEvent(state);
+  const text = `${event.name} ${event.description}`.toLocaleLowerCase('vi');
+  const rain = debugWeatherOverride ? debugWeatherOverride !== 'clear' : text.includes('mưa');
+  const storm = debugWeatherOverride ? debugWeatherOverride === 'storm'
+    : rain && ['mưa lớn', 'mưa to', 'giông', 'bão', 'sấm'].some(term => text.includes(term));
+  if (storm) return {
+    kind: 'storm', arrivalDelay: 8, patienceBonus: 12, onlineDemandMultiplier: 1.55,
+    walkDurationMultiplier: 1.28, weatherItemBonus: 9, groupChanceMultiplier: .45,
+  };
+  if (rain) return {
+    kind: 'rain', arrivalDelay: 4, patienceBonus: 6, onlineDemandMultiplier: 1.25,
+    walkDurationMultiplier: 1.12, weatherItemBonus: 5, groupChanceMultiplier: .72,
+  };
+  return {
+    kind: 'clear', arrivalDelay: 0, patienceBonus: 0, onlineDemandMultiplier: 1,
+    walkDurationMultiplier: 1, weatherItemBonus: 0, groupChanceMultiplier: 1,
+  };
+}
 const supplierFactor = (state: GameState) => state.activeSupplierId === 'global' ? .88 : state.activeSupplierId === 'wholesale' ? .95 : 1;
 export const buyPrice = (state: GameState, product: Product) => Math.round(product.buyPrice * currentEvent(state).discount * supplierFactor(state));
 export const sellPrice = (state: GameState, product: Product) => state.prices[product.id] ?? product.sellPrice;
@@ -174,7 +205,7 @@ export function arrivalDelay(state: GameState, random: () => number): number {
   // Đầu game khoảng 19–35 giây giữa hai lượt; shop phát triển sẽ đông dần
   // nhưng vẫn luôn có nhịp nghỉ để người chơi kịp xử lý khách đang chờ.
   const crisisPenalty = state.reputationCrisis ? 7 : 0;
-  return Math.max(10, Math.round(26 + random() * 16 - customerTraffic(state) + crisisPenalty));
+  return Math.max(10, Math.round(26 + random() * 16 - customerTraffic(state) + crisisPenalty + weatherImpact(state).arrivalDelay));
 }
 
 /** EXP tăng theo quy mô đơn, nhưng có trần để đơn lớn không đẩy cấp quá nhanh. */
@@ -382,6 +413,7 @@ export function matchScore(state: GameState, customer: Customer, items: Product[
   const price = items.reduce((sum, item) => sum + sellPrice(state, item), 0);
   if (price > customer.budget) return 0;
   const appeal = Math.min(12, decorAppealScore(state) / 2.5);
+  const weather = weatherImpact(state);
   const value = items.reduce((sum, item) => {
     const styles = productStyles(item);
     const style = styles.some(s => customer.styles.includes(s)) ? 38 : customer.styles.some(s => styles.some(itemStyle => compatible[s]?.includes(itemStyle))) ? 22 : 0;
@@ -398,7 +430,14 @@ export function matchScore(state: GameState, customer: Customer, items: Product[
     const bargain = customer.personality === 'Thợ săn giá tốt' && sellPrice(state, item) > item.sellPrice ? 12 : 0;
     const occasion = customer.occasion && item.occasions.includes(customer.occasion) ? 6 : 0;
     const category = customer.preferredCategories?.length ? customer.preferredCategories.includes(item.category) ? 8 : -8 : 0;
-    return sum + 15 + style + color + trend + occasion + category + item.quality * .14 + appeal - markup - bargain;
+    const weatherFit = weather.kind !== 'clear'
+      ? item.category === 'outerwear'
+        ? weather.weatherItemBonus
+        : productStyles(item).includes('Gorpcore')
+          ? Math.ceil(weather.weatherItemBonus * .55)
+          : 0
+      : 0;
+    return sum + 15 + style + color + trend + occasion + category + weatherFit + item.quality * .14 + appeal - markup - bargain;
   }, 0) / items.length;
   const trustBonus = loyaltyTierIndex(loyaltyTier(state.customerLoyalty[customer.id])) * 2;
   return Math.max(0, Math.min(100, Math.round(value + trustBonus)));
@@ -558,5 +597,6 @@ export function onlineOrderChance(s: GameState, availableProductIds: string[] = 
   const assortment = .44 + .56 * Math.min(1, available.length / 7);
   const offerQuality = available.reduce((sum, product) => sum + onlineProductDemandWeight(s, product), 0) / available.length;
   const deliveryHistory = Math.min(.18, s.onlineSales * .004) * ratingTrust;
-  return Math.max(0, Math.min(.78, .0025 + shopTrust * recognition * ratingTrust * reviewConfidence * assortment * offerQuality * .82 + deliveryHistory));
+  const baseChance = .0025 + shopTrust * recognition * ratingTrust * reviewConfidence * assortment * offerQuality * .82 + deliveryHistory;
+  return Math.max(0, Math.min(.78, baseChance * weatherImpact(s).onlineDemandMultiplier));
 }

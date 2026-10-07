@@ -8,6 +8,7 @@ import { GameUI } from './ui/GameUI';
 import { ShopScene } from './scenes/ShopScene';
 import { recoveredFurnitureCount } from './systems/save';
 import { preloadGameAssets } from './systems/preload';
+import { weatherImpact } from './systems/rules';
 
 let game: Phaser.Game | undefined;
 let viewportFrame = 0;
@@ -159,6 +160,8 @@ game = new Phaser.Game({
   audio: { noAudio: true },
   banner: false,
 });
+game.events.on('weather-audio', (kind: 'clear' | 'rain' | 'storm') => audio.setWeatherAmbience(kind));
+game.events.on('weather-thunder', () => audio.play('thunder'));
 const settleMobileViewport = () => {
   viewportSettleTimers.forEach(timer => window.clearTimeout(timer));
   viewportSettleTimers = [];
@@ -182,6 +185,7 @@ new ResizeObserver(syncVisualViewport).observe(document.documentElement);
 settleMobileViewport();
 ui.attachScene(scene);
 game.events.once('shop-ready', () => {
+  audio.setWeatherAmbience(weatherImpact(store.state).kind);
   window.removeEventListener('game-asset-progress', phaserProgress);
   document.querySelector('.game-loading')?.remove();
   document.querySelector('#game-canvas')?.setAttribute('data-ready', 'true');

@@ -7,7 +7,7 @@ import { COURIER_APPEARANCE_COUNT, courierArtwork } from '../art/courierAssets';
 import { externalFurnitureArtwork } from '../art/furnitureAssets';
 import { customers, furniture, products } from '../data/catalog';
 import type { GameStore } from '../systems/store';
-import { activeCustomer, activeEmployees, activeVisit, canPlace, customerNeedsAdvice, displayCapacity, isWallFurnitureId, landExpansion, landSize, nextLandExpansion, randomBrowseThought } from '../systems/rules';
+import { activeCustomer, activeEmployees, activeVisit, canPlace, customerNeedsAdvice, displayCapacity, isWallFurnitureId, landExpansion, landSize, nextLandExpansion, randomBrowseThought, setDebugWeatherOverride, weatherImpact, type WeatherKind } from '../systems/rules';
 import type { PlacedFurniture, SaleResult, Customer, Furniture } from '../types';
 import { lookupCustomer } from '../systems/customerGen';
 import { gameDate } from '../systems/calendar';
@@ -89,6 +89,12 @@ const CENTERED_FURNITURE_ORIGIN = { x: .5, y: 440 / 460 };
 const SHOP_SIGN_FONT_SCALE = 0.9;
 const CRYSTAL_LUXE_TEXTURE = 'f-crystal-luxe';
 const CRYSTAL_LUXE_LIVE_TEXTURE = 'f-crystal-luxe-live';
+const WEATHER_RAIN_STREAK_TEXTURE = 'weather-rain-streak';
+const WEATHER_RAIN_SKY_TEXTURE = 'weather-rain-sky';
+const WEATHER_CLOUD_TEXTURE = 'weather-soft-cloud';
+const WEATHER_GLOW_TEXTURE = 'weather-sun-glow';
+const WEATHER_SPARKLE_TEXTURE = 'weather-sparkle';
+const WEATHER_MIST_TEXTURE = 'weather-ground-mist';
 
 const shopSignTextLayout = (name: string) => {
   const normalized = (name.trim() || 'My Little Boutique').normalize('NFC');
@@ -252,6 +258,14 @@ export class ShopScene extends Phaser.Scene {
   private selectionClearBlockedUntil = 0;
   private furnitureTapTweens = new Map<string, Phaser.Tweens.Tween>();
   private currentTab = 'shop';
+  private weatherLayer?: Phaser.GameObjects.Container;
+  private weatherMaskShape?: Phaser.GameObjects.Graphics;
+  private weatherMask?: Phaser.Display.Masks.GeometryMask;
+  private weatherMaskSignature = '';
+  private weatherTweens: Phaser.Tweens.Tween[] = [];
+  private weatherTimers: Phaser.Time.TimerEvent[] = [];
+  private weatherSignature = '';
+  private debugWeatherStep = 0;
   private readonly coarsePointer = typeof window !== 'undefined'
     && (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
   private tapTolerance(pointer?: Phaser.Input.Pointer) {
@@ -392,7 +406,10 @@ export class ShopScene extends Phaser.Scene {
     this.currentTab = tab;
     this.input.enabled = (tab === 'shop' || tab === 'decor');
     this.updateLandExpansionButtons();
-    if (this.scene.isActive()) this.refreshStaff();
+    if (this.scene.isActive()) {
+      this.refreshStaff();
+      this.refreshWeather();
+    }
   }
   preserveSelectionForUiAction() {
     this.selectionClearBlockedUntil = Date.now() + 180;
@@ -526,6 +543,7 @@ export class ShopScene extends Phaser.Scene {
     this.grid = this.add.graphics().setDepth(-500).setVisible(false);
     this.dragGhost = this.add.graphics().setDepth(999);
     this.selectionArrows = this.add.graphics().setDepth(1250);
+    this.refreshWeather();
     this.drawGrid();
     this.refresh();
     this.time.addEvent({
@@ -554,6 +572,7 @@ export class ShopScene extends Phaser.Scene {
         this.drawGrid();
         this.refreshFurniture();
         this.refreshOnlineShippers();
+        this.refreshWeather();
       }
       if (event.type === 'customer') this.refreshCustomer();
       if (event.type === 'sale') this.animateSale(event.result);
@@ -856,6 +875,9 @@ export class ShopScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.crystalLuxeLoadGeneration++;
       this.crystalLuxeFrameTimer?.remove(false);
+      this.destroyWeather();
+      this.game.events.emit('weather-audio', 'clear');
+      setDebugWeatherOverride(undefined);
       this.unsubscribe?.();
       this.resizeObserver?.disconnect();
       this.game.canvas.removeEventListener('pointerdown', beginNativePointerGesture, true);
@@ -866,6 +888,547 @@ export class ShopScene extends Phaser.Scene {
       document.removeEventListener('visibilitychange', cancelNativeGesture);
     });
     this.game.events.emit('shop-ready');
+  }
+  update() {
+    if (!this.weatherLayer) return;
+    this.syncWeatherLayerToViewport();
+  }
+  private syncWeatherLayerToViewport() {
+    if (!this.weatherLayer) return;
+    const camera = this.cameras.main;
+    const inverseZoom = 1 / Math.max(.01, this.cameras.main.zoom);
+    const x = camera.width * .5 * (1 - inverseZoom);
+    const y = camera.height * .5 * (1 - inverseZoom);
+    if (Math.abs(this.weatherLayer.scaleX - inverseZoom) <= .001
+      && Math.abs(this.weatherLayer.x - x) <= .05
+      && Math.abs(this.weatherLayer.y - y) <= .05) return;
+    // Phaser zooms fixed-scroll objects around the camera centre as well. Scale
+    // cancels the size change; this matching offset cancels the centre shift so
+    // the 1000x700 weather layer keeps touching every viewport edge.
+    this.weatherLayer.setPosition(x, y).setScale(inverseZoom);
+  }
+  private destroyWeather() {
+    for (const tween of this.weatherTweens) tween.stop();
+    this.weatherTweens = [];
+    for (const timer of this.weatherTimers) timer.remove(false);
+    this.weatherTimers = [];
+    this.weatherLayer?.clearMask(false);
+    this.weatherMask?.destroy();
+    this.weatherMaskShape?.destroy();
+    this.weatherMask = undefined;
+    this.weatherMaskShape = undefined;
+    this.weatherMaskSignature = '';
+    this.weatherLayer?.destroy();
+    this.weatherLayer = undefined;
+  }
+  private refreshWeatherMask() {
+    if (!this.weatherLayer) return;
+    const size = landSize(this.store.state);
+    const signature = `${size}:${this.weatherSignature}`;
+    if (this.weatherMask && this.weatherMaskShape && signature === this.weatherMaskSignature) return;
+    this.weatherLayer.clearMask(false);
+    this.weatherMask?.destroy();
+    this.weatherMaskShape?.destroy();
+
+    const span = 56 * (size + .35);
+    const halfSpan = 28 * (size + .35);
+    const leftX = 500 - span;
+    const rightX = 500 + span;
+    const wallSideY = 225 + halfSpan - 190;
+    const floorSideY = 225 + halfSpan + 21;
+    const bottomY = 225 + halfSpan * 2 + 23;
+    const outerLeft = -1800;
+    const outerRight = 2800;
+    const outerTop = -1200;
+    const outerBottom = 2200;
+    const shape = this.make.graphics({ x: 0, y: 0 }, false);
+    shape.fillStyle(0xffffff, 1);
+    // Four polygons surround the exact room silhouette. Drawing the exterior
+    // explicitly also works with Phaser's Canvas renderer, where inverted
+    // geometry masks are not supported.
+    shape.fillPoints([
+      new Phaser.Geom.Point(outerLeft, outerTop),
+      new Phaser.Geom.Point(outerRight, outerTop),
+      new Phaser.Geom.Point(outerRight, wallSideY),
+      new Phaser.Geom.Point(rightX, wallSideY),
+      new Phaser.Geom.Point(500, 35),
+      new Phaser.Geom.Point(leftX, wallSideY),
+      new Phaser.Geom.Point(outerLeft, wallSideY),
+    ], true);
+    shape.fillRect(outerLeft, wallSideY, leftX - outerLeft, floorSideY - wallSideY);
+    shape.fillRect(rightX, wallSideY, outerRight - rightX, floorSideY - wallSideY);
+    shape.fillPoints([
+      new Phaser.Geom.Point(outerLeft, floorSideY),
+      new Phaser.Geom.Point(leftX, floorSideY),
+      new Phaser.Geom.Point(500, bottomY),
+      new Phaser.Geom.Point(rightX, floorSideY),
+      new Phaser.Geom.Point(outerRight, floorSideY),
+      new Phaser.Geom.Point(outerRight, outerBottom),
+      new Phaser.Geom.Point(outerLeft, outerBottom),
+    ], true);
+    this.weatherMaskShape = shape;
+    this.weatherMask = shape.createGeometryMask();
+    this.weatherMaskSignature = signature;
+    this.weatherLayer.setMask(this.weatherMask);
+  }
+  private refreshWeather() {
+    const weather = weatherImpact(this.store.state);
+    const kind = weather.kind === 'clear' ? 'sunny' : weather.kind;
+    const signature = `${this.store.state.day}:${kind}`;
+    if (!this.weatherLayer || signature !== this.weatherSignature) {
+      this.destroyWeather();
+      this.weatherSignature = signature;
+      this.weatherLayer = kind === 'rain' || kind === 'storm'
+        ? this.createRainWeather(kind === 'storm')
+        : this.createSunnyWeather();
+      this.weatherLayer
+        .setDepth(1180)
+        .setScrollFactor(0)
+        .setAlpha(0);
+      this.syncWeatherLayerToViewport();
+      this.weatherTweens.push(this.tweens.add({
+        targets: this.weatherLayer,
+        alpha: 1,
+        duration: 420,
+        ease: 'Sine.easeOut',
+      }));
+    }
+    this.refreshWeatherMask();
+    const visible = this.currentTab === 'shop' && !this.edit;
+    this.weatherLayer.setVisible(visible);
+    for (const tween of this.weatherTweens) {
+      if (visible) tween.resume();
+      else tween.pause();
+    }
+    for (const timer of this.weatherTimers) timer.paused = !visible;
+    this.game.events.emit('weather-audio', visible ? weather.kind : 'clear');
+  }
+  cycleDebugWeather() {
+    const sequence: { kind?: WeatherKind; label: string }[] = [
+      { kind: 'clear', label: 'Nắng đẹp' },
+      { kind: 'rain', label: 'Mưa nhẹ' },
+      { kind: 'storm', label: 'Mưa giông' },
+      { label: 'Theo thời tiết của ngày' },
+    ];
+    const selected = sequence[this.debugWeatherStep % sequence.length];
+    this.debugWeatherStep++;
+    setDebugWeatherOverride(selected.kind);
+    this.weatherSignature = '';
+    this.refreshWeather();
+    return selected.label;
+  }
+  private weatherWalkDuration(baseDuration: number) {
+    return Math.round(baseDuration * weatherImpact(this.store.state).walkDurationMultiplier);
+  }
+  private ensureWeatherTextures() {
+    if (!this.textures.exists(WEATHER_RAIN_SKY_TEXTURE)) {
+      const texture = this.textures.createCanvas(WEATHER_RAIN_SKY_TEXTURE, 512, 512);
+      if (texture) {
+        const context = texture.context;
+        const sky = context.createLinearGradient(0, 0, 0, 512);
+        sky.addColorStop(0, 'rgba(48,63,91,.72)');
+        sky.addColorStop(.42, 'rgba(69,83,108,.48)');
+        sky.addColorStop(.78, 'rgba(101,115,135,.22)');
+        sky.addColorStop(1, 'rgba(126,139,153,.06)');
+        context.fillStyle = sky;
+        context.fillRect(0, 0, 512, 512);
+
+        // Broad, soft patches keep the rainy sky from looking like a flat grey panel.
+        const haze = context.createRadialGradient(110, 150, 8, 110, 150, 250);
+        haze.addColorStop(0, 'rgba(184,201,218,.18)');
+        haze.addColorStop(1, 'rgba(184,201,218,0)');
+        context.fillStyle = haze;
+        context.fillRect(0, 0, 512, 420);
+        const shadow = context.createRadialGradient(430, 80, 12, 430, 80, 285);
+        shadow.addColorStop(0, 'rgba(23,34,55,.22)');
+        shadow.addColorStop(1, 'rgba(23,34,55,0)');
+        context.fillStyle = shadow;
+        context.fillRect(100, 0, 412, 410);
+        texture.refresh();
+      }
+    }
+    if (!this.textures.exists(WEATHER_RAIN_STREAK_TEXTURE)) {
+      const texture = this.textures.createCanvas(WEATHER_RAIN_STREAK_TEXTURE, 12, 64);
+      if (texture) {
+        const gradient = texture.context.createLinearGradient(0, 0, 0, 64);
+        gradient.addColorStop(0, 'rgba(245,252,255,0)');
+        gradient.addColorStop(.2, 'rgba(245,252,255,.9)');
+        gradient.addColorStop(.72, 'rgba(207,234,247,.52)');
+        gradient.addColorStop(1, 'rgba(207,234,247,0)');
+        texture.context.strokeStyle = gradient;
+        texture.context.lineWidth = 2;
+        texture.context.lineCap = 'round';
+        texture.context.beginPath();
+        texture.context.moveTo(10, 1);
+        texture.context.lineTo(2, 63);
+        texture.context.stroke();
+        texture.refresh();
+      }
+    }
+    if (!this.textures.exists(WEATHER_CLOUD_TEXTURE)) {
+      const texture = this.textures.createCanvas(WEATHER_CLOUD_TEXTURE, 440, 160);
+      if (texture) {
+        const context = texture.context;
+        context.save();
+        context.filter = 'blur(15px)';
+        context.fillStyle = 'rgba(255,255,255,.86)';
+        context.beginPath();
+        context.ellipse(90, 100, 100, 35, 0, 0, Math.PI * 2);
+        context.ellipse(190, 74, 122, 55, 0, 0, Math.PI * 2);
+        context.ellipse(306, 96, 132, 40, 0, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+        texture.refresh();
+      }
+    }
+    if (!this.textures.exists(WEATHER_GLOW_TEXTURE)) {
+      const texture = this.textures.createCanvas(WEATHER_GLOW_TEXTURE, 320, 320);
+      if (texture) {
+        const gradient = texture.context.createRadialGradient(160, 160, 6, 160, 160, 158);
+        gradient.addColorStop(0, 'rgba(255,252,221,.95)');
+        gradient.addColorStop(.18, 'rgba(255,238,162,.55)');
+        gradient.addColorStop(.52, 'rgba(255,218,117,.18)');
+        gradient.addColorStop(1, 'rgba(255,218,117,0)');
+        texture.context.fillStyle = gradient;
+        texture.context.fillRect(0, 0, 320, 320);
+        texture.refresh();
+      }
+    }
+    if (!this.textures.exists(WEATHER_SPARKLE_TEXTURE)) {
+      const texture = this.textures.createCanvas(WEATHER_SPARKLE_TEXTURE, 32, 32);
+      if (texture) {
+        const context = texture.context;
+        const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 15);
+        gradient.addColorStop(0, 'rgba(255,255,245,1)');
+        gradient.addColorStop(.18, 'rgba(255,244,190,.8)');
+        gradient.addColorStop(1, 'rgba(255,231,145,0)');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 32, 32);
+        context.strokeStyle = 'rgba(255,255,245,.82)';
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(16, 5); context.lineTo(16, 27);
+        context.moveTo(5, 16); context.lineTo(27, 16);
+        context.stroke();
+        texture.refresh();
+      }
+    }
+    if (!this.textures.exists(WEATHER_MIST_TEXTURE)) {
+      const texture = this.textures.createCanvas(WEATHER_MIST_TEXTURE, 512, 128);
+      if (texture) {
+        const context = texture.context;
+        const gradient = context.createLinearGradient(0, 0, 0, 128);
+        gradient.addColorStop(0, 'rgba(220,238,246,0)');
+        gradient.addColorStop(.55, 'rgba(220,238,246,.38)');
+        gradient.addColorStop(1, 'rgba(220,238,246,0)');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 512, 128);
+        texture.refresh();
+      }
+    }
+  }
+  private createRainWeather(heavy = false) {
+    this.ensureWeatherTextures();
+    const layer = this.add.container(0, 0);
+    const rainySky = this.add.image(500, 350, WEATHER_RAIN_SKY_TEXTURE)
+      .setDisplaySize(1000, 700)
+      .setAlpha(heavy ? .82 : .56);
+    const horizonVeil = this.add.rectangle(500, 550, 1000, 300, 0xaebdcb, heavy ? .055 : .035)
+      .setOrigin(.5);
+    layer.add([rainySky, horizonVeil]);
+
+    const cloudVeil = this.add.image(260, 32, WEATHER_CLOUD_TEXTURE)
+      .setDisplaySize(620, 188)
+      .setTint(0xaebfd2)
+      .setAlpha(.3);
+    const cloudVeilFar = this.add.image(820, 4, WEATHER_CLOUD_TEXTURE)
+      .setDisplaySize(570, 164)
+      .setTint(0xc5d1de)
+      .setAlpha(.18)
+      .setFlipX(true);
+    layer.add([cloudVeilFar, cloudVeil]);
+    this.weatherTweens.push(this.tweens.add({
+      targets: cloudVeil,
+      x: { from: 225, to: 295 },
+      alpha: { from: .24, to: .42 },
+      duration: 9000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    }));
+    this.weatherTweens.push(this.tweens.add({
+      targets: cloudVeilFar,
+      x: { from: 770, to: 850 },
+      alpha: { from: .13, to: .26 },
+      duration: 12500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    }));
+
+    // Thin distant rain establishes depth without forming a uniform curtain.
+    for (let index = 0; index < (heavy ? 72 : 34); index++) {
+      const startX = Phaser.Math.Between(-30, 1120);
+      const drop = this.add.image(
+        startX,
+        Phaser.Math.Between(-130, -20),
+        WEATHER_RAIN_STREAK_TEXTURE,
+      ).setOrigin(.5, 0)
+        .setDisplaySize(Phaser.Math.FloatBetween(3.2, 4.6), Phaser.Math.Between(18, 30))
+        .setAlpha(Phaser.Math.FloatBetween(heavy ? .28 : .2, heavy ? .52 : .4));
+      layer.add(drop);
+      this.weatherTweens.push(this.tweens.add({
+        targets: drop,
+        x: startX - Phaser.Math.Between(70, 105),
+        y: 740,
+        duration: Phaser.Math.Between(1250, 1750),
+        delay: Phaser.Math.Between(0, 1700),
+        repeat: -1,
+        ease: 'Linear',
+      }));
+    }
+
+    // Brighter foreground drops fall faster and at slightly different angles.
+    for (let index = 0; index < (heavy ? 58 : 25); index++) {
+      const startX = Phaser.Math.Between(-20, 1160);
+      const drop = this.add.image(
+        startX,
+        Phaser.Math.Between(-180, -30),
+        WEATHER_RAIN_STREAK_TEXTURE,
+      ).setOrigin(.5, 0)
+        .setDisplaySize(Phaser.Math.FloatBetween(4.4, 6.5), Phaser.Math.Between(38, 62))
+        .setAlpha(Phaser.Math.FloatBetween(heavy ? .52 : .42, heavy ? .84 : .74));
+      layer.add(drop);
+      this.weatherTweens.push(this.tweens.add({
+        targets: drop,
+        x: startX - Phaser.Math.Between(115, 170),
+        y: 770,
+        duration: Phaser.Math.Between(720, 980),
+        delay: Phaser.Math.Between(0, 1450),
+        repeat: -1,
+        ease: 'Linear',
+      }));
+    }
+
+    for (let index = 0; index < (heavy ? 16 : 9); index++) {
+      const splash = this.add.ellipse(
+        Phaser.Math.Between(25, 975),
+        Phaser.Math.Between(610, 695),
+        Phaser.Math.Between(8, 15),
+        Phaser.Math.Between(2, 4),
+        0xe8f5fb,
+        0,
+      );
+      layer.add(splash);
+      this.weatherTweens.push(this.tweens.add({
+        targets: splash,
+        scaleX: { from: .2, to: 1.45 },
+        scaleY: { from: .55, to: 1 },
+        alpha: { from: .48, to: 0 },
+        duration: Phaser.Math.Between(360, 540),
+        delay: Phaser.Math.Between(0, 1500),
+        repeatDelay: Phaser.Math.Between(650, 1500),
+        repeat: -1,
+        ease: 'Sine.easeOut',
+      }));
+    }
+
+    const mist = this.add.image(500, 654, WEATHER_MIST_TEXTURE)
+      .setDisplaySize(1120, 126)
+      .setAlpha(.18);
+    layer.add(mist);
+    this.weatherTweens.push(this.tweens.add({
+      targets: mist,
+      x: { from: 455, to: 535 },
+      alpha: { from: .1, to: .25 },
+      duration: 4400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    }));
+    if (heavy) this.scheduleStormLightning(layer);
+    return layer;
+  }
+  private scheduleStormLightning(layer: Phaser.GameObjects.Container) {
+    const scheduleNext = () => {
+      if (this.weatherLayer && this.weatherLayer !== layer) return;
+      const timer = this.time.delayedCall(Phaser.Math.Between(18000, 36000), () => {
+        this.weatherTimers = this.weatherTimers.filter(candidate => candidate !== timer);
+        if (this.weatherLayer !== layer || !layer.active) return;
+        this.flashStormLightning(layer);
+        scheduleNext();
+      });
+      this.weatherTimers.push(timer);
+    };
+    scheduleNext();
+  }
+  private flashStormLightning(layer: Phaser.GameObjects.Container) {
+    const flash = this.add.rectangle(0, 0, 1000, 700, 0xeaf5ff, 1)
+      .setOrigin(0)
+      .setAlpha(0)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const horizonGlow = this.add.image(Phaser.Math.Between(140, 860), 90, WEATHER_GLOW_TEXTURE)
+      .setDisplaySize(Phaser.Math.Between(320, 470), Phaser.Math.Between(240, 340))
+      .setTint(0xddecff)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(0);
+    layer.add([horizonGlow, flash]);
+
+    // A faint leading glow, the main strike and a soft afterglow feel less
+    // abrupt than toggling the whole screen twice within a few milliseconds.
+    const preFlash = this.tweens.add({
+      targets: flash,
+      alpha: { from: 0, to: .1 },
+      duration: 115,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+    });
+    const preGlow = this.tweens.add({
+      targets: horizonGlow,
+      alpha: { from: 0, to: .18 },
+      scale: { from: .92, to: 1.04 },
+      duration: 145,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+    });
+    this.weatherTweens.push(preFlash, preGlow);
+
+    const strikeTimer = this.time.delayedCall(230, () => {
+      this.weatherTimers = this.weatherTimers.filter(candidate => candidate !== strikeTimer);
+      if (this.weatherLayer !== layer || !layer.active) return;
+      this.game.events.emit('weather-thunder');
+      const strike = this.tweens.add({
+        targets: flash,
+        alpha: { from: 0, to: .4 },
+        duration: 95,
+        hold: 24,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+      });
+      const strikeGlow = this.tweens.add({
+        targets: horizonGlow,
+        alpha: { from: 0, to: .58 },
+        scale: { from: .96, to: 1.1 },
+        duration: 135,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+      });
+      this.weatherTweens.push(strike, strikeGlow);
+    });
+    this.weatherTimers.push(strikeTimer);
+
+    const echoTimer = this.time.delayedCall(610, () => {
+      this.weatherTimers = this.weatherTimers.filter(candidate => candidate !== echoTimer);
+      if (this.weatherLayer !== layer || !layer.active) return;
+      const echo = this.tweens.add({
+        targets: flash,
+        alpha: { from: 0, to: .13 },
+        duration: 180,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+      });
+      const echoGlow = this.tweens.add({
+        targets: horizonGlow,
+        alpha: { from: 0, to: .2 },
+        duration: 210,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          flash.destroy();
+          horizonGlow.destroy();
+        },
+      });
+      this.weatherTweens.push(echo, echoGlow);
+    });
+    this.weatherTimers.push(echoTimer);
+  }
+  private createSunnyWeather() {
+    this.ensureWeatherTextures();
+    const layer = this.add.container(0, 0);
+    layer.add(this.add.rectangle(0, 0, 1000, 700, 0xffe9b5, .035).setOrigin(0));
+
+    const sunGlow = this.add.image(858, 82, WEATHER_GLOW_TEXTURE)
+      .setDisplaySize(280, 280)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(.5);
+    const sunCore = this.add.image(858, 82, WEATHER_GLOW_TEXTURE)
+      .setDisplaySize(118, 118)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(.72);
+    layer.add([sunGlow, sunCore]);
+    this.weatherTweens.push(this.tweens.add({
+      targets: sunGlow,
+      scale: { from: .92, to: 1.08 },
+      alpha: { from: .38, to: .62 },
+      duration: 3200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    }));
+    this.weatherTweens.push(this.tweens.add({
+      targets: sunCore,
+      scale: { from: .9, to: 1.05 },
+      alpha: { from: .58, to: .78 },
+      duration: 2300,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    }));
+
+    for (let index = 0; index < 3; index++) {
+      const beam = this.add.rectangle(670 + index * 115, 235, 74, 560, 0xfff4c9, .026)
+        .setOrigin(.5)
+        .setRotation(-.35)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      layer.add(beam);
+      this.weatherTweens.push(this.tweens.add({
+        targets: beam,
+        alpha: { from: .012, to: .052 },
+        duration: 2600 + index * 420,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      }));
+    }
+
+    const cloud = this.add.image(0, 90, WEATHER_CLOUD_TEXTURE)
+      .setDisplaySize(390, 125)
+      .setAlpha(.42);
+    layer.add(cloud);
+    this.weatherTweens.push(this.tweens.add({
+      targets: cloud,
+      x: { from: -280, to: 1080 },
+        alpha: { from: .25, to: .55 },
+      duration: 26000,
+      repeat: -1,
+      ease: 'Linear',
+    }));
+
+    for (let index = 0; index < 12; index++) {
+      const size = Phaser.Math.FloatBetween(5, 13);
+      const mote = this.add.image(
+        Phaser.Math.Between(30, 970),
+        Phaser.Math.Between(60, 650),
+        WEATHER_SPARKLE_TEXTURE,
+      ).setDisplaySize(size, size)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(Phaser.Math.FloatBetween(.18, .46));
+      layer.add(mote);
+      this.weatherTweens.push(this.tweens.add({
+        targets: mote,
+        y: mote.y - Phaser.Math.Between(18, 42),
+        x: mote.x + Phaser.Math.Between(-14, 14),
+        angle: Phaser.Math.Between(-25, 25),
+        scale: { from: .72, to: 1.18 },
+        alpha: { from: .12, to: .58 },
+        duration: Phaser.Math.Between(1800, 3200),
+        delay: Phaser.Math.Between(0, 1000),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      }));
+    }
+    return layer;
   }
   private setupCrystalLuxeAnimation() {
     const generation = ++this.crystalLuxeLoadGeneration;
@@ -1306,7 +1869,10 @@ export class ShopScene extends Phaser.Scene {
     }
     this.selectCallback(this.selected);
     this.moveModeChangeCallback?.(active, this.selected);
-    if (this.scene.isActive()) this.refreshFurniture();
+    if (this.scene.isActive()) {
+      this.refreshFurniture();
+      this.refreshWeather();
+    }
   }
 
   startFurniturePlacement(uid: string) {
@@ -2212,7 +2778,7 @@ export class ShopScene extends Phaser.Scene {
           container.setDepth(container.y);
         } else {
           this.tweens.add({
-            targets: container, x: target.x, y: target.y, duration: 850 + index * 100, ease: 'Sine.inOut',
+            targets: container, x: target.x, y: target.y, duration: this.weatherWalkDuration(850 + index * 100), ease: 'Sine.inOut',
             onUpdate: () => {
               container.setDepth(container.y);
               this.customerPositions.set(visit.uid, { x: container.x, y: container.y });
@@ -2227,7 +2793,7 @@ export class ShopScene extends Phaser.Scene {
         if (Phaser.Math.Distance.Between(previousTargetX, previousTargetY, target.x, target.y) > 4) {
           this.tweens.killTweensOf(entry.container);
           this.tweens.add({
-            targets: entry.container, x: target.x, y: target.y, duration: 700, ease: 'Sine.inOut',
+            targets: entry.container, x: target.x, y: target.y, duration: this.weatherWalkDuration(700), ease: 'Sine.inOut',
             onUpdate: () => {
               entry!.container.setDepth(entry!.container.y);
               this.customerPositions.set(visit.uid, { x: entry!.container.x, y: entry!.container.y });
@@ -2479,7 +3045,7 @@ export class ShopScene extends Phaser.Scene {
         targets: this.avatar,
         x: arrivalTarget.x,
         y: arrivalTarget.y,
-        duration: 1300,
+        duration: this.weatherWalkDuration(1300),
         ease: 'Sine.inOut',
         onUpdate: () => {
           if (!this.avatar) return;
@@ -2502,7 +3068,7 @@ export class ShopScene extends Phaser.Scene {
       const target = this.spacedCustomerTarget(this.checkoutCustomerTarget(0), visit.uid);
       this.avatar.setData('customerTargetX', target.x).setData('customerTargetY', target.y);
       this.tweens.killTweensOf(this.avatar);
-      this.tweens.add({ targets: this.avatar, x: target.x, y: target.y, duration: 700, ease: 'Sine.inOut', onUpdate: () => {
+      this.tweens.add({ targets: this.avatar, x: target.x, y: target.y, duration: this.weatherWalkDuration(700), ease: 'Sine.inOut', onUpdate: () => {
         if (!this.avatar) return;
         this.avatar.setDepth(this.avatar.y);
         this.customerPositions.set(visit.uid, { x: this.avatar.x, y: this.avatar.y });
@@ -2545,7 +3111,7 @@ export class ShopScene extends Phaser.Scene {
         targets: this.avatar,
         x: target.x,
         y: target.y,
-        duration: 850,
+        duration: this.weatherWalkDuration(850),
         ease: 'Sine.inOut',
         onUpdate: () => {
           if (!this.avatar) return;
@@ -2567,7 +3133,7 @@ export class ShopScene extends Phaser.Scene {
       x: exit.x,
       y: exit.y,
       alpha: 0,
-      duration: 1000,
+      duration: this.weatherWalkDuration(1000),
       ease: 'Sine.inOut',
       onComplete: () => {
         if (this.avatar === avatar) {
@@ -2598,7 +3164,7 @@ export class ShopScene extends Phaser.Scene {
         if (result.success) this.burst(container.x, container.y - 70, result.viral);
         const exit = this.customerEntrance().outside;
         this.tweens.add({
-          targets: container, x: exit.x, y: exit.y, alpha: 0, duration: 850, ease: 'Sine.inOut', onComplete: () => {
+          targets: container, x: exit.x, y: exit.y, alpha: 0, duration: this.weatherWalkDuration(850), ease: 'Sine.inOut', onComplete: () => {
             if (result.visitUid) this.customerTextureAssignments.delete(result.visitUid);
             this.destroyAnimatedContainer(container);
             this.refreshCustomer();

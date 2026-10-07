@@ -1,6 +1,6 @@
 import { customers, furniture, levels, products } from '../data/catalog';
 import type { CashDrawer, CustomProduct, Customer, CustomerVisit, DramaResponseTone, GameEvent, GameState, LivestreamRequest, LivestreamRoundResult, LoyaltyTier, OnlineOrder, PendingMaterialOrder, PendingOrder, PlacedFurniture, Product, ProductDesignMotif, ProductDesignPoint, ProductDesignSticker, ProductDesignStroke, RegularOnlineOrder, SaleResult, SocialDrama, StaffAssignment, StaffCandidate, StaffMember, Style, SupplierId } from '../types';
-import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, evaluateStaffAdvice, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, MAX_PLACED_FURNITURE, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffAdviceProfile, staffCapacity, staffCashierProfile, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit } from './rules';
+import { activeCustomer, activeEmployees, activeVisit, buyPrice, canPlace, advicePatience, arrivalDelay, currentEvent, customerNeedsAdvice, dailyRent, DAY_DURATION, dayDuration, displayCapacity, displayLevel, displayUpgradeCost, displayedInventory, displayedQuantity, evaluateCustomerSelfPick, evaluateStaffAdvice, isTrending, isWallFurnitureId, landExpansion, landSize, LOAN_DAILY_RATE, LOAN_MAX, LOAN_MIN, LOAN_PAYMENT_RATE, loyaltyMilestones, loyaltyPatienceBonus, loyaltyTier, matchScore, MAX_PLACED_FURNITURE, nextLandExpansion, nextStaffRequirement, onlineOrderChance, onlineProductDemandWeight, saleXp, sellPrice, staffAdviceBonus, staffAdviceProfile, staffCapacity, staffCashierProfile, staffStockProfile, STAFF_RECRUITMENT_FEE, STAFF_SALARY_MAX, STAFF_SALARY_MIN, threshold, validOutfit, weatherImpact } from './rules';
 import { emptyStats, initialState, SaveSystem } from './save';
 import { generateDayCustomers, registerCustomer } from './customerGen';
 import { recordPublicShopReview, shopReviewStats } from './reviews';
@@ -1154,7 +1154,10 @@ export class GameStore {
   }
   private checkoutMethod() {
     const roll = this.random();
-    return roll < .42 ? 'cash' as const : roll < .72 ? 'transfer' as const : 'card' as const;
+    const weather = weatherImpact(this.state);
+    const cashCutoff = weather.kind === 'storm' ? .24 : weather.kind === 'rain' ? .34 : .42;
+    const transferCutoff = weather.kind === 'storm' ? .72 : weather.kind === 'rain' ? .7 : .72;
+    return roll < cashCutoff ? 'cash' as const : roll < transferCutoff ? 'transfer' as const : 'card' as const;
   }
 
   private beginCheckout(visit: CustomerVisit, items: Product[], total: number, score: number, speech: string, advice?: {
@@ -1175,7 +1178,8 @@ export class GameStore {
       return counts;
     }, {});
     if (items.some(item => displayedQuantity(this.state, item.id) - (heldByOthers[item.id] ?? 0) < 1)) return false;
-    const wait = 30 + Math.min(20, Math.max(0, this.state.level - 1) * 2) + loyaltyPatienceBonus(this.state, customer.id);
+    const wait = 30 + Math.min(20, Math.max(0, this.state.level - 1) * 2)
+      + loyaltyPatienceBonus(this.state, customer.id) + Math.ceil(weatherImpact(this.state).patienceBonus * .5);
     visit.stage = 'checkout';
     visit.cartProductIds = items.map(item => item.id);
     visit.cartTotal = total;
@@ -1548,7 +1552,8 @@ export class GameStore {
     const needsAdvice = this.random() < (isPicky ? .65 : .35);
     const mode = needsAdvice ? 'advice' : 'browse';
     const loyaltyBonus = loyaltyPatienceBonus(this.state, customer.id);
-    const maxPatience = (needsAdvice ? advicePatience(customer, this.state.level) : 12 + Math.floor(this.random() * 9)) + loyaltyBonus;
+    const maxPatience = (needsAdvice ? advicePatience(customer, this.state.level) : 12 + Math.floor(this.random() * 9))
+      + loyaltyBonus + weatherImpact(this.state).patienceBonus;
     const uid = `visit-${this.state.day}-${this.state.customerIndex}-${this.state.activeVisits.length}-${customer.id}-${Date.now().toString(36)}-${Math.floor(this.random() * 1e6).toString(36)}`;
     this.state.activeVisits.push({ uid, customerId: customer.id, mode, patience: maxPatience, maxPatience });
     if (!this.state.currentVisitId) this.state.currentVisitId = uid;
@@ -1597,7 +1602,8 @@ export class GameStore {
       if (!this.state.nextArrivalIn && this.state.activeVisits.length < this.maxConcurrentCustomers()) {
         this.state.nextArrivalIn = arrivalDelay(this.state, this.random);
         this.admitCustomer();
-        const groupChance = Math.min(.24, .015 + Math.max(0, this.state.level - 1) * .03 + (this.state.landLevel ?? 0) * .025);
+        const groupChance = Math.min(.24, .015 + Math.max(0, this.state.level - 1) * .03 + (this.state.landLevel ?? 0) * .025)
+          * weatherImpact(this.state).groupChanceMultiplier;
         if (this.state.activeVisits.length < this.maxConcurrentCustomers() && this.random() < groupChance) this.admitCustomer();
       }
     }

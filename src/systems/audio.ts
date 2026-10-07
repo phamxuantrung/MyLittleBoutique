@@ -1,7 +1,10 @@
-export type SfxKind = 'click' | 'itemTap' | 'clothing' | 'coin' | 'error' | 'reward' | 'payment' | 'entry' | 'exit' | 'closing' | 'disappointment' | 'equip' | 'levelUp';
+export type SfxKind = 'click' | 'itemTap' | 'clothing' | 'coin' | 'error' | 'reward' | 'payment' | 'entry' | 'exit' | 'closing' | 'disappointment' | 'equip' | 'levelUp' | 'thunder';
+export type WeatherAudioKind = 'clear' | 'rain' | 'storm';
 
 const AUDIO_ROOT = `${import.meta.env.BASE_URL}assets/audio/`;
 const BACKGROUND_VOLUME_SCALE = .42;
+const RAIN_AMBIENCE_URL = `${AUDIO_ROOT}gentle-rain.mp3`;
+const HEAVY_RAIN_AMBIENCE_URL = `${AUDIO_ROOT}heavy-rain.mp3?v=2`;
 export const BACKGROUND_MUSIC = {
   id: 'pastel-boutique-melody',
   name: 'Pastel Boutique Melody',
@@ -33,12 +36,15 @@ const SFX_URLS: Record<SfxKind, string> = {
   disappointment: `${AUDIO_ROOT}disappointment.mp3`,
   equip: `${AUDIO_ROOT}equip.mp3`,
   levelUp: `${AUDIO_ROOT}level-up.mp3`,
+  thunder: `${AUDIO_ROOT}thunder-clap.mp3`,
 };
 export const GAME_AUDIO_URLS = Object.freeze([
   BACKGROUND_MUSIC.url,
   SALE_BACKGROUND_MUSIC.url,
   ...MUSIC_TRACKS.map(track => track.url),
   ...Object.values(SFX_URLS),
+  RAIN_AMBIENCE_URL,
+  HEAVY_RAIN_AMBIENCE_URL,
 ]);
 const SFX_VOLUME: Record<SfxKind, number> = {
   click: .62,
@@ -54,6 +60,7 @@ const SFX_VOLUME: Record<SfxKind, number> = {
   disappointment: .8,
   equip: .76,
   levelUp: .92,
+  thunder: .84,
 };
 
 const SFX_RATE_VARIATION: Partial<Record<SfxKind, number>> = {
@@ -80,7 +87,17 @@ export class AudioSystem {
   private backgroundMode: 'boutique' | 'sale' = 'boutique';
   private backgroundGain = 1;
   private backgroundFadeTimer?: number;
-  enabled = true;
+  private weatherTrack?: HTMLAudioElement;
+  private weatherTrackSource = '';
+  private weatherKind: WeatherAudioKind = 'clear';
+  private audioEnabled = true;
+
+  get enabled() { return this.audioEnabled; }
+  set enabled(value: boolean) {
+    this.audioEnabled = value;
+    if (value) this.resumeWeatherAmbience();
+    else this.weatherTrack?.pause();
+  }
 
   constructor(private onMusicPlaybackChanged?: () => void) {
     // Start fetching and decoding while the opening screen is visible. HTML
@@ -124,6 +141,7 @@ export class AudioSystem {
     if (context) {
       try {
         if (context.state === 'suspended') await context.resume();
+        this.resumeWeatherAmbience();
         return;
       } catch { /* Continue with the HTMLAudio primer below. */ }
     }
@@ -137,6 +155,7 @@ export class AudioSystem {
         primer.pause();
         primer.currentTime = 0;
         primer.muted = false;
+        this.resumeWeatherAmbience();
       }
     } catch { /* A browser without audio can still play the complete game. */ }
   }
@@ -153,6 +172,48 @@ export class AudioSystem {
       const volume = Math.min(1, SFX_VOLUME[kind] * this.effectsVolume);
       pool.forEach(effect => { effect.volume = volume; });
     }
+    this.applyWeatherVolume();
+  }
+
+  private ensureWeatherTrack() {
+    const source = this.weatherKind === 'storm' ? HEAVY_RAIN_AMBIENCE_URL : RAIN_AMBIENCE_URL;
+    if (!this.weatherTrack) {
+      this.weatherTrack = new Audio(source);
+      this.weatherTrack.preload = 'auto';
+      this.weatherTrack.loop = true;
+      this.weatherTrack.preservesPitch = true;
+      this.weatherTrackSource = source;
+    } else if (this.weatherTrackSource !== source) {
+      this.weatherTrack.pause();
+      this.weatherTrack.src = source;
+      this.weatherTrack.load();
+      this.weatherTrackSource = source;
+    }
+    this.applyWeatherVolume();
+    return this.weatherTrack;
+  }
+
+  private applyWeatherVolume() {
+    if (!this.weatherTrack) return;
+    const strength = this.weatherKind === 'storm' ? .48 : this.weatherKind === 'rain' ? .32 : 0;
+    this.weatherTrack.volume = Math.min(1, strength * this.effectsVolume);
+  }
+
+  private resumeWeatherAmbience() {
+    if (!this.audioEnabled || this.weatherKind === 'clear') return;
+    const track = this.ensureWeatherTrack();
+    this.applyWeatherVolume();
+    void track.play().catch(() => { /* The next user gesture retries playback. */ });
+  }
+
+  setWeatherAmbience(kind: WeatherAudioKind) {
+    if (kind === this.weatherKind) return;
+    this.weatherKind = kind;
+    if (kind === 'clear') {
+      this.weatherTrack?.pause();
+      return;
+    }
+    this.resumeWeatherAmbience();
   }
 
   setMusicTrack(trackId: string) {
@@ -339,5 +400,6 @@ export class AudioSystem {
     this.backgroundFadeTimer = undefined;
     this.backgroundTrack?.pause();
     this.playerTrack?.pause();
+    this.weatherTrack?.pause();
   }
 }

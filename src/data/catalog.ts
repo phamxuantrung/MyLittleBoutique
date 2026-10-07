@@ -140,6 +140,7 @@ export const dailyEvents = [
   { name: 'Ngày khai trương', description: 'Những khách đầu tiên đang chờ khám phá shop của bạn.', discount: 1, extra: 0 },
   { name: 'Ưu đãi nhà cung cấp', description: 'Giảm 5% giá nhập tất cả sản phẩm trong hôm nay.', discount: .95, extra: 0 },
   { name: 'Một ngày mưa nhẹ', description: 'Ít khách hơn một chút. Dành thời gian chọn đồ thật xinh nhé.', discount: 1, extra: -1 },
+  { name: 'Mưa giông bất chợt', description: 'Mưa lớn kèm sấm chớp. Ít hơn 2 khách ghé shop trong hôm nay.', discount: 1, extra: -2 },
   { name: 'Fashion weekend', description: 'Thêm 2 khách ghé shop. Sẵn sàng cho một ngày bận rộn!', discount: 1, extra: 2 },
 ];
 export const compatible: Partial<Record<Style, Style[]>> = {

@@ -28999,7 +28999,7 @@ dialog.dialog-open-shop-confirm {
 dialog.dialog-open-shop-confirm::backdrop { background: rgba(54,28,48,.34); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 dialog.dialog-open-shop-confirm .dialog-inner { height: 100%; max-height: none; box-sizing: border-box; padding: 0; overflow: hidden; }
 .open-shop-confirmation { position: relative; display: flex; height: 100%; min-height: 0; flex-direction: column; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; color: #563047; background: radial-gradient(circle at 8% 2%, rgba(255,255,255,.98), transparent 30%), linear-gradient(160deg,#fffafd,#fcecf5); -webkit-overflow-scrolling: touch; }
-.open-shop-confirmation>header { position: sticky; z-index: 5; top: 0; display: grid; flex: 0 0 auto; grid-template-columns: 48px minmax(0,1fr) 34px; align-items: center; gap: 11px; padding: max(17px,var(--mobile-safe-top,17px)) 16px 14px max(16px,var(--mobile-safe-left,16px)); border-bottom: 1px solid rgba(229,190,213,.76); background: rgba(255,248,252,.76); box-shadow: 0 9px 20px rgba(103,48,81,.08); backdrop-filter: blur(16px) saturate(1.22); -webkit-backdrop-filter: blur(16px) saturate(1.22); }
+.open-shop-confirmation>header { position: sticky; z-index: 5; top: 0; display: grid; flex: 0 0 auto; grid-template-columns: 48px minmax(0,1fr) 34px; align-items: center; gap: 11px; padding: max(17px,var(--mobile-safe-top,17px)) 16px 14px max(16px,var(--mobile-safe-left,16px),calc(env(safe-area-inset-left,0px) + 10px)); border-bottom: 1px solid rgba(229,190,213,.76); background: rgba(255,248,252,.76); box-shadow: 0 9px 20px rgba(103,48,81,.08); backdrop-filter: blur(16px) saturate(1.22); -webkit-backdrop-filter: blur(16px) saturate(1.22); }
 .open-shop-confirm-icon { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 15px; color: #fff; background: linear-gradient(145deg,#f04482,#ad51dc); box-shadow: 0 5px 14px rgba(181,60,127,.25); }
 .open-shop-confirm-icon .icon { width: 23px; height: 23px; }
 .open-shop-confirmation>header>div:nth-child(2) { min-width: 0; }
@@ -29007,7 +29007,7 @@ dialog.dialog-open-shop-confirm .dialog-inner { height: 100%; max-height: none; 
 .open-shop-confirmation>header p { margin: 0; color: #9d748c; font-size: 8px; line-height: 1.3; }
 .open-shop-confirm-close { display: grid; width: 32px; height: 32px; padding: 0; place-items: center; border: 1px solid #e5c2d6; border-radius: 10px; color: #81536d; background: rgba(255,255,255,.8); }
 .open-shop-confirm-close .icon { width: 14px; height: 14px; }
-.open-shop-content { display: flex; min-height: 0; flex: 1 0 auto; flex-direction: column; gap: 10px; padding: 13px 14px; overflow: visible; }
+.open-shop-content { display: flex; min-height: 0; flex: 1 0 auto; flex-direction: column; gap: 10px; padding: 13px 14px 13px max(14px,var(--mobile-safe-left,14px),calc(env(safe-area-inset-left,0px) + 10px)); overflow: visible; }
 .open-shop-day-overview { display: grid; grid-template-columns: 52px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 11px; border: 1px solid #dfcef0; border-radius: 16px; background: linear-gradient(135deg,#f4ebff,#fff8fc 72%); box-shadow: 0 4px 13px rgba(95,54,133,.07); }
 .open-shop-day-mark { display: grid; width: 50px; height: 50px; place-content: center; border-radius: 14px; color: #fff; text-align: center; background: linear-gradient(145deg,#9d65dd,#704bb9); box-shadow: 0 4px 10px rgba(102,67,166,.25); }
 .open-shop-day-mark small { font-size: 6px; letter-spacing: .12em; }
@@ -29049,7 +29049,7 @@ dialog.dialog-open-shop-confirm .dialog-inner { height: 100%; max-height: none; 
 .open-shop-trend-strip strong { display: block; margin-top: 1px; overflow: hidden; color: #623b75; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .open-shop-trend-strip p { margin: 1px 0 0; overflow: hidden; color: #9c7aab; font-size: 6.5px; text-overflow: ellipsis; white-space: nowrap; }
 .open-shop-trend-strip>b { padding: 5px 7px; border-radius: 999px; color: #fff; background: #8657ce; font-size: 7px; }
-.open-shop-confirmation>footer { position: sticky; z-index: 5; bottom: 0; flex: 0 0 auto; padding: 11px 14px max(14px,var(--mobile-safe-bottom,14px)) max(14px,var(--mobile-safe-left,14px)); border-top: 1px solid rgba(229,190,213,.76); background: rgba(255,248,252,.76); box-shadow: 0 -10px 22px rgba(103,48,81,.09); backdrop-filter: blur(16px) saturate(1.22); -webkit-backdrop-filter: blur(16px) saturate(1.22); }
+.open-shop-confirmation>footer { position: sticky; z-index: 5; bottom: 0; flex: 0 0 auto; padding: 11px 14px max(14px,var(--mobile-safe-bottom,14px)) max(14px,var(--mobile-safe-left,14px),calc(env(safe-area-inset-left,0px) + 10px)); border-top: 1px solid rgba(229,190,213,.76); background: rgba(255,248,252,.76); box-shadow: 0 -10px 22px rgba(103,48,81,.09); backdrop-filter: blur(16px) saturate(1.22); -webkit-backdrop-filter: blur(16px) saturate(1.22); }
 .open-shop-confirmation>footer>p { margin: 0 0 9px; color: #895e77; font-size: 7px; line-height: 1.35; }
 .open-shop-confirmation>footer>p .icon { width: 11px; height: 11px; vertical-align: -2px; }
 .open-shop-confirmation>footer>div { display: grid; grid-template-columns: .72fr 1.28fr; gap: 8px; }
@@ -29058,12 +29058,12 @@ dialog.dialog-open-shop-confirm .dialog-inner { height: 100%; max-height: none; 
 
 @media (max-width: 520px) {
   dialog.dialog-open-shop-confirm { inset: 0 auto 0 0 !important; width: calc(100vw - 12px) !important; height: 100dvh !important; border-radius: 0; }
-  .open-shop-confirmation>header { padding: max(12px,var(--mobile-safe-top,12px)) 11px 10px max(11px,var(--mobile-safe-left,11px)); }
-  .open-shop-content { gap: 8px; padding: 9px 10px; }
+  .open-shop-confirmation>header { padding: max(12px,var(--mobile-safe-top,12px)) 11px 10px max(11px,var(--mobile-safe-left,11px),calc(env(safe-area-inset-left,0px) + 10px)); }
+  .open-shop-content { gap: 8px; padding: 9px 10px 9px max(10px,var(--mobile-safe-left,10px),calc(env(safe-area-inset-left,0px) + 10px)); }
   .open-shop-day-overview { grid-template-columns: 44px minmax(0,1fr); padding: 8px; }
   .open-shop-day-mark { width: 42px; height: 42px; }
   .open-shop-time { grid-column: 1/-1; grid-template-columns: auto auto 1fr; align-items: center; justify-items: start; padding: 6px 0 0; border-top: 1px solid #e4d5ed; border-left: 0; }
-  .open-shop-confirmation>footer { padding: 9px 10px max(10px,var(--mobile-safe-bottom,10px)) max(10px,var(--mobile-safe-left,10px)); }
+  .open-shop-confirmation>footer { padding: 9px 10px max(10px,var(--mobile-safe-bottom,10px)) max(10px,var(--mobile-safe-left,10px),calc(env(safe-area-inset-left,0px) + 10px)); }
 }
 
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
